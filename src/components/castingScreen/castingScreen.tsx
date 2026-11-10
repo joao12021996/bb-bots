@@ -1,6 +1,6 @@
 import React from "react";
 import FileDrop from "react-file-drop";
-import { PlayerProfile } from "../../model";
+import { PlayerProfile, getSocial, getComp } from "../../model";
 import { SetupPortrait } from "../playerPortrait/setupPortrait";
 import { shuffle } from "lodash";
 import { RandomButton } from "./randomXButton";
@@ -67,6 +67,14 @@ export class CastingScreen extends React.Component<CastingScreenProps, CastingSc
         };
     }
 
+    private setStat(i: number) {
+        return (stat: "social" | "comp", value: number) => {
+            const newState = { ...this.state };
+            newState.players[i][stat] = value;
+            this.setState(newState);
+        };
+    }
+
     private getFiles() {
         const players = this.state.players;
         if (!players) {
@@ -84,6 +92,9 @@ export class CastingScreen extends React.Component<CastingScreenProps, CastingSc
                         selectCastPlayer(player.castingScreenId || -1);
                     }}
                     onRename={this.rename(i)}
+                    social={getSocial(player)}
+                    comp={getComp(player)}
+                    onStatChange={this.setStat(i)}
                     selected={this.state.selectedPlayers.has(player.castingScreenId || -1)}
                     key={(++i).toString()}
                 />

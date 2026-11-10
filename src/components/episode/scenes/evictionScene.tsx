@@ -35,6 +35,15 @@ interface EvictionSceneOptions {
     tieBreaker?: TieBreaker;
     splitIndex?: number;
     nomineesCanVote?: boolean;
+    forcedVotes?: { [voterId: number]: number }; // player mode: voterId -> nominee id
+    forcedTieBreak?: number; // player mode: nominee id chosen by the human tie breaker
+    hideVoters?: boolean; // player mode: show only vote counts, not who voted for whom
+}
+
+function forcedLogic(nominees: Houseguest[], nomineeId: number): NumberWithLogic {
+    const decision = nominees.findIndex((hg) => hg.id === nomineeId);
+    if (decision < 0) throw new Error("Forced vote for a houseguest who is not an option.");
+    return { decision, reason: "" };
 }
 
 export function generateEvictionScene(
@@ -58,7 +67,9 @@ export function generateEvictionScene(
     hohArray.forEach((h) => nonVoters.add(h.id));
     nonEvictedHousguestsSplit(options.splitIndex, newGameState).forEach((voter) => {
         if (!nonVoters.has(voter.id)) {
-            const logic = castVote(voter, nominees, newGameState);
+            const forced = options.forcedVotes && options.forcedVotes[voter.id];
+            const logic =
+                forced !== undefined ? forcedLogic(nominees, forced) : castVote(voter, nominees, newGameState);
             const result: ProfileHouseguest = { ...voter };
             result.tooltip = logic.reason;
             newGameState.currentLog.votes[voter.id] =
@@ -87,11 +98,11 @@ export function generateEvictionScene(
     const tieBreakerHg = options.tieBreaker ? options.tieBreaker.hg : hohArray[0];
     if (tieVote) {
         newGameState.currentLog.outOf++;
-        tieBreaker = castVote(
-            tieBreakerHg!,
-            pluralities.map((p) => nominees[p]),
-            newGameState
-        );
+        const tiedNominees = pluralities.map((p) => nominees[p]);
+        tieBreaker =
+            options.forcedTieBreak !== undefined
+                ? forcedLogic(tiedNominees, options.forcedTieBreak)
+                : castVote(tieBreakerHg!, tiedNominees, newGameState);
         const tiebreakerDecision = nominees[pluralities[tieBreaker.decision]].id;
         newGameState.currentLog.votes[tieBreakerHg!.id] = options.tieBreaker
             ? options.tieBreaker.voteType(tiebreakerDecision)
@@ -176,7 +187,11 @@ export function generateEvictionScene(
                     <div className="columns is-centered">
                         {votes.map((voters, i) => (
                             <DividerBox className="column" key={`voters${i}`}>
-                                <Portraits houseguests={voters} centered={true} />
+                                {options.hideVoters ? (
+                                    <CenteredBold>{`${voters.length} vote${voters.length === 1 ? "" : "s"} to ${options.votingTo.toLowerCase()} ${nominees[i].name}`}</CenteredBold>
+                                ) : (
+                                    <Portraits houseguests={voters} centered={true} />
+                                )}
                             </DividerBox>
                         ))}
                     </div>

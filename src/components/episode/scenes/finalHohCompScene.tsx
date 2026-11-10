@@ -3,7 +3,7 @@ import {
     Houseguest,
     MutableGameState,
     nonEvictedHouseguests,
-    randomPlayer,
+    compWinner,
     getById,
 } from "../../../model";
 import { Scene } from "./scene";
@@ -12,13 +12,30 @@ import { NextEpisodeButton } from "../../nextEpisodeButton/nextEpisodeButton";
 import React from "react";
 import { Centered, CenteredBold } from "../../layout/centered";
 
-export function finalHohCompScene(initialGameState: GameState): [GameState, Scene, Houseguest] {
+// player mode: winners of each part, decided by played competitions
+export interface FinalHohWinners {
+    endurance: number;
+    skill: number;
+    final: number;
+}
+
+export function finalHohCompScene(
+    initialGameState: GameState,
+    forcedWinners?: FinalHohWinners
+): [GameState, Scene, Houseguest] {
     const newGameState = new MutableGameState(initialGameState);
     const final3 = nonEvictedHouseguests(initialGameState);
-    const enduranceWinner = randomPlayer(final3);
+    const enduranceWinner = forcedWinners
+        ? getById(initialGameState, forcedWinners.endurance)
+        : compWinner(final3);
     const enduranceLosers = final3.filter((hg) => hg.id !== enduranceWinner.id);
-    const skillWinner = randomPlayer(final3, [enduranceWinner]);
-    const finalHoH = getById(newGameState, randomPlayer([enduranceWinner, skillWinner]).id);
+    const skillWinner = forcedWinners
+        ? getById(initialGameState, forcedWinners.skill)
+        : compWinner(final3, [enduranceWinner]);
+    const finalHoH = getById(
+        newGameState,
+        forcedWinners ? forcedWinners.final : compWinner([enduranceWinner, skillWinner]).id
+    );
     finalHoH.hohWins++;
     const scene: Scene = new Scene({
         title: "Final HoH Competition",

@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import { selectedColor } from "./houseguestPortraitController";
+import { clampStat, MAX_STAT, MIN_STAT } from "../../model/playerProfile";
 
 const EditPortrait = styled.div`
     padding: 5px;
@@ -55,6 +56,45 @@ const EditButton = styled(Noselect)`
     }
 `;
 
+const StatRow = styled.div`
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    margin-top: 2px;
+`;
+
+const StatInput = styled.input`
+    width: 3em;
+    font-size: 0.8rem;
+    text-align: center;
+    border: 1px solid #6d6d6d;
+    border-radius: 3px;
+`;
+
+interface StatFieldProps {
+    label: string;
+    title: string;
+    value: number;
+    onChange: (n: number) => void;
+}
+
+function StatField(props: StatFieldProps) {
+    return (
+        <StatRow title={props.title}>
+            <span>{props.label}</span>
+            <StatInput
+                type="number"
+                min={MIN_STAT}
+                max={MAX_STAT}
+                value={props.value}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => props.onChange(clampStat(parseInt(event.target.value)))}
+            />
+        </StatRow>
+    );
+}
+
 interface SetupPortraitProps {
     name: string;
     imageUrl: string;
@@ -62,6 +102,9 @@ interface SetupPortraitProps {
     onRename: () => void;
     onClick: () => void;
     selected: boolean;
+    social: number;
+    comp: number;
+    onStatChange: (stat: "social" | "comp", value: number) => void;
 }
 
 interface SetupPortraitState {
@@ -102,6 +145,18 @@ export class SetupPortrait extends React.Component<SetupPortraitProps, SetupPort
                     <img src={this.props.imageUrl} style={{ width: 100, height: 100 }} alt="" />
                     <br />
                     <p>{this.state.name}</p>
+                    <StatField
+                        label="Social"
+                        title={`Social (${MIN_STAT}-${MAX_STAT}): higher means other houseguests like them more`}
+                        value={this.props.social}
+                        onChange={(n) => this.props.onStatChange("social", n)}
+                    />
+                    <StatField
+                        label="Comp"
+                        title={`Comp (${MIN_STAT}-${MAX_STAT}): higher means they win more competitions`}
+                        value={this.props.comp}
+                        onChange={(n) => this.props.onStatChange("comp", n)}
+                    />
                 </div>
             </EditPortrait>
         );

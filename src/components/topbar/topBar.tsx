@@ -87,16 +87,16 @@ export class Topbar extends React.Component<{ style?: any }, { tab: Screens }> {
     public render(): JSX.Element {
         const style = { ...(this.props.style || {}) };
         return (
-            <Box className="level is-mobile" style={style}>
-                <div className="level-item">
+            <Box className="bbb-topbar" style={style}>
+                <div className="bbb-brand">
+                    <span className="bbb-brand-eye">👁️</span>
+                    Big Brother <span className="dim">Bots</span>
+                </div>
+                <nav className="bbb-nav">
                     <ChooseCastLink />
-                </div>
-                <div className="level-item">
                     <CastingScreenLink />
-                </div>
-                <div className="level-item">
                     <EditSeasonLink />
-                </div>
+                </nav>
             </Box>
         );
     }

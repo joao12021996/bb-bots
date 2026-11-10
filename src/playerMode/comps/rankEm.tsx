@@ -1,0 +1,131 @@
+import React from "react";
+import { Houseguest } from "../../model";
+import { BigButton, Face, Grid, Subtle, Title } from "../ui/common";
+import { CompDefinition, CompProps } from "./compTypes";
+import { pick, Rand, sample, shuffled } from "./random";
+
+const ROUNDS = 3;
+const PER_ROUND = 5;
+
+interface Criterion {
+    label: string;
+    // lower key = should be placed earlier
+    key: (hg: Houseguest) => number | string;
+}
+
+const CRITERIA: Criterion[] = [
+    { label: "Most HoH wins first", key: (hg) => -hg.hohWins },
+    { label: "Most veto wins first", key: (hg) => -hg.povWins },
+    { label: "Most times nominated first", key: (hg) => -hg.nominations },
+];
+const ALPHABETICAL: Criterion = { label: "Alphabetical order (A → Z)", key: (hg) => hg.name.toLowerCase() };
+const REVERSE: Criterion = {
+    label: "Reverse alphabetical order (Z → A)",
+    key: (hg) =>
+        hg.name
+            .toLowerCase()
+            .split("")
+            .map((c) => String.fromCharCode(255 - c.charCodeAt(0)))
+            .join(""),
+};
+
+function pickCriterion(hgs: Houseguest[], used: Set<string>, rand: Rand): Criterion {
+    // only use stat criteria where the chosen houseguests actually differ
+    const varied = CRITERIA.filter((c) => !used.has(c.label) && new Set(hgs.map(c.key)).size >= 3);
+    if (varied.length > 0) return pick(rand, varied);
+    return used.has(ALPHABETICAL.label) ? REVERSE : ALPHABETICAL;
+}
+
+// fraction of pairs in the right relative order (ties always count as right)
+function pairScore(order: Houseguest[], criterion: Criterion): number {
+    let right = 0;
+    let total = 0;
+    for (let i = 0; i < order.length; i++) {
+        for (let j = i + 1; j < order.length; j++) {
+            total++;
+            if (criterion.key(order[i]) <= criterion.key(order[j])) right++;
+        }
+    }
+    return total === 0 ? 1 : right / total;
+}
+
+function RankEm(props: CompProps) {
+    const [rounds] = React.useState(() => {
+        const used = new Set<string>();
+        return Array.from({ length: ROUNDS }, () => {
+            const hgs = sample(props.rand, props.gameState.houseguests, PER_ROUND);
+            const criterion = pickCriterion(hgs, used, props.rand);
+            used.add(criterion.label);
+            return { hgs, criterion };
+        });
+    });
+    const [round, setRound] = React.useState(0);
+    const [order, setOrder] = React.useState<Houseguest[]>(() => shuffled(props.rand, rounds[0].hgs));
+    const [picked, setPicked] = React.useState<number | null>(null);
+    const [scores, setScores] = React.useState<number[]>([]);
+    const [start] = React.useState(Date.now());
+
+    const tap = (i: number) => {
+        if (picked === null) {
+            setPicked(i);
+            return;
+        }
+        const next = [...order];
+        [next[picked], next[i]] = [next[i], next[picked]];
+        setOrder(next);
+        setPicked(null);
+    };
+
+    const lockIn = () => {
+        const newScores = [...scores, pairScore(order, rounds[round].criterion)];
+        setScores(newScores);
+        const pct = (newScores.reduce((a, b) => a + b, 0) / ROUNDS) * 100;
+        props.report(pct);
+        if (round + 1 >= ROUNDS) {
+            const secs = (Date.now() - start) / 1000;
+            props.finish(pct + Math.max(0, 1 - secs / 180) * 0.99);
+            return;
+        }
+        setRound(round + 1);
+        setOrder(shuffled(props.rand, rounds[round + 1].hgs));
+        setPicked(null);
+    };
+
+    return (
+        <div>
+            <Title>
+                Round {round + 1} of {ROUNDS}
+            </Title>
+            <p style={{ fontSize: "1.2rem" }}>
+                <b>{rounds[round].criterion.label}</b>
+            </p>
+            <Subtle>Tap two houseguests to swap them. First place is top-left.</Subtle>
+            <Grid>
+                {order.map((hg, i) => (
+                    <Face
+                        key={hg.id}
+                        hg={hg}
+                        selected={picked === i}
+                        caption={<b>#{i + 1}</b>}
+                        onClick={() => tap(i)}
+                    />
+                ))}
+            </Grid>
+            <BigButton kind="success" onClick={lockIn}>
+                Lock it in
+            </BigButton>
+        </div>
+    );
+}
+
+export const RankEmComp: CompDefinition = {
+    id: "rank-em",
+    name: "Rank 'Em",
+    emoji: "📊",
+    kind: "skill",
+    rules: `Three rounds. Each round, put ${PER_ROUND} houseguests in order: by HoH wins, veto wins, nominations, or alphabetically. Tap two to swap them. The most accurate rankings win; ties go to the fastest.`,
+    maxSeconds: 180,
+    Component: RankEm,
+    botScore: (p) => Math.min(100, 45 + 55 * Math.pow(p, 0.8)) + p * 0.9,
+    format: (s) => `${Math.floor(s)}% correct`,
+};

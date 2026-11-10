@@ -52,7 +52,7 @@ export class EditRelationshipsScreen extends React.Component<
             (props.initialTribes ? this.initalizeTribes(props.profiles, props.initialTribes) : {});
         this.state = {
             cast: props.profiles,
-            relationships: props.relationships || firstImpressionsMap(props.profiles.length),
+            relationships: props.relationships || firstImpressionsMap(props.profiles.length, props.profiles),
             currentTribes,
             selectedPlayer: undefined,
             swapButtonActive: false,
@@ -167,7 +167,7 @@ export class EditRelationshipsScreen extends React.Component<
                     <button
                         className={`button is-warning`}
                         onClick={() => {
-                            this.setState({ relationships: firstImpressionsMap(props.profiles.length) });
+                            this.setState({ relationships: firstImpressionsMap(props.profiles.length, props.profiles) });
                             selectPlayer(null);
                         }}
                     >

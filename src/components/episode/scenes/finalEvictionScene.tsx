@@ -9,10 +9,17 @@ import { CenteredBold, Centered } from "../../layout/centered";
 import { HoHVote, NomineeVote } from "../../../model/logging/voteType";
 import { evictHouseguest } from "../utilities/evictHouseguest";
 
-export function finalEvictionScene(initialGameState: GameState, HoH: Houseguest): [GameState, Scene] {
+export function finalEvictionScene(
+    initialGameState: GameState,
+    HoH: Houseguest,
+    forcedEvictee?: number // player mode: id chosen by the human final HoH
+): [GameState, Scene] {
     const newGameState = new MutableGameState(initialGameState);
     const nominees = nonEvictedHouseguests(newGameState).filter((hg) => hg.id !== HoH.id);
-    const { decision: vote, reason } = castEvictionVote(HoH, nominees, newGameState);
+    const { decision: vote, reason } =
+        forcedEvictee !== undefined
+            ? { decision: nominees.findIndex((hg) => hg.id === forcedEvictee), reason: "" }
+            : castEvictionVote(HoH, nominees, newGameState);
     const evictee = nominees[vote];
     const survivor = nominees[vote === 1 ? 0 : 1];
     newGameState.currentLog.soleVoter = HoH.name;

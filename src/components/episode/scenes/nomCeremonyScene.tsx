@@ -21,6 +21,7 @@ interface NomCeremonyOptions {
     doubleEviction?: boolean;
     thirdNominee?: boolean;
     splitIndex?: number;
+    forcedNominees?: Houseguest[]; // player mode: nominees chosen by the human HoH
 }
 
 export function generateNomCeremonyScene(
@@ -37,12 +38,18 @@ export function generateNomCeremonyScene(
         ? newGameState.houseguests
         : getMembersFromSplitIndex(options.splitIndex, newGameState);
 
-    const nom1: Houseguest = getById(
-        newGameState,
-        backdoorNPlayers(HoH, exclude(houseguests, coHoH ? [HoH, coHoH] : [HoH]), newGameState, 1)[0].decision
-    );
+    const forced = options.forcedNominees;
+    const nom1: Houseguest = forced
+        ? getById(newGameState, forced[0].id)
+        : getById(
+              newGameState,
+              backdoorNPlayers(HoH, exclude(houseguests, coHoH ? [HoH, coHoH] : [HoH]), newGameState, 1)[0]
+                  .decision
+          );
 
-    const nom2 = coHoH
+    const nom2 = forced
+        ? getById(newGameState, forced[1].id)
+        : coHoH
         ? getById(
               newGameState,
               backdoorNPlayers(coHoH, exclude(houseguests, [HoH, coHoH, nom1]), newGameState, 1)[0].decision

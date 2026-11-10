@@ -10,6 +10,7 @@ import { Subscription } from "rxjs";
 import { selectedColor } from "../playerPortrait/houseguestPortraitController";
 import { PlayerProfile } from "../../model";
 import { Screens } from "../topbar/topBar";
+import { ALLOWED_DECKS, lookupStats } from "../../data/houseguestStats";
 
 interface DeckScreenProps {}
 
@@ -66,10 +67,9 @@ async function submitCasts(casts: Set<string>) {
             return { name: file, url: `${baseUrl}${cast}/${file}` };
         });
         const folderProfiles = imageLinks.map((image: { name: string; url: string }) => {
-            return {
-                name: image.name.substr(0, image.name.lastIndexOf(".")) || image.name,
-                imageURL: image.url,
-            };
+            const name = image.name.substr(0, image.name.lastIndexOf(".")) || image.name;
+            // real houseguests come with Social and Comp ratings based on their season
+            return { name, imageURL: image.url, ...lookupStats(cast, name) };
         });
         playerProfiles.push(...folderProfiles);
     }
@@ -133,9 +133,11 @@ export class DeckScreen extends React.Component<DeckScreenProps, DeckScreenState
         selectDeckSubject(null);
         this.subs.push(selectedDecks$.subscribe((selectedDecks) => this.setState({ selectedDecks })));
         const data = await (await fetch(`${baseUrl}/dir.json`)).json();
+        // only the US and Canada editions are offered
+        const decks: string[] = data.decks.filter((deck: string) => ALLOWED_DECKS.has(deck));
         this.setState({
-            sortedDecks: data.decks,
-            decks: shuffle(data.decks),
+            sortedDecks: decks,
+            decks: shuffle(decks),
             selectedDecks: new Set<string>(),
             loading: false,
         });

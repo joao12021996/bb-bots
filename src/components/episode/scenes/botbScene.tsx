@@ -1,4 +1,4 @@
-import { GameState, Houseguest, MutableGameState } from "../../../model";
+import { GameState, getComp, Houseguest, MutableGameState } from "../../../model";
 import { Scene } from "./scene";
 import { Portrait, Portraits } from "../../playerPortrait/portraits";
 import { NextEpisodeButton } from "../../nextEpisodeButton/nextEpisodeButton";
@@ -15,7 +15,11 @@ export function generateBotbScene(
     nomsArray: Houseguest[]
 ): [GameState, Scene, Houseguest, Houseguest[], Houseguest[]] {
     const newGameState = new MutableGameState(initialGameState);
-    const hoh0wins = rng().flipCoin();
+    // The pair with the higher combined comp score is more likely to win BotB.
+    // hoh0 keeps their HoH when the nominees of hoh1 (nomsArray[2], nomsArray[3]) win.
+    const pair0 = getComp(nomsArray[0]) + getComp(nomsArray[1]);
+    const pair1 = getComp(nomsArray[2]) + getComp(nomsArray[3]);
+    const hoh0wins = Math.abs(rng().randomFloat()) * (pair0 + pair1) < pair1;
     const hoh = hohArray[hoh0wins ? 0 : 1];
     newGameState.previousHOH = [hoh];
     newGameState.currentLog.votes[hoh.id] = new HoHVote();

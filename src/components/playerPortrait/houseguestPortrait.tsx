@@ -19,7 +19,9 @@ const MemoryWallPortrait = styled.div`
     margin: 5px;
     border: 1px solid ${({ theme }: { theme: ColorTheme }) => theme.portraitBorder};
     color: black;
-    border-radius: 5px;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
     text-align: center;
     font-weight: 600;
     width: 7rem;
@@ -44,6 +46,7 @@ const Jury = styled(MemoryWallPortrait)`
 `;
 
 const Normal = styled.img`
+    object-fit: cover;
     min-width: 100px;
     width: 100%;
     width: -moz-available;

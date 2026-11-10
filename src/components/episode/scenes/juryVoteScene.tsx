@@ -9,13 +9,19 @@ import { DividerBox } from "../../layout/box";
 import { NextEpisodeButton } from "../../nextEpisodeButton/nextEpisodeButton";
 import { NormalVote } from "../../../model/logging/voteType";
 
-export function juryVoteScene(initialGameState: GameState): [GameState, Scene] {
+export function juryVoteScene(
+    initialGameState: GameState,
+    forcedVotes?: { [jurorId: number]: number }, // player mode: jurorId -> finalist id
+    hideVoters?: boolean // player mode: show only vote counts, not who voted for whom
+): [GameState, Scene] {
     const newGameState = new MutableGameState(initialGameState);
     const jurors: Houseguest[] = getJurors(newGameState);
     const finalists = nonEvictedHouseguests(newGameState);
     const votes: Array<ProfileHouseguest[]> = [[], []];
     jurors.forEach((juror) => {
-        const decision = castJuryVote(juror, finalists);
+        const forced = forcedVotes && forcedVotes[juror.id];
+        const decision =
+            forced !== undefined ? finalists.findIndex((hg) => hg.id === forced) : castJuryVote(juror, finalists);
         const result: ProfileHouseguest = { ...juror };
         votes[decision].push(result);
         newGameState.currentLog.votes[juror.id] = new NormalVote(finalists[decision].id);
@@ -38,12 +44,15 @@ export function juryVoteScene(initialGameState: GameState): [GameState, Scene] {
             <div>
                 <CenteredBold>{voteCountText}</CenteredBold>
                 <div className="columns is-centered">
-                    <DividerBox className="column">
-                        <Portraits houseguests={votes[0]} centered={true} />
-                    </DividerBox>
-                    <DividerBox className="column">
-                        <Portraits houseguests={votes[1]} centered={true} />
-                    </DividerBox>
+                    {[0, 1].map((i) => (
+                        <DividerBox className="column" key={i}>
+                            {hideVoters ? (
+                                <CenteredBold>{`${votes[i].length} vote${votes[i].length === 1 ? "" : "s"} for ${finalists[i].name}`}</CenteredBold>
+                            ) : (
+                                <Portraits houseguests={votes[i]} centered={true} />
+                            )}
+                        </DividerBox>
+                    ))}
                 </div>
                 <Portraits houseguests={finalists} centered={true} />
                 <CenteredBold>{`Congratulations, ${winner.name}... you are the winner of Big Brother!`}</CenteredBold>

@@ -9,6 +9,7 @@ import { HasText } from "../layout/text";
 import { shuffle } from "lodash";
 import { activeScreen$, Screens } from "../topbar/topBar";
 import { baseUrl } from "../deckScreen/deckScreen";
+import { lookupStats } from "../../data/houseguestStats";
 interface SidebarState {
     episodes: Episode[];
     selectedScene: number;
@@ -36,9 +37,11 @@ export class Sidebar extends React.Component<{}, SidebarState> {
         for (const player of data) {
             let name = player.substr(0, player.lastIndexOf(".")) || player;
             name = name.substr(name.indexOf("/") + 1) || name;
+            const season = player.substr(0, player.indexOf("/"));
             cast.push({
                 name,
                 imageURL: `${baseUrl}Big Brother ${player}.png`,
+                ...lookupStats(`Big Brother ${season}`, name),
             });
         }
 
@@ -58,7 +61,7 @@ export class Sidebar extends React.Component<{}, SidebarState> {
 
     public render() {
         return (
-            <Box style={{ minWidth: 180, maxWidth: 250 }}>
+            <Box className="bbb-sidebar" style={{ minWidth: 180, maxWidth: 250 }}>
                 <HasText>{this.getEpisodes()}</HasText>
             </Box>
         );

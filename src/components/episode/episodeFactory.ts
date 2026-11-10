@@ -1,12 +1,27 @@
 import { GameState, MutableGameState, nonEvictedHouseguests } from "../../model/gameState";
-import { Episode, Houseguest } from "../../model";
+import { Episode, Houseguest, getSocial, DEFAULT_STAT, MAX_STAT } from "../../model";
 import { EpisodeType, Split } from "./episodes";
 import { angleBetween, rng } from "../../utils";
 import { EpisodeLog } from "../../model/logging/episodelog";
 import { refreshHgStats } from "./utilities/evictHouseguest";
 import { cast$ } from "../../subjects/subjects";
+import { Tribe } from "../../model/tribe";
 
-export function firstImpressionsMap(hgs: number): { [id: number]: { [id: number]: number } } {
+// How much social score shifts relationships. With both players at max social, a relationship
+// is shifted up by 2 * SOCIAL_STRENGTH; with both at min social, it is shifted down by about the same.
+const SOCIAL_STRENGTH = 0.3;
+
+// Relationship bonus between two players based on their social scores (symmetric, so relationships stay mutual).
+// A neutral player (DEFAULT_STAT) contributes nothing.
+function socialBonus(a: { social?: number }, b: { social?: number }): number {
+    const range = MAX_STAT - DEFAULT_STAT;
+    return (SOCIAL_STRENGTH * (getSocial(a) - DEFAULT_STAT + (getSocial(b) - DEFAULT_STAT))) / range;
+}
+
+export function firstImpressionsMap(
+    hgs: number,
+    profiles: { social?: number }[] = []
+): { [id: number]: { [id: number]: number } } {
     const sin = Math.sin;
     const cos = Math.cos;
     const compatibilityMap: { [id: number]: [number, number, number] } = {};
@@ -30,7 +45,10 @@ export function firstImpressionsMap(hgs: number): { [id: number]: { [id: number]
     for (let i = 0; i < hgs; i++) {
         for (let j = i + 1; j < hgs; j++) {
             // creates a bunch of mutual relationships based on points on (or inside) a sphere
-            const impression = 1 - (2 * angleBetween(compatibilityMap[i], compatibilityMap[j])) / Math.PI;
+            let impression = 1 - (2 * angleBetween(compatibilityMap[i], compatibilityMap[j])) / Math.PI;
+            if (profiles[i] && profiles[j]) {
+                impression = Math.max(-1, Math.min(1, impression + socialBonus(profiles[i], profiles[j])));
+            }
             map[i][j] = impression;
             map[j][i] = impression;
         }
@@ -38,22 +56,40 @@ export function firstImpressionsMap(hgs: number): { [id: number]: { [id: number]
     return map;
 }
 
-function firstImpressions(houseguests: Houseguest[]) {
-    const map = cast$.value.options?.relationships || firstImpressionsMap(houseguests.length);
+// Optional overrides for the cast options (custom relationships, teams), keyed by houseguest id.
+// Player mode uses this when it plays with a subset of the cast, since ids are renumbered.
+export interface CastOptionsOverride {
+    relationships?: { [id: number]: { [id: number]: number } };
+    currentTribes?: { [id: number]: Tribe };
+}
+
+function firstImpressions(houseguests: Houseguest[], override?: CastOptionsOverride) {
+    const custom = override ? override.relationships : cast$.value.options?.relationships;
+    const generated = firstImpressionsMap(houseguests.length, houseguests);
     for (let i = 0; i < houseguests.length; i++) {
         for (let j = i + 1; j < houseguests.length; j++) {
-            houseguests[i].relationships[houseguests[j].id] = map[i][j];
-            houseguests[j].relationships[houseguests[i].id] = map[i][j];
+            // custom relationships win; any pair they don't cover (e.g. a player who joined under their own name)
+            // gets a normal first impression
+            const customValue = custom && custom[i] ? custom[i][j] : undefined;
+            const value = customValue !== undefined ? customValue : generated[i][j];
+            houseguests[i].relationships[houseguests[j].id] = value;
+            houseguests[j].relationships[houseguests[i].id] = value;
         }
     }
 }
 
-export function nextEpisode(oldState: GameState, episodeType: EpisodeType): Episode {
+// Sets up the game state for the start of a new week (first impressions, phase, logs, stats).
+export function prepareNextWeek(
+    oldState: GameState,
+    episodeType: EpisodeType,
+    override?: CastOptionsOverride
+): GameState {
     let newState = new MutableGameState(oldState);
     if (oldState.phase === 0) {
-        firstImpressions(newState.houseguests);
-        if (cast$.value.options?.currentTribes) {
-            const tribes = cast$.value.options.currentTribes;
+        firstImpressions(newState.houseguests, override);
+        const currentTribes = override ? override.currentTribes : cast$.value.options?.currentTribes;
+        if (currentTribes) {
+            const tribes = currentTribes;
             newState.houseguests.forEach((hg) => {
                 hg.tribe = tribes[hg.id];
             });
@@ -71,8 +107,11 @@ export function nextEpisode(oldState: GameState, episodeType: EpisodeType): Epis
     nonEvictedHouseguests(newState).forEach((hg) => {
         hg.previousPopularity = hg.popularity;
     });
-    const finalState = new GameState(newState);
+    return new GameState(newState);
+}
 
+export function nextEpisode(oldState: GameState, episodeType: EpisodeType): Episode {
+    const finalState = prepareNextWeek(oldState, episodeType);
     if (!episodeType.canPlayWith(finalState.remainingPlayers))
         throw new Error(
             `Episode type ${episodeType.name} not playable with ${finalState.remainingPlayers} players`

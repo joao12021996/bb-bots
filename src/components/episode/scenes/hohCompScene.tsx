@@ -4,7 +4,8 @@ import {
     getMembersFromSplitIndex,
     Houseguest,
     MutableGameState,
-    randomPlayer,
+    getById,
+    compWinner,
 } from "../../../model";
 import { Scene } from "./scene";
 import { Portrait, Portraits } from "../../playerPortrait/portraits";
@@ -25,6 +26,7 @@ interface HohCompOptions {
     competitors?: Houseguest[];
     splitIndex?: number;
     previousHoHcanCompete?: boolean;
+    forcedWinners?: Houseguest[]; // player mode: winners decided by a played competition
 }
 
 export function generateHohCompScene(
@@ -41,9 +43,12 @@ export function generateHohCompScene(
     const previousHoh = initialGameState.previousHOH ? initialGameState.previousHOH : [];
     const excludePreviousHoH = options.previousHoHcanCompete ? [] : previousHoh;
     const competitors = options.competitors || exclude(houseguests, excludePreviousHoH);
-    const newHoH: Houseguest = randomPlayer(competitors);
+    const forced = options.forcedWinners;
+    const newHoH: Houseguest = forced ? getById(newGameState, forced[0].id) : compWinner(competitors);
     const newHoH2: Houseguest = options.coHoH
-        ? randomPlayer(competitors, [newHoH, ...excludePreviousHoH])
+        ? forced && forced[1]
+            ? getById(newGameState, forced[1].id)
+            : compWinner(competitors, [newHoH, ...excludePreviousHoH])
         : newHoH;
     // set previous hoh
     if (!options.skipHoHWin) {

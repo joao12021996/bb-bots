@@ -14,6 +14,9 @@ interface VetoCeremonySceneOptions {
     veto: Veto;
     immuneHgs?: Houseguest[];
     splitIndex?: number;
+    // player mode: the human veto holder's decision (null = don't use)
+    forcedVetoChoice?: { decision: Houseguest | null; reason: string };
+    forcedRenom?: Houseguest; // player mode: replacement nominee chosen by the human HoH
 }
 
 export function generateVetoCeremonyScene(
@@ -43,7 +46,7 @@ export function generateVetoCeremonyScene(
         coHoH.id !== povWinner.id && immunePlayers.push(coHoH);
     }
 
-    const vetoChoice = veto.use(povWinner, initialNominees, initialGameState, coHoH ? -1 : HoH.id, {
+    const vetoChoice = options.forcedVetoChoice || veto.use(povWinner, initialNominees, initialGameState, coHoH ? -1 : HoH.id, {
         immunePlayers,
         splitIndex,
     });
@@ -82,14 +85,11 @@ export function generateVetoCeremonyScene(
             exclusion = exclude(potentialRenoms, [HoH, ...initialNominees, ...immunePlayers]);
         }
         const replacementCount = veto === BoomerangVeto ? 2 : 1;
-        const replacementNoms = backdoorNPlayers(
-            replacementNomineeNamer,
-            exclusion,
-            initialGameState,
-            replacementCount
-        ).map((v) => {
-            return getById(initialGameState, v.decision);
-        });
+        const replacementNoms = options.forcedRenom
+            ? [getById(initialGameState, options.forcedRenom.id)]
+            : backdoorNPlayers(replacementNomineeNamer, exclusion, initialGameState, replacementCount).map(
+                  (v) => getById(initialGameState, v.decision)
+              );
         if (replacementNoms.length === 1) {
             const replacementNom = replacementNoms[0];
             const replacementIndex = initialNominees.findIndex((hg) => hg.id === vetoChoice.decision!.id);

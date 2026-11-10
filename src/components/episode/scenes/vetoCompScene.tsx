@@ -3,6 +3,7 @@ import {
     Houseguest,
     MutableGameState,
     randomPlayer,
+    compWinner,
     getById,
     exclude,
     nonEvictedHousguestsSplit,
@@ -19,26 +20,21 @@ interface VetoCompSceneOptions {
     veto: Veto;
     doubleEviction?: boolean;
     splitIndex?: number;
+    forcedPlayers?: Houseguest[]; // player mode: veto players drawn ahead of time
+    forcedWinner?: Houseguest; // player mode: winner decided by a played competition
 }
 
-export function generateVetoCompScene(
-    initialGameState: GameState,
+export function pickVetoPlayers(
+    gameState: GameState,
     HoHs: Houseguest[],
     nominees: Houseguest[],
-    options: VetoCompSceneOptions
-): [GameState, Scene, Houseguest] {
-    const newGameState = new MutableGameState(initialGameState);
-    const veto = options.veto;
-    const doubleEviction = !!options.doubleEviction;
-    const splitIndex = options.splitIndex;
-    const nonEvictedHgs = nonEvictedHousguestsSplit(splitIndex, newGameState);
-
-    const hohPlaysVeto = newGameState.hohPlaysVeto || nonEvictedHgs.length <= 5 || HoHs.length > 1;
+    splitIndex?: number
+): { povPlayers: Houseguest[]; everyoneWillPlay: boolean; hohPlaysVeto: boolean } {
+    const nonEvictedHgs = nonEvictedHousguestsSplit(splitIndex, gameState);
+    const hohPlaysVeto = gameState.hohPlaysVeto || nonEvictedHgs.length <= 5 || HoHs.length > 1;
     const maxVetoPlayers = hohPlaysVeto ? 6 : 5;
-
-    // pick players
     const choices = exclude(nonEvictedHgs, HoHs);
-    let povPlayers: any[] = [];
+    const povPlayers: any[] = [];
     const everyoneWillPlay = nonEvictedHgs.length <= maxVetoPlayers;
     if (everyoneWillPlay) {
         HoHs.forEach((hoh) => povPlayers.push({ ...hoh }));
@@ -53,7 +49,25 @@ export function generateVetoCompScene(
             povPlayers.push({ ...randomPlayer(choices, povPlayers) });
         }
     }
-    let povWinner = randomPlayer(povPlayers);
+    return { povPlayers, everyoneWillPlay, hohPlaysVeto };
+}
+
+
+export function generateVetoCompScene(
+    initialGameState: GameState,
+    HoHs: Houseguest[],
+    nominees: Houseguest[],
+    options: VetoCompSceneOptions
+): [GameState, Scene, Houseguest] {
+    const newGameState = new MutableGameState(initialGameState);
+    const veto = options.veto;
+    const doubleEviction = !!options.doubleEviction;
+    const splitIndex = options.splitIndex;
+    const drawn = pickVetoPlayers(newGameState, HoHs, nominees, splitIndex);
+    const hohPlaysVeto = drawn.hohPlaysVeto;
+    const everyoneWillPlay = drawn.everyoneWillPlay;
+    const povPlayers: Houseguest[] = options.forcedPlayers || drawn.povPlayers;
+    let povWinner = options.forcedWinner || compWinner(povPlayers);
     povWinner = getById(newGameState, povWinner.id);
     povWinner.povWins++;
     newGameState.currentLog.vetoWinner = povWinner.name;

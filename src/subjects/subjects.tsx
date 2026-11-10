@@ -81,3 +81,10 @@ export const displayMode$ = new BehaviorSubject<PortraitDisplayMode>(popularityM
 
 // If the screen is fullscreen or not. (ie. from the voting table)
 export const isFullscreen$ = new BehaviorSubject<boolean>(false);
+
+// Player mode: when set, "Continue" buttons inside scenes call this instead of moving the sidebar.
+export const continueOverride$ = new BehaviorSubject<(() => void) | null>(null);
+
+// Player mode: when set, the season is being played by a human. Moving past the last scene in the
+// sidebar returns to the player mode screen instead of auto-generating the next episode.
+export const playerModeScreen$ = new BehaviorSubject<(() => JSX.Element) | null>(null);

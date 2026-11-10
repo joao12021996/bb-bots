@@ -1,5 +1,5 @@
 import { Houseguest } from "./houseguest";
-import { PlayerProfile } from "./playerProfile";
+import { PlayerProfile, getComp } from "./playerProfile";
 import _ from "lodash";
 import { newRelationshipMap, rng } from "../utils";
 import { getFinalists } from "./season";
@@ -26,6 +26,23 @@ export function randomPlayer(inclusions: Houseguest[], exclusions: Houseguest[] 
     return options[choice];
 }
 
+// Picks a competition winner. Each player's chance of winning is proportional to their comp score,
+// so a player with comp 10 is twice as likely to win as a player with comp 5.
+export function compWinner(inclusions: Houseguest[], exclusions: Houseguest[] = []): Houseguest {
+    if (inclusions.length === 0) {
+        throw new Error("Tried to get a competition winner from a list of 0 players.");
+    }
+    const options = exclude(inclusions, exclusions);
+    const weights = options.map((hg) => getComp(hg));
+    const total = weights.reduce((a, b) => a + b, 0);
+    let roll = Math.abs(rng().randomFloat()) * total;
+    for (let i = 0; i < options.length; i++) {
+        roll -= weights[i];
+        if (roll < 0) return options[i];
+    }
+    return options[options.length - 1];
+}
+
 export function nonEvictedHouseguests(gameState: GameState): Houseguest[] {
     return [...gameState.nonEvictedHouseguests.entries()].map(([_, id]) => getById(gameState, id));
 }
@@ -50,12 +67,13 @@ export function calculatePopularity(hero: Houseguest, house: Houseguest[]) {
     return count === 0 ? 0 : sum / count;
 }
 
+// Jury: everyone evicted in the second half of the game, not counting the final 2.
+// (total - 2) / 2, rounded down, then made odd so the jury vote can never tie. At least 1.
+// e.g. 8 houseguests -> 3 jurors, 12 -> 5, 16 -> 7.
 export function defaultJurySize(castSize: number): number {
-    castSize = Math.round(castSize * 0.55);
-    if (castSize % 2 === 0) {
-        castSize--;
-    }
-    return castSize;
+    let jury = Math.floor((castSize - 2) / 2);
+    if (jury % 2 === 0) jury--;
+    return Math.max(1, jury);
 }
 
 export function validateJurySize(j: number, castSize: number): boolean {

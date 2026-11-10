@@ -1,0 +1,440 @@
+import React from "react";
+import { BigButton, Subtle, Title } from "../ui/common";
+import { CompDefinition, CompProps } from "./compTypes";
+import { Keypad, sleep } from "./compUi";
+import { pick, randInt, sample, shuffled } from "./random";
+
+const EMOJIS = ["🍕", "🎸", "👑", "🔑", "🐍", "💎", "🎲", "🧸", "🍩", "🚀", "🌵", "🎩"];
+
+// ---------------- Simon Says ----------------
+
+const PADS = ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f"];
+
+function SimonSays(props: CompProps) {
+    const [sequence] = React.useState(() => Array.from({ length: 40 }, () => randInt(props.rand, 0, 3)));
+    const [level, setLevel] = React.useState(3);
+    const [lit, setLit] = React.useState<number | null>(null);
+    const [showing, setShowing] = React.useState(true);
+    const [input, setInput] = React.useState(0);
+    const alive = React.useRef(true);
+
+    React.useEffect(() => () => void (alive.current = false), []);
+    React.useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            setShowing(true);
+            await sleep(700);
+            const on = Math.max(260, 480 - level * 15);
+            for (let i = 0; i < level && !cancelled; i++) {
+                setLit(sequence[i]);
+                await sleep(on);
+                setLit(null);
+                await sleep(160);
+            }
+            if (!cancelled) {
+                setShowing(false);
+                setInput(0);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [level, sequence]);
+
+    const tap = (pad: number) => {
+        if (showing) return;
+        setLit(pad);
+        setTimeout(() => alive.current && setLit(null), 150);
+        if (pad !== sequence[input]) {
+            props.finish(level - 1);
+            return;
+        }
+        if (input + 1 === level) {
+            props.report(level);
+            setLevel(level + 1);
+        } else {
+            setInput(input + 1);
+        }
+    };
+
+    return (
+        <div>
+            <Title>Sequence of {level}</Title>
+            <Subtle>{showing ? "Watch closely…" : `Your turn: ${input}/${level}`}</Subtle>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, width: "min(80vw, 300px)", margin: "0 auto" }}>
+                {PADS.map((c, i) => (
+                    <div
+                        key={i}
+                        onPointerDown={() => tap(i)}
+                        style={{
+                            ...({ aspectRatio: "1" } as any),
+                            borderRadius: 18,
+                            background: c,
+                            opacity: lit === i ? 1 : 0.35,
+                            transform: lit === i ? "scale(1.04)" : "none",
+                            transition: "opacity 80ms, transform 80ms",
+                            touchAction: "manipulation",
+                            cursor: showing ? "default" : "pointer",
+                        }}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+export const SimonSaysComp: CompDefinition = {
+    id: "simon-says",
+    name: "Simon Says",
+    emoji: "🟩",
+    kind: "memory",
+    rules: "Watch the pads light up, then tap them back in the same order. Each round adds one more. One mistake and you're out. The longest sequence wins.",
+    maxSeconds: 180,
+    Component: SimonSays,
+    botScore: (p) => 2 + Math.round(10 * p),
+    format: (s) => `sequence of ${s}`,
+};
+
+// ---------------- Concentration ----------------
+
+const CONC_LIMIT = 180;
+
+function Concentration(props: CompProps) {
+    const [cards] = React.useState(() => {
+        const icons = sample(props.rand, EMOJIS, 6);
+        return shuffled(props.rand, [...icons, ...icons]);
+    });
+    const [open, setOpen] = React.useState<number[]>([]);
+    const [matched, setMatched] = React.useState<Set<number>>(new Set());
+    const [start] = React.useState(() => performance.now());
+    const busy = open.length === 2;
+
+    const flip = (i: number) => {
+        if (busy || open.includes(i) || matched.has(i)) return;
+        const next = [...open, i];
+        setOpen(next);
+        if (next.length === 2) {
+            if (cards[next[0]] === cards[next[1]]) {
+                const m = new Set(matched);
+                next.forEach((n) => m.add(n));
+                setMatched(m);
+                setOpen([]);
+                props.report((m.size / 2) * 10);
+                if (m.size === cards.length) {
+                    props.finish(1000 + Math.max(0, CONC_LIMIT - (performance.now() - start) / 1000));
+                }
+            } else {
+                setTimeout(() => setOpen([]), 700);
+            }
+        }
+    };
+
+    return (
+        <div>
+            <Title>{matched.size / 2} of 6 pairs</Title>
+            <Subtle>Flip two cards at a time and find all the matching pairs.</Subtle>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, width: "min(88vw, 360px)", margin: "0 auto" }}>
+                {cards.map((c, i) => {
+                    const shown = open.includes(i) || matched.has(i);
+                    return (
+                        <button
+                            type="button"
+                            key={i}
+                            onClick={() => flip(i)}
+                            className="bbb-card-flip"
+                            style={{
+                                ...({ aspectRatio: "3 / 4" } as any),
+                                fontSize: "2rem",
+                                borderRadius: 10,
+                                border: "none",
+                                background: matched.has(i) ? "#1f4d2c" : shown ? "#2c3e66" : "linear-gradient(135deg, #6d28d9, #db2777)",
+                                color: "white",
+                                touchAction: "manipulation",
+                                cursor: "pointer",
+                            }}
+                        >
+                            {shown ? c : "?"}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+export const ConcentrationComp: CompDefinition = {
+    id: "concentration",
+    name: "Concentration",
+    emoji: "🃏",
+    kind: "memory",
+    rules: "Twelve face-down cards hide six pairs. Flip two at a time to find matches. Clear the board fastest to win.",
+    maxSeconds: CONC_LIMIT,
+    Component: Concentration,
+    botScore: (p) => {
+        const t = 25 + (1 - p) * 130;
+        return t < CONC_LIMIT ? 1000 + (CONC_LIMIT - t) : Math.round(2 + 3 * p) * 10;
+    },
+    format: (s) => (s >= 1000 ? `cleared in ${Math.round(CONC_LIMIT - (s - 1000))}s` : `${s / 10} pairs`),
+};
+
+// ---------------- Digit Span ----------------
+
+function DigitSpan(props: CompProps) {
+    const [length, setLength] = React.useState(4);
+    const [digits, setDigits] = React.useState(() => Array.from({ length: 4 }, () => randInt(props.rand, 0, 9)).join(""));
+    const [phase, setPhase] = React.useState<"show" | "enter">("show");
+    const [value, setValue] = React.useState("");
+
+    React.useEffect(() => {
+        if (phase !== "show") return;
+        const t = setTimeout(() => setPhase("enter"), 700 + length * 550);
+        return () => clearTimeout(t);
+    }, [phase, length]);
+
+    const submit = () => {
+        if (value !== digits) {
+            props.finish(length - 1);
+            return;
+        }
+        props.report(length);
+        const n = length + 1;
+        setLength(n);
+        setDigits(Array.from({ length: n }, () => randInt(props.rand, 0, 9)).join(""));
+        setValue("");
+        setPhase("show");
+    };
+
+    return (
+        <div>
+            <Title>{length} digits</Title>
+            {phase === "show" ? (
+                <div style={{ fontSize: "3rem", fontFamily: "monospace", letterSpacing: 6, margin: "24px 0" }}>{digits}</div>
+            ) : (
+                <div>
+                    <Subtle>Type the number you saw.</Subtle>
+                    <Keypad value={value} onChange={setValue} onSubmit={submit} maxLength={length} />
+                </div>
+            )}
+        </div>
+    );
+}
+
+export const DigitSpanComp: CompDefinition = {
+    id: "digit-span",
+    name: "Digit Span",
+    emoji: "🔟",
+    kind: "memory",
+    rules: "A number flashes on screen. Type it back from memory. Each round adds a digit, and one mistake ends your run. The longest number wins.",
+    maxSeconds: 180,
+    Component: DigitSpan,
+    botScore: (p) => 4 + Math.round(6 * p),
+    format: (s) => `${s} digits`,
+};
+
+// ---------------- Count 'Em ----------------
+
+const COUNT_ROUNDS = 5;
+
+function CountEm(props: CompProps) {
+    const [rounds] = React.useState(() =>
+        Array.from({ length: COUNT_ROUNDS }, (_, r) => {
+            const types = sample(props.rand, EMOJIS, 4);
+            const size = 20 + r * 4;
+            const grid = Array.from({ length: size }, () => pick(props.rand, types));
+            const target = pick(props.rand, types);
+            return { grid, target, answer: grid.filter((g) => g === target).length };
+        })
+    );
+    const [round, setRound] = React.useState(0);
+    const [phase, setPhase] = React.useState<"show" | "answer" | "feedback">("show");
+    const [value, setValue] = React.useState("");
+    const [errors, setErrors] = React.useState<number[]>([]);
+
+    React.useEffect(() => {
+        if (phase !== "show") return;
+        const t = setTimeout(() => setPhase("answer"), 3000);
+        return () => clearTimeout(t);
+    }, [phase]);
+
+    const r = rounds[round];
+    const submit = () => {
+        const errs = [...errors, Math.abs(parseInt(value, 10) - r.answer)];
+        setErrors(errs);
+        const total = errs.reduce((a, b) => a + b, 0);
+        props.report(-(total + (COUNT_ROUNDS - errs.length) * 10));
+        setPhase("feedback");
+    };
+    const next = () => {
+        if (round + 1 >= COUNT_ROUNDS) {
+            props.finish(-errors.reduce((a, b) => a + b, 0));
+            return;
+        }
+        setRound(round + 1);
+        setValue("");
+        setPhase("show");
+    };
+
+    return (
+        <div>
+            <Title>
+                Round {round + 1} of {COUNT_ROUNDS}
+            </Title>
+            {phase === "show" && (
+                <div style={{ display: "flex", flexWrap: "wrap", maxWidth: 360, margin: "0 auto", fontSize: "1.8rem" }}>
+                    {r.grid.map((g, i) => (
+                        <span key={i} style={{ width: "16.6%" }}>
+                            {g}
+                        </span>
+                    ))}
+                </div>
+            )}
+            {phase === "answer" && (
+                <div>
+                    <Subtle>
+                        How many <span style={{ fontSize: "1.8rem" }}>{r.target}</span> were there?
+                    </Subtle>
+                    <Keypad value={value} onChange={setValue} onSubmit={submit} maxLength={2} />
+                </div>
+            )}
+            {phase === "feedback" && (
+                <div>
+                    <p>
+                        There were <b>{r.answer}</b>. You said {value}.
+                    </p>
+                    <BigButton onClick={next}>{round + 1 >= COUNT_ROUNDS ? "Finish" : "Next round"}</BigButton>
+                </div>
+            )}
+        </div>
+    );
+}
+
+export const CountEmComp: CompDefinition = {
+    id: "count-em",
+    name: "Count 'Em",
+    emoji: "🧮",
+    kind: "memory",
+    rules: `${COUNT_ROUNDS} rounds. A pile of items flashes for 3 seconds, then you're asked how many of one kind there were. The smallest total error wins.`,
+    maxSeconds: 150,
+    Component: CountEm,
+    botScore: (p) => -Math.round((1 - p) * 14),
+    format: (s) => `${-s} off in total`,
+};
+
+// ---------------- Find the Key ----------------
+
+const KEY_ROUNDS = 5;
+const SLOTS = 3;
+
+function FindTheKey(props: CompProps) {
+    const [round, setRound] = React.useState(0);
+    const [slots, setSlots] = React.useState([0, 1, 2]); // slots[cup] = position
+    const [keyCup, setKeyCup] = React.useState(0);
+    const [phase, setPhase] = React.useState<"reveal" | "shuffle" | "pick" | "result">("reveal");
+    const [picked, setPicked] = React.useState<number | null>(null);
+    const [correct, setCorrect] = React.useState(0);
+    const { rand } = props;
+
+    React.useEffect(() => {
+        if (phase !== "reveal") return;
+        let cancelled = false;
+        (async () => {
+            const cup = randInt(rand, 0, SLOTS - 1);
+            setKeyCup(cup);
+            setPicked(null);
+            await sleep(1300);
+            if (cancelled) return;
+            setPhase("shuffle");
+            const swaps = 4 + round * 2;
+            const ms = Math.max(200, 520 - round * 75);
+            let current = [0, 1, 2];
+            for (let i = 0; i < swaps && !cancelled; i++) {
+                const a = randInt(rand, 0, SLOTS - 1);
+                const b = (a + randInt(rand, 1, SLOTS - 1)) % SLOTS;
+                const next = [...current];
+                const cupA = next.indexOf(a);
+                const cupB = next.indexOf(b);
+                next[cupA] = b;
+                next[cupB] = a;
+                current = next;
+                setSlots(next);
+                await sleep(ms);
+            }
+            if (!cancelled) setPhase("pick");
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [phase, round, rand]);
+
+    const choose = (cup: number) => {
+        if (phase !== "pick") return;
+        setPicked(cup);
+        const c = correct + (cup === keyCup ? 1 : 0);
+        setCorrect(c);
+        props.report(c);
+        setPhase("result");
+        if (round + 1 >= KEY_ROUNDS) setTimeout(() => props.finish(c), 900);
+    };
+
+    const showKey = phase === "reveal" || phase === "result";
+    return (
+        <div>
+            <Title>
+                Round {round + 1} of {KEY_ROUNDS}, found {correct}
+            </Title>
+            <Subtle>
+                {phase === "reveal" ? "Watch where the key is…" : phase === "shuffle" ? "Keep your eye on it!" : phase === "pick" ? "Which box has the key?" : picked === keyCup ? "You found it!" : "Wrong box!"}
+            </Subtle>
+            <div style={{ position: "relative", height: 130, width: "min(90vw, 360px)", margin: "0 auto" }}>
+                {[0, 1, 2].map((cup) => (
+                    <div
+                        key={cup}
+                        onClick={() => choose(cup)}
+                        style={{
+                            position: "absolute",
+                            left: `${slots[cup] * 33.3 + 1.5}%`,
+                            width: "30%",
+                            top: 10,
+                            height: 110,
+                            transition: "left 180ms ease-in-out",
+                            borderRadius: 14,
+                            background: picked === cup ? "#7c3aed" : "linear-gradient(180deg, #f59e0b, #b45309)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "2.6rem",
+                            cursor: phase === "pick" ? "pointer" : "default",
+                            touchAction: "manipulation",
+                            boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+                        }}
+                    >
+                        {showKey && cup === keyCup ? "🔑" : "📦"}
+                    </div>
+                ))}
+            </div>
+            {phase === "result" && round + 1 < KEY_ROUNDS && (
+                <BigButton
+                    onClick={() => {
+                        setRound(round + 1);
+                        setSlots([0, 1, 2]);
+                        setPhase("reveal");
+                    }}
+                >
+                    Next round
+                </BigButton>
+            )}
+        </div>
+    );
+}
+
+export const FindTheKeyComp: CompDefinition = {
+    id: "find-the-key",
+    name: "Find the Key",
+    emoji: "🔑",
+    kind: "memory",
+    rules: `A key goes in one of three boxes, then the boxes shuffle. Pick the box with the key. ${KEY_ROUNDS} rounds, and the shuffles get faster. Most keys found wins.`,
+    maxSeconds: 120,
+    Component: FindTheKey,
+    botScore: (p) => Math.round(1 + 4 * p),
+    format: (s) => `${s} of ${KEY_ROUNDS} found`,
+};

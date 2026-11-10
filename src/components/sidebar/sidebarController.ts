@@ -13,6 +13,7 @@ import {
     displayMode$,
     season$,
     pushToMainContentStream,
+    playerModeScreen$,
 } from "../../subjects/subjects";
 import { popularityMode } from "../../model/portraitDisplayMode";
 import { activeScreen$, Screens } from "../topbar/topBar";
@@ -88,6 +89,9 @@ export class SidebarController {
         if (targetScene < renderedScenes) {
             // Go back to an earlier scene
             this.switchToScene(targetScene);
+        } else if (targetScene === renderedScenes && playerModeScreen$.value) {
+            // Player mode: the next scene hasn't happened yet; go back to the player's screen
+            pushToMainContentStream(playerModeScreen$.value(), Screens.Ingame);
         } else if (targetScene === renderedScenes) {
             // Generate a new scene, then jump to it
             const currentGameState = lastEpisode.gameState;

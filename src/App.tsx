@@ -4,6 +4,7 @@ import { MainPageController } from "./components/mainPage/mainPageController";
 import { ThemeProvider } from "styled-components";
 import { ColorTheme, darkTheme } from "./theme/theme";
 import { GlobalStyles } from "./theme/globalTheme";
+import "./theme/modern.css";
 import { Subscription } from "rxjs";
 
 class App extends React.Component<{}, { theme: ColorTheme }> {
