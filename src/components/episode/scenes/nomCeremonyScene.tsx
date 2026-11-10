@@ -62,10 +62,13 @@ export function generateNomCeremonyScene(
     nom2.nominations++;
     newGameState.currentLog.nominationsPreVeto = [nom1.name, nom2.name];
     let nom3: Houseguest | undefined;
-    if (options.thirdNominee) {
+    const thirdNominee = options.thirdNominee || (!!forced && forced.length > 2);
+    if (thirdNominee) {
         nom3 = getById(
             newGameState,
-            backdoorNPlayers(HoH, exclude(houseguests, [HoH, nom1, nom2]), newGameState, 1)[0].decision
+            forced && forced[2]
+                ? forced[2].id
+                : backdoorNPlayers(HoH, exclude(houseguests, [HoH, nom1, nom2]), newGameState, 1)[0].decision
         );
         nom3.nominations++;
         newGameState.currentLog.nominationsPreVeto.push(nom3.name);
@@ -87,7 +90,7 @@ export function generateNomCeremonyScene(
                 <Centered>
                     {!doubleEviction &&
                         `This is the nomination ceremony. It is ${myOur} responsibility as ${theHoH} to
-                    nominate ${options.thirdNominee ? `three` : `two`} houseguests for eviction.`}
+                    nominate ${thirdNominee ? `three` : `two`} houseguests for eviction.`}
                 </Centered>
                 {!doubleEviction && <Portraits centered={true} houseguests={hohList} />}
                 <div className="columns is-marginless is-centered">
@@ -99,7 +102,7 @@ export function generateNomCeremonyScene(
                         <Centered>{secondText}</Centered>
                         <Portrait centered={true} houseguest={noms[1]} />
                     </DividerBox>
-                    {options.thirdNominee && (
+                    {thirdNominee && (
                         <DividerBox className="column">
                             <Centered>My third nominee is...</Centered>
                             <Portrait centered={true} houseguest={noms[2]} />

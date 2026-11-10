@@ -8,6 +8,7 @@ import { clearSave, inlineBlobImages, readSave } from "../save/serialize";
 import { buildSeason } from "../setupGame";
 import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
 import { initialsAvatar } from "./avatar";
+import { FaceEditor, Look } from "./faceEditor";
 import { PlayerModeScreen } from "./playerModeScreen";
 
 function launch(controller: PlayerModeController) {
@@ -62,8 +63,13 @@ export function PlayerSetup() {
     const [botCount, setBotCount] = React.useState(Math.max(0, total - 1));
     const [botOrder, setBotOrder] = React.useState<number[]>(() => shuffle(cast.map((_, i) => i)));
     const [starting, setStarting] = React.useState(false);
+    // players' chosen names and faces, by pool index
+    const [looks, setLooks] = React.useState<{ [i: number]: Look }>({});
+    const [editing, setEditing] = React.useState<number | null>(null);
+    const [hideSkills, setHideSkills] = React.useState(false);
 
-    const pool = [...cast, ...customs];
+    const basePool = [...cast, ...customs];
+    const pool: PlayerProfile[] = basePool.map((hg, i) => (looks[i] && selected.includes(i) ? { ...hg, ...looks[i] } : hg));
     const isCustom = (i: number) => i >= total;
     const castPlayers = selected.filter((i) => !isCustom(i)).length;
     const unassigned = playerCount - selected.length; // players who haven't picked yet might pick from the cast
@@ -110,12 +116,15 @@ export function PlayerSetup() {
         if (!ready) return;
         setStarting(true);
         clearSave();
-        const setup = buildSeason(pool, selected, bots, cast$.value.options || {}, hohPlaysVeto);
+        // skill randomizer: everyone gets secret, random Social and Comp scores
+        const roll = () => Math.round(1 + 9 * ((Math.random() + Math.random()) / 2));
+        const players = hideSkills ? pool.map((hg) => ({ ...hg, social: roll(), comp: roll() })) : pool;
+        const setup = buildSeason(players, selected, bots, cast$.value.options || {}, hohPlaysVeto);
         // make uploaded portraits survive a reload
         await inlineBlobImages(setup.gameState.houseguests);
         await newEpisode(null);
         await newEpisode(new PregameEpisode(setup.gameState));
-        launch(new PlayerModeController(newPlayerSave(setup.gameState, setup.humanIds, setup.castOptions)));
+        launch(new PlayerModeController(newPlayerSave(setup.gameState, setup.humanIds, setup.castOptions, hideSkills)));
     };
 
     const role = (i: number) => (selected.includes(i) ? "player" : bots.includes(i) ? "bot" : "out");
@@ -171,6 +180,39 @@ export function PlayerSetup() {
                     ✏️ Join
                 </button>
             </form>
+            {selected.length > 0 && (
+                <div className="bbb-looks">
+                    {selected.map((i, n) => (
+                        <button key={i} type="button" className="bbb-look" onClick={() => setEditing(editing === i ? null : i)}>
+                            <img src={pool[i].imageURL} alt="" />
+                            <span>
+                                <b>Player {n + 1}</b>: {pool[i].name}
+                                <br />
+                                <small>✏️ Change name & face</small>
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            )}
+            {editing !== null && selected.includes(editing) && (
+                <FaceEditor
+                    key={editing}
+                    original={{ name: basePool[editing].name, imageURL: basePool[editing].imageURL }}
+                    current={{ name: pool[editing].name, imageURL: pool[editing].imageURL }}
+                    onSave={(look) => {
+                        setLooks({ ...looks, [editing]: look });
+                        setEditing(null);
+                    }}
+                    onCancel={() => setEditing(null)}
+                />
+            )}
+            <label className="bbb-toggle">
+                <input type="checkbox" checked={hideSkills} onChange={(e) => setHideSkills(e.target.checked)} />
+                <span>
+                    🎲 <b>Skill randomizer</b>: give everyone secret, random Social and Comp scores, so nobody knows who's
+                    strongest. Revealed when the season ends.
+                </span>
+            </label>
             <div className="bbb-setup-summary">
                 <b>{houseguests}</b> houseguests · jury of <b>{jury}</b> · final <b>2</b>
             </div>
@@ -197,9 +239,13 @@ export function PlayerSetup() {
                             ) : isCustom(i) ? (
                                 <span>tap to play</span>
                             ) : role(i) === "bot" ? (
-                                <span>
-                                    🤖 🗣️{getSocial(hg)} 🏆{getComp(hg)}
-                                </span>
+                                hideSkills ? (
+                                    <span>🤖 🗣️? 🏆?</span>
+                                ) : (
+                                    <span>
+                                        🤖 🗣️{getSocial(hg)} 🏆{getComp(hg)}
+                                    </span>
+                                )
                             ) : (
                                 <span>sitting out</span>
                             )
@@ -208,8 +254,9 @@ export function PlayerSetup() {
                 ))}
             </Grid>
             <Subtle>
-                🗣️ Social and 🏆 Comp scores are set on the casting screen. Bots use both. For players, Social boosts your
-                social moves, and your comp results are all you.
+                🗣️ Social and 🏆 Comp scores are set on the casting screen (or rolled in secret by the skill randomizer).
+                Bots use both. For players, Social boosts your social moves and your sway in alliances; your comp results
+                are all you.
             </Subtle>
             <BigButton kind="success" disabled={!ready || starting} onClick={start}>
                 {starting ? "Starting…" : "Enter the house"}

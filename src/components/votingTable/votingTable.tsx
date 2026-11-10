@@ -364,7 +364,7 @@ function generatePreVetoRow(
                 {interleave(
                     [
                         ...log.nominationsPreVeto,
-                        ...log.strikethroughNominees.map((txt) => <del>{txt}</del>),
+                        ...log.strikethroughNominees.map((txt) => <del key={`del-${txt}`}>{txt}</del>),
                     ] as any,
                     (key) => (
                         <br key={`preveto--br--${week}-${key++}`} />

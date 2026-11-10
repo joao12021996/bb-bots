@@ -11,6 +11,7 @@ interface ChoosePromptProps {
     noneLabel?: string;
     confirmLabel: string;
     actor: Houseguest; // the player making this choice
+    allyIds?: number[]; // the player's alliance mates (picking them is a backstab)
     resolve: (ids: number[]) => void;
 }
 
@@ -54,6 +55,7 @@ export function ChoosePrompt(props: ChoosePromptProps) {
                                 ) : (
                                     <span title={feeling.label}>
                                         {feeling.emoji} {feeling.label}
+                                        {props.allyIds && props.allyIds.includes(hg.id) ? " 🤝" : ""}
                                     </span>
                                 )
                             }

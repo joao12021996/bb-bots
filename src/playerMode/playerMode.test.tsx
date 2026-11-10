@@ -3,6 +3,7 @@ import { rng } from "../utils";
 import { PlayerModeController, newPlayerSave, Prompt, Step, PlayerSave, migrateSave } from "./playerModeController";
 import { botPercentile } from "./comps/botScores";
 import { botSocialTime, performSocialAction, SocialMemory } from "./social/socialActions";
+import { Alliance, betray, botNominate, createAlliance, emptyBook, holdMeeting } from "./social/alliances";
 import { deserialize, serialize } from "./save/serialize";
 import { prepareNextWeek } from "../components/episode/episodeFactory";
 import { BigBrotherVanilla } from "../components/episode/bigBrotherEpisode";
@@ -32,17 +33,32 @@ function answer(controller: PlayerModeController, p: Prompt, strategy: Strategy,
     if (p.kind === "scene") controller.continue();
     else if (p.kind === "handoff") p.next();
     else if (p.kind === "social") {
+        const me = controller.socialActor;
+        // answer whoever came to talk
+        while (controller.approachesFor(me.id).length > 0) controller.respondApproach(0, Math.random() < 0.6);
         for (let i = 0; i < 3; i++) {
-            const me = controller.socialActor;
-            const bots = nonEvictedHouseguests(controller.gameState).filter((hg) => !controller.isHuman(hg));
-            if (bots.length === 0) break;
-            const bot = pick(bots);
-            const target = nonEvictedHouseguests(controller.gameState).find((b) => b.id !== bot.id && b.id !== me.id);
-            const kind = target ? ["chat", "alliance", "pitch"][i % 3] : "chat";
-            const action: any = kind === "pitch" ? { kind, botId: bot.id, targetId: target!.id } : { kind, botId: bot.id };
+            const others = nonEvictedHouseguests(controller.gameState).filter((hg) => hg.id !== me.id);
+            if (others.length === 0) break;
+            const other = pick(others);
+            const target = others.find((b) => b.id !== other.id);
+            const kind = controller.isHuman(other) ? "alliance" : target ? ["chat", "alliance", "pitch"][i % 3] : "chat";
+            const action: any =
+                kind === "pitch"
+                    ? { kind, botId: other.id, targetId: target!.id }
+                    : kind === "alliance"
+                    ? { kind, botId: other.id, name: `Team ${me.id}-${other.id}` }
+                    : { kind, botId: other.id };
             controller.socialAct(action);
         }
         controller.endSocial();
+    } else if (p.kind === "alliance") {
+        const me = controller.socialActor;
+        controller.alliancesOf(me.id).forEach((a) => {
+            const outsiders = nonEvictedHouseguests(controller.gameState).filter((hg) => !a.memberIds.includes(hg.id));
+            if (Math.random() < 0.05 && outsiders.length > 0) controller.leak(a.id, pick(outsiders).id);
+            else controller.allianceSuggest(a.id, outsiders.length > 0 ? pick(outsiders).id : null);
+        });
+        controller.endAlliance();
     } else if (p.kind === "compPlay") {
         const win = humansWin === "random" ? Math.random() < 0.5 : humansWin;
         p.onScore(win ? 1e9 : -1e9);
@@ -59,6 +75,8 @@ function playSeason(n: number, humanIds: number[], strategy: Strategy, humansWin
     const controller = new PlayerModeController(newPlayerSave(newGame(n), humanIds));
     controller.state.seed = humanIds[0] * 7919 + n;
     const seen = new Set<string>();
+    const scenes = new Set<string>();
+    const nomCounts: [number, number][] = [];
     let prompt: Prompt | null = null;
     controller.prompt$.subscribe((p) => (prompt = p));
     controller.start();
@@ -67,11 +85,14 @@ function playSeason(n: number, humanIds: number[], strategy: Strategy, humansWin
         const p = prompt as Prompt | null;
         if (!p) throw new Error("No prompt");
         seen.add(p.kind === "choose" ? `choose:${p.title}` : p.kind);
+        if (p.kind === "choose" && p.title === "Nomination Ceremony")
+            nomCounts.push([nonEvictedHouseguests(controller.gameState).length, p.count]);
+        if (p.kind === "scene") scenes.add(p.scene.title);
         if (p.kind === "gameOver") break;
         answer(controller, p, strategy, humansWin);
     }
     if (guard >= 5000) throw new Error("Season did not finish");
-    return { controller, seen };
+    return { controller, seen, scenes, nomCounts };
 }
 
 describe("player mode season", () => {
@@ -125,13 +146,38 @@ describe("player mode season", () => {
         expect(playSeason(8, [1, 4], "random", "random").seen.has("handoff")).toBe(true);
     });
 
-    it("never repeats a competition in a 16-person season", () => {
+    it("doesn't repeat a competition until every weekly comp has been played", () => {
         for (const ids of [[0], [3, 7]]) {
             const { controller } = playSeason(16, ids, "random", "random");
             const used = controller.state.usedComps;
-            expect(used.length).toBe(2 * (16 - 3) + 3);
-            expect(new Set(used).size).toBe(used.length);
+            // HoH + veto every week, a Blockbuster in weeks with 7+ houseguests, and three finale parts
+            const blockbusters = 16 - 7 + 1;
+            expect(used.length).toBe(2 * (16 - 3) + blockbusters + 3);
+            const firstRound = used.slice(0, WEEKLY_COMPS.length - 2);
+            expect(new Set(firstRound).size).toBe(firstRound.length);
         }
+    });
+
+    it("has Blockbuster weeks (three nominees) only while 7 or more houseguests are left", () => {
+        const counts: [number, number][] = [];
+        const scenes = new Set<string>();
+        for (let id = 0; id < 10; id++) {
+            const r = playSeason(10, [id], "random", true);
+            counts.push(...r.nomCounts);
+            r.scenes.forEach((t) => scenes.add(t));
+        }
+        expect(counts.length).toBeGreaterThan(0);
+        counts.forEach(([alive, count]) => expect(count).toBe(alive >= 7 ? 3 : 2));
+        expect(counts.some(([alive]) => alive >= 7)).toBe(true);
+        expect(counts.some(([alive]) => alive < 7)).toBe(true);
+        expect(scenes.has("Blockbuster")).toBe(true);
+    });
+
+    it("bots form their own named alliances, and players get alliance time", () => {
+        const { controller, seen } = playSeason(12, [9], "random", "random");
+        expect(seen.has("alliance")).toBe(true);
+        expect(controller.state.book.nextId).toBeGreaterThan(2);
+        controller.state.book.alliances.forEach((a) => expect(a.name.length).toBeGreaterThan(0));
     });
 
     it("has enough comps for a 16-person season, with unique ids and time limits of at most 10 minutes", () => {
@@ -197,7 +243,7 @@ describe("bot scores", () => {
 describe("social actions", () => {
     function setup() {
         const gs = new MutableGameState(prepareNextWeek(newGame(6), BigBrotherVanilla));
-        const memory: SocialMemory = { chatsThisWeek: {}, allies: [] };
+        const memory: SocialMemory = { chatsThisWeek: {} };
         return { gs, memory };
     }
 
@@ -298,10 +344,13 @@ describe("save files", () => {
             socialLog: [],
         };
         const migrated = migrateSave(v1)!;
-        expect(migrated.version).toBe(2);
+        expect(migrated.version).toBe(3);
         expect(migrated.humanIds).toEqual([4]);
         expect(migrated.usedComps).toEqual(["face-off"]);
-        expect(migrated.social[4].allies).toEqual([1]);
+        // old allies become an alliance
+        expect(migrated.book.alliances.length).toBe(1);
+        expect([...migrated.book.alliances[0].memberIds].sort()).toEqual([1, 4]);
+        expect(migrated.socialStage).toBe("social");
     });
 });
 
@@ -398,5 +447,131 @@ describe("real houseguest ratings and custom players", () => {
             answer(controller, p, "random", "random");
         }
         expect(controller.state.step).toBe(Step.GameOver);
+    });
+});
+
+describe("alliances", () => {
+    function setup(n: number = 8) {
+        rng().seed(3);
+        const gs = new MutableGameState(prepareNextWeek(newGame(n), BigBrotherVanilla));
+        return { gs, book: emptyBook() };
+    }
+
+    it("creates named alliances that bring members closer", () => {
+        const { gs, book } = setup();
+        const before = getById(gs, 0).relationships[1];
+        const a = createAlliance(gs, book, [0, 1], "The Vault");
+        expect(a.name).toBe("The Vault");
+        expect(getById(gs, 0).relationships[1]).toBeGreaterThan(before);
+        // same members: same alliance
+        expect(createAlliance(gs, book, [1, 0], "Other").id).toBe(a.id);
+    });
+
+    it("disagreeing on a target costs chemistry; agreeing builds it", () => {
+        let lost = false;
+        let gained = false;
+        for (let seed = 0; seed < 60 && !(lost && gained); seed++) {
+            const { gs, book } = setup();
+            rng().seed(seed);
+            const a: Alliance = createAlliance(gs, book, [0, 1, 2, 3], "Test");
+            const before = a.chemistry;
+            // the player (0) suggests someone; bots have their own ideas
+            a.suggestions[0] = 4 + (seed % 4);
+            const result = holdMeeting(gs, a, [0]);
+            if (result.chemistryChange < 0) {
+                expect(a.chemistry).toBeLessThan(before);
+                lost = true;
+            }
+            if (result.chemistryChange > 0) {
+                expect(a.chemistry).toBeGreaterThan(before);
+                gained = true;
+            }
+            expect(a.target).toBe(result.targetId === null ? undefined : result.targetId);
+        }
+        expect(lost).toBe(true);
+        expect(gained).toBe(true);
+    });
+
+    it("high-Social players get their way in alliance meetings more often", () => {
+        const wins = (social: number) => {
+            let n = 0;
+            for (let seed = 0; seed < 150; seed++) {
+                rng().seed(seed);
+                const gs = new MutableGameState(prepareNextWeek(newGame(10), BigBrotherVanilla));
+                getById(gs, 0).social = social;
+                const book = emptyBook();
+                const a = createAlliance(gs, book, [0, 1, 2, 3], "Test");
+                // suggest the outsider bot 1 likes most, so it takes persuasion
+                const target = [4, 5, 6, 7, 8, 9].sort(
+                    (x, y) => getById(gs, 1).relationships[y] - getById(gs, 1).relationships[x]
+                )[0];
+                a.suggestions[0] = target;
+                if (holdMeeting(gs, a, [0]).targetId === target) n++;
+            }
+            return n;
+        };
+        expect(wins(10)).toBeGreaterThan(wins(1));
+    });
+
+    it("a caught backstabber is kicked out and resented", () => {
+        const { gs, book } = setup();
+        const a = createAlliance(gs, book, [0, 1, 2], "Test");
+        const before = getById(gs, 1).relationships[0];
+        betray(gs, book, a, 0, 1, true);
+        expect(a.memberIds).toEqual([1, 2]);
+        expect(getById(gs, 1).relationships[0]).toBeLessThan(before);
+    });
+
+    it("loyal bots don't nominate their allies when they have other options", () => {
+        const { gs, book } = setup();
+        const a = createAlliance(gs, book, [0, 1, 2], "Test");
+        a.chemistry = 1;
+        [1, 2].forEach((id) => {
+            getById(gs, 0).relationships[id] = 1;
+            getById(gs, id).relationships[0] = 1;
+        });
+        const hoh = getById(gs, 0);
+        const options = nonEvictedHouseguests(gs).filter((hg) => hg.id !== 0);
+        let allyNoms = 0;
+        for (let seed = 0; seed < 50; seed++) {
+            rng().seed(seed);
+            const { picks } = botNominate(gs, book, hoh, options, 3);
+            allyNoms += picks.filter((p) => p.id === 1 || p.id === 2).length;
+        }
+        expect(allyNoms).toBeLessThan(5);
+    });
+
+    it("a player who nominates an alliance mate gets kicked out of the alliance", () => {
+        for (let id = 0; id < 8; id++) {
+            const controller = new PlayerModeController(newPlayerSave(newGame(8), [id]));
+            controller.state.seed = id;
+            let prompt: Prompt | null = null;
+            controller.prompt$.subscribe((p) => (prompt = p));
+            controller.start();
+            let guard = 0;
+            while (guard++ < 400) {
+                const p = prompt as Prompt | null;
+                if (!p || p.kind === "gameOver") break;
+                if (p.kind === "choose" && p.title === "Nomination Ceremony") {
+                    // make an alliance with the first option, then nominate them
+                    const victim = p.options[0];
+                    const gs = new MutableGameState(controller.gameState);
+                    const a = createAlliance(gs, controller.state.book, [id, victim.id], "Doomed");
+                    controller.state.gameState = new GameState(gs);
+                    p.resolve(p.options.slice(0, p.count).map((o) => o.id));
+                    expect(a.memberIds.includes(id)).toBe(false);
+                    expect(controller.allyIds(id).includes(victim.id)).toBe(false);
+                    return;
+                }
+                answer(controller, p, "random", true);
+            }
+        }
+        throw new Error("The player never got to nominate");
+    });
+
+    it("keeps hidden skills hidden in the save", () => {
+        const save = newPlayerSave(newGame(6), [0], undefined, true);
+        const restored = migrateSave(deserialize<any>(serialize(save)))!;
+        expect(restored.statsHidden).toBe(true);
     });
 });

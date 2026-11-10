@@ -6,6 +6,7 @@ import { PlayerModeController, Prompt } from "../playerModeController";
 import { ChoosePrompt } from "./choosePrompt";
 import { BigButton, Panel, Subtle, Title } from "./common";
 import { SocialScreen } from "./socialScreen";
+import { AllianceScreen } from "./allianceScreen";
 
 interface Props {
     controller: PlayerModeController;
@@ -73,6 +74,9 @@ export class PlayerModeScreen extends React.Component<Props, State> {
             case "social":
                 body = <SocialScreen key={this.state.key} controller={controller} blockName={prompt.blockName} />;
                 break;
+            case "alliance":
+                body = <AllianceScreen key={this.state.key} controller={controller} blockName={prompt.blockName} />;
+                break;
             case "compPlay":
                 body = (
                     <CompPlay
@@ -114,6 +118,7 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                         noneLabel={prompt.noneLabel}
                         confirmLabel={prompt.confirmLabel}
                         actor={controller.player(prompt.actorId)}
+                        allyIds={controller.allyIds(prompt.actorId)}
                         resolve={prompt.resolve}
                     />
                 );

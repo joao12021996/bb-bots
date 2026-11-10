@@ -4,5 +4,6 @@ export interface WeekRecord {
     hohId?: number;
     nomineeIds: number[]; // final nominees (after the veto ceremony)
     povId?: number;
+    blockbusterId?: number; // won the Blockbuster (came off the block)
     evictedIds: number[];
 }

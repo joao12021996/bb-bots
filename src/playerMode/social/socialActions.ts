@@ -1,14 +1,18 @@
-import { getById, getSocial, Houseguest, MutableGameState, nonEvictedHouseguests } from "../../model";
+import { getById, getSocial, MutableGameState, nonEvictedHouseguests } from "../../model";
 import { rng } from "../../utils";
+import { setRelationship, shiftRelationship, socialFactor } from "./relationships";
+import { alliesOf, AllianceBook, randomAllianceName } from "./alliances";
+
+export { setRelationship, shiftRelationship, socialFactor };
 
 // Social actions change relationships, which drive every bot decision (votes, nominations, jury).
-// Relationships in this game are mutual, so every change is applied in both directions.
 
 export const ACTIONS_PER_BLOCK = 3;
 
+// Alliance proposals are handled by the controller (see alliances.ts); chat and pitches are handled here.
 export type SocialAction =
     | { kind: "chat"; botId: number }
-    | { kind: "alliance"; botId: number }
+    | { kind: "alliance"; botId: number; allianceId?: number; name?: string }
     | { kind: "pitch"; botId: number; targetId: number };
 
 export interface SocialOutcome {
@@ -18,30 +22,16 @@ export interface SocialOutcome {
 
 export interface SocialMemory {
     chatsThisWeek: { [botId: number]: number };
-    allies: number[];
 }
+
+// Something another houseguest came to talk to a player about.
+export type Approach =
+    | { kind: "chat"; fromId: number; text: string } // already happened
+    | { kind: "pitch"; fromId: number; targetId: number } // "we should go after X": agree or not
+    | { kind: "invite"; fromId: number; allianceId?: number; name: string }; // join an alliance (or start one)
 
 function rand(): number {
     return Math.abs(rng().randomFloat());
-}
-
-function clamp(n: number): number {
-    return Math.max(-1, Math.min(1, n));
-}
-
-export function setRelationship(gs: MutableGameState, a: number, b: number, value: number) {
-    const v = clamp(value);
-    getById(gs, a).relationships[b] = v;
-    getById(gs, b).relationships[a] = v;
-}
-
-export function shiftRelationship(gs: MutableGameState, a: number, b: number, delta: number) {
-    setRelationship(gs, a, b, getById(gs, a).relationships[b] + delta);
-}
-
-// 0.6 (social 1) to 1.5 (social 10)
-export function socialFactor(hg: Houseguest): number {
-    return 0.5 + getSocial(hg) / 10;
 }
 
 export function performSocialAction(
@@ -70,19 +60,7 @@ export function performSocialAction(
     }
 
     if (action.kind === "alliance") {
-        if (memory.allies.includes(bot.id)) {
-            return { text: `${bot.name} is already in your alliance.`, good: true };
-        }
-        const pAccept = Math.max(0.05, Math.min(0.95, (trust + 0.3) * sf));
-        if (rand() < pAccept) {
-            memory.allies.push(bot.id);
-            shiftRelationship(gs, humanId, bot.id, 0.2);
-            // your allies warm up to each other too
-            memory.allies.forEach((ally) => ally !== bot.id && shiftRelationship(gs, ally, bot.id, 0.1));
-            return { text: `${bot.name} agreed to an alliance with you!`, good: true };
-        }
-        shiftRelationship(gs, humanId, bot.id, -0.05);
-        return { text: `${bot.name} isn't ready to commit to an alliance with you.`, good: false };
+        throw new Error("Alliance proposals are handled by proposeAlliance.");
     }
 
     // pitch a target: try to turn the bot against someone else
@@ -154,4 +132,51 @@ export function botSocialTime(gs: MutableGameState, humanIds: number[]): void {
         }
     });
     houseDrift(gs, humanIds);
+}
+
+const CHAT_LINES = [
+    "came by to chat about life back home.",
+    "pulled you aside to say they've got your back.",
+    "brought you a snack and hung out for a while.",
+    "wanted to vent about the house, and you listened.",
+    "spent the afternoon by the pool with you.",
+];
+
+// Bots come to the players: friendly ones chat, schemers pitch targets, and some ask the player to join (or
+// start) an alliance. Chats take effect right away; pitches and invitations wait for the player's answer.
+export function botApproaches(gs: MutableGameState, book: AllianceBook, humanId: number, humanIds: number[]): Approach[] {
+    const allies = alliesOf(book, humanId);
+    const out: Approach[] = [];
+    const bots = nonEvictedHouseguests(gs).filter((hg) => !humanIds.includes(hg.id));
+    bots.forEach((bot) => {
+        if (out.length >= 3) return;
+        const rel = bot.relationships[humanId];
+        const pApproach = 0.04 + 0.025 * getSocial(bot) + 0.3 * Math.max(0, rel);
+        if (rand() > pApproach) return;
+        if (rel > 0.3 && !allies.has(bot.id) && rand() < 0.3 && nonEvictedHouseguests(gs).length > 4) {
+            out.push({ kind: "invite", fromId: bot.id, name: randomAllianceName(book) });
+            return;
+        }
+        const target = bot.hitList.find((e) => e.id !== humanId && e.id !== bot.id && !getById(gs, e.id).isEvicted);
+        if (target && rand() < 0.45) {
+            out.push({ kind: "pitch", fromId: bot.id, targetId: target.id });
+            return;
+        }
+        shiftRelationship(gs, humanId, bot.id, 0.03 * socialFactor(bot) * (0.5 + rand()));
+        out.push({ kind: "chat", fromId: bot.id, text: `${bot.name} ${CHAT_LINES[rng().randomInt(0, CHAT_LINES.length - 1)]}` });
+    });
+    return out;
+}
+
+// A player answers a bot's pitch. Agreeing builds trust with the bot and sours the player on the target.
+export function answerPitch(gs: MutableGameState, humanId: number, fromId: number, targetId: number, agree: boolean): SocialOutcome {
+    const from = getById(gs, fromId);
+    const target = getById(gs, targetId);
+    if (agree) {
+        shiftRelationship(gs, humanId, fromId, 0.06);
+        shiftRelationship(gs, humanId, targetId, -0.05);
+        return { text: `You told ${from.name} you're on board with going after ${target.name}.`, good: true };
+    }
+    shiftRelationship(gs, humanId, fromId, -0.03);
+    return { text: `You told ${from.name} you're not sold on going after ${target.name}.`, good: false };
 }

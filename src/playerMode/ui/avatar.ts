@@ -17,3 +17,17 @@ export function initialsAvatar(name: string): string {
 </svg>`;
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
+
+export const AVATAR_EMOJIS = ["😎", "🤠", "🥳", "😈", "🤖", "👽", "🦊", "🐼", "🐯", "🦁", "🐸", "🐙", "🦄", "🐺", "🌵", "🔥", "💎", "👑", "🍕", "🎸"];
+
+// An emoji face on a colorful background, as a data URL.
+export function emojiAvatar(emoji: string, hue: number): string {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="hsl(${hue},75%,62%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360},70%,40%)"/>
+</linearGradient></defs>
+<rect width="160" height="160" fill="url(#g)"/>
+<text x="80" y="84" dy=".35em" text-anchor="middle" font-size="96">${emoji}</text>
+</svg>`;
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
