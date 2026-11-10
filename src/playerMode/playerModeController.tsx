@@ -34,6 +34,7 @@ import { WeekRecord } from "./history";
 import { CompDefinition, Opponent } from "./comps/compTypes";
 import { compById, finaleComps, pickWeeklyComp } from "./comps";
 import { botPercentile } from "./comps/botScores";
+import { seededRand } from "./comps/random";
 import { CompResult, rankResults } from "./comps/compRunner";
 import { ACTIONS_PER_BLOCK, botSocialTime, performSocialAction, SocialAction, SocialMemory, SocialOutcome } from "./social/socialActions";
 import { clearSave, writeSave } from "./save/serialize";
@@ -278,11 +279,16 @@ export class PlayerModeController {
         return this.alivePlayers.filter((p) => hgs.some((hg) => hg.id === p.id));
     }
 
-    private simulateBots(comp: CompDefinition, participants: Houseguest[]): CompResult[] {
-        const ctx = { gameState: this.gameState, history: this.state.history };
+    // Bots play the exact same comp instance as the players (same seed: same questions, dice, maze...),
+    // performing according to their Comp score.
+    private simulateBots(comp: CompDefinition, participants: Houseguest[], seed: number): CompResult[] {
+        const ctx = { seed, gameState: this.gameState, history: this.state.history, participants };
         return participants
             .filter((hg) => !this.isHuman(hg))
-            .map((hg) => ({ id: hg.id, score: comp.botScore(botPercentile(hg), ctx) }));
+            .map((hg) => {
+                const result = comp.simulate(ctx, botPercentile(hg), seededRand(hashcode(`${seed}:bot:${hg.id}`)));
+                return { id: hg.id, score: result.score, answers: result.answers };
+            });
     }
 
     private noteComp(comp: CompDefinition) {
@@ -291,9 +297,9 @@ export class PlayerModeController {
 
     // Runs a competition: every player in it takes a turn (same seed), then everyone sees the results.
     private runComp(title: string, comp: CompDefinition, participants: Houseguest[], onWinner: (id: number) => void) {
-        const bots = this.simulateBots(comp, participants);
-        const humans = this.playingHumans(participants);
         const seed = hashcode(`${this.state.seed}:${this.gameState.phase}:${this.state.step}:${comp.id}`);
+        const bots = this.simulateBots(comp, participants, seed);
+        const humans = this.playingHumans(participants);
         const done = (winnerId: number) => {
             this.noteComp(comp);
             onWinner(winnerId);
@@ -317,7 +323,11 @@ export class PlayerModeController {
                 return;
             }
             const player = humans[i];
-            const opponents: Opponent[] = [...bots, ...humanResults].map((r) => ({ hg: byId(r.id), score: r.score }));
+            const opponents: Opponent[] = [...bots, ...humanResults].map((r) => ({
+                hg: byId(r.id),
+                score: r.score,
+                answers: r.answers,
+            }));
             this.privately(player.id, `${player.name}'s turn in the ${comp.name}`, () =>
                 this.show({
                     kind: "compPlay",

@@ -1,8 +1,8 @@
 import React from "react";
-import { nonEvictedHouseguests } from "../../model";
+import { GameState, nonEvictedHouseguests } from "../../model";
 import { BigButton, Face, Grid, Subtle, Title, useElapsed } from "../ui/common";
-import { CompDefinition, CompProps } from "./compTypes";
-import { Rand, sample, shuffled } from "./random";
+import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
+import { answerQuestion, chance, clamp, gaussian, Rand, sample, seededRand, shuffled } from "./random";
 import { QuizScoreboard } from "./compUi";
 
 const ITEMS = ["🍕", "🎸", "👑", "🔑", "🐍", "💎", "🎲", "🧸", "🍩", "🚀", "🌵", "🎩"];
@@ -18,6 +18,7 @@ interface Question {
     prompt: React.ReactNode;
     options: { key: string; node: React.ReactNode }[];
     answer: string;
+    about: number; // id of the houseguest whose card the question is about
 }
 
 function buildQuestions(cards: Card[], rand: Rand): Question[] {
@@ -43,6 +44,7 @@ function buildQuestions(cards: Card[], rand: Rand): Question[] {
                     node: <span style={{ fontSize: "2rem" }}>{it}</span>,
                 })),
                 answer: card.item,
+                about: card.hg.id,
             });
         } else {
             // "Who had ITEM?"
@@ -58,19 +60,34 @@ function buildQuestions(cards: Card[], rand: Rand): Question[] {
                     node: <Face hg={c.hg} />,
                 })),
                 answer: `${card.hg.id}`,
+                about: card.hg.id,
             });
         }
     }
     return shuffled(rand, questions);
 }
 
+// The wall and its questions. Players and bots all get the same one from the comp's seed.
+export function generateMemoryWall(rand: Rand, gs: GameState): { cards: Card[]; questions: Question[] } {
+    const people = sample(rand, nonEvictedHouseguests(gs), 6);
+    const items = sample(rand, ITEMS, people.length);
+    const cards = people.map((hg, i) => ({ hg, item: items[i] }));
+    return { cards, questions: buildQuestions(cards, rand) };
+}
+
+function simulateMemoryWall(ctx: SimContext, skill: number, noise: Rand): SimResult {
+    const { cards, questions } = generateMemoryWall(seededRand(ctx.seed), ctx.gameState);
+    // the bot remembers each card on the wall (or not), then answers the same questions
+    const recall = clamp(0.25 + 0.7 * skill + 0.08 * gaussian(noise), 0.05, 0.98);
+    const remembers = new Set(cards.filter(() => chance(noise, recall)).map((c) => c.hg.id));
+    const answers = questions.map((q) => answerQuestion(noise, remembers.has(q.about) ? 1 : 0, q.options.length));
+    const correct = answers.filter(Boolean).length;
+    const seconds = 25 + (1 - skill) * 80 + 6 * gaussian(noise);
+    return { score: correct * 100 + Math.max(0, 99 - seconds), answers };
+}
+
 function MemoryWall(props: CompProps) {
-    const [cards] = React.useState<Card[]>(() => {
-        const people = sample(props.rand, nonEvictedHouseguests(props.gameState), 6);
-        const items = sample(props.rand, ITEMS, people.length);
-        return people.map((hg, i) => ({ hg, item: items[i] }));
-    });
-    const [questions] = React.useState(() => buildQuestions(cards, props.rand));
+    const [{ cards, questions }] = React.useState(() => generateMemoryWall(props.rand, props.gameState));
     const [phase, setPhase] = React.useState<"study" | "quiz">("study");
     const [index, setIndex] = React.useState(0);
     const [correct, setCorrect] = React.useState(0);
@@ -157,6 +174,7 @@ export const MemoryWallComp: CompDefinition = {
     rules: `Houseguests appear with a mystery item each. You have ${STUDY_SECONDS} seconds to memorize who had what, then answer ${QUESTIONS} questions. Most right answers wins; ties go to whoever answered fastest.`,
     maxSeconds: 180,
     Component: MemoryWall,
+    simulate: simulateMemoryWall,
     botScore: (p) => {
         const correct = Math.min(QUESTIONS, Math.round(QUESTIONS * (0.25 + 0.75 * p)));
         return correct * 100 + Math.max(0, 99 - (25 + (1 - p) * 80));

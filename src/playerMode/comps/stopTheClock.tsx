@@ -1,15 +1,28 @@
 import React from "react";
 import { BigButton, Subtle, Title } from "../ui/common";
-import { CompDefinition, CompProps } from "./compTypes";
-import { randInt } from "./random";
+import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
+import { gaussian, Rand, randInt, seededRand } from "./random";
 
 const ROUNDS = 3;
 const VISIBLE_FOR = 1.5; // seconds the clock is visible before it hides
 
-function StopTheClock(props: CompProps) {
-    const [targets] = React.useState(() =>
-        Array.from({ length: ROUNDS }, () => randInt(props.rand, 5, 10))
+// The target times, the same for every player and bot.
+export function generateTargets(rand: Rand): number[] {
+    return Array.from({ length: ROUNDS }, () => randInt(rand, 5, 10));
+}
+
+function simulateStopTheClock(ctx: SimContext, skill: number, noise: Rand): SimResult {
+    const targets = generateTargets(seededRand(ctx.seed));
+    // longer targets are harder to time
+    const error = targets.reduce(
+        (sum, t) => sum + Math.abs(gaussian(noise)) * (0.04 + (1 - skill) * 0.7) * (t / 7.5),
+        0
     );
+    return { score: -error };
+}
+
+function StopTheClock(props: CompProps) {
+    const [targets] = React.useState(() => generateTargets(props.rand));
     const [round, setRound] = React.useState(0);
     const [startedAt, setStartedAt] = React.useState<number | null>(null);
     const [stoppedAt, setStoppedAt] = React.useState<number | null>(null);
@@ -103,6 +116,7 @@ export const StopTheClockComp: CompDefinition = {
     rules: `Three rounds. Press Start, and the clock counts up, but it disappears after ${VISIBLE_FOR} seconds. Press STOP when you think the target time has passed. The smallest total error wins.`,
     maxSeconds: 120,
     Component: StopTheClock,
+    simulate: simulateStopTheClock,
     botScore: (p) => -(0.06 + 3 * Math.pow(1 - p, 2)),
     format: (s) => `${(-s).toFixed(2)}s off`,
 };

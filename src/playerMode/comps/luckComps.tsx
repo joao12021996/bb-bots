@@ -1,8 +1,8 @@
 import React from "react";
 import { rng } from "../../utils";
 import { BigButton, Subtle, Title } from "../ui/common";
-import { CompDefinition, CompProps } from "./compTypes";
-import { randInt } from "./random";
+import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
+import { chance, gaussian, Rand, randInt, seededRand } from "./random";
 
 // Luck comps: like Big Brother's "Pandora's box" style comps, skill only matters a little.
 
@@ -74,6 +74,20 @@ function HigherOrLower(props: CompProps) {
     );
 }
 
+function simulateHigherOrLower(ctx: SimContext, skill: number, noise: Rand): SimResult {
+    // the exact same cards; better bots play the odds more consistently
+    const rand = seededRand(ctx.seed);
+    const deck = Array.from({ length: HL_GUESSES + 1 }, () => randInt(rand, 1, 13));
+    let right = 0;
+    for (let i = 0; i < HL_GUESSES; i++) {
+        const playOdds = chance(noise, 0.65 + 0.35 * skill);
+        const higher = playOdds ? deck[i] <= 7 : noise() < 0.5;
+        const next = deck[i + 1];
+        if (next === deck[i] || (higher ? next > deck[i] : next < deck[i])) right++;
+    }
+    return { score: right };
+}
+
 export const HigherOrLowerComp: CompDefinition = {
     id: "higher-or-lower",
     name: "Higher or Lower",
@@ -82,6 +96,7 @@ export const HigherOrLowerComp: CompDefinition = {
     rules: `A card is face up. Guess whether the next card is higher or lower. ${HL_GUESSES} guesses; most right wins. Mostly luck, but play the odds!`,
     maxSeconds: 90,
     Component: HigherOrLower,
+    simulate: simulateHigherOrLower,
     botScore: () => {
         // bots play the odds; the cards decide
         let cur = Math.floor(botRand() * 13) + 1;
@@ -174,6 +189,26 @@ function BankOrBust(props: CompProps) {
     );
 }
 
+function simulateBankOrBust(ctx: SimContext, skill: number, noise: Rand): SimResult {
+    // the exact same dice rolls in the same order; better bots stop closer to the best point (~20)
+    const rand = seededRand(ctx.seed);
+    const threshold = 10 + Math.round(10 * skill + 2 * gaussian(noise));
+    let total = 0;
+    for (let r = 0; r < BANK_ROUNDS; r++) {
+        let pot = 0;
+        while (pot < threshold) {
+            const die = randInt(rand, 1, 6);
+            if (die === 1) {
+                pot = 0;
+                break;
+            }
+            pot += die;
+        }
+        total += pot;
+    }
+    return { score: total };
+}
+
 export const BankOrBustComp: CompDefinition = {
     id: "bank-or-bust",
     name: "Bank or Bust",
@@ -182,6 +217,7 @@ export const BankOrBustComp: CompDefinition = {
     rules: `${BANK_ROUNDS} rounds. Roll the die to add to your pot, but rolling a 1 busts and you lose that round's pot. Bank whenever you want. Highest total wins.`,
     maxSeconds: 120,
     Component: BankOrBust,
+    simulate: simulateBankOrBust,
     botScore: (p) => {
         // better bots know when to stop (around 20 is optimal)
         const threshold = 10 + Math.round(10 * p);

@@ -1,9 +1,9 @@
 import React from "react";
 import { GameState, nonEvictedHouseguests } from "../../model";
 import { Subtle, Title } from "../ui/common";
-import { CompDefinition, CompProps } from "./compTypes";
+import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { QuizScoreboard } from "./compUi";
-import { pick, Rand, sample, shuffled } from "./random";
+import { answerQuestion, chance, clamp, gaussian, pick, Rand, sample, seededRand, shuffled } from "./random";
 
 // Comps about the houseguests themselves. Scored as correct * 100 + a speed bonus, with a live scoreboard.
 
@@ -12,15 +12,18 @@ import { pick, Rand, sample, shuffled } from "./random";
 const ZOOM_ROUNDS = 6;
 const ZOOM_SECONDS = 8;
 
-function ZoomIn(props: CompProps) {
-    const [rounds] = React.useState(() => {
-        const pool = props.gameState.houseguests;
-        return Array.from({ length: ZOOM_ROUNDS }, () => {
-            const target = pick(props.rand, pool);
-            const options = shuffled(props.rand, [target, ...sample(props.rand, pool.filter((h) => h.id !== target.id), 3)]);
-            return { target, options, ox: 20 + props.rand() * 60, oy: 20 + props.rand() * 60 };
-        });
+// The photos, answer choices and zoom points, the same for every player and bot.
+export function generateZoomRounds(rand: Rand, gs: GameState) {
+    const pool = gs.houseguests;
+    return Array.from({ length: ZOOM_ROUNDS }, () => {
+        const target = pick(rand, pool);
+        const options = shuffled(rand, [target, ...sample(rand, pool.filter((h) => h.id !== target.id), 3)]);
+        return { target, options, ox: 20 + rand() * 60, oy: 20 + rand() * 60 };
     });
+}
+
+function ZoomIn(props: CompProps) {
+    const [rounds] = React.useState(() => generateZoomRounds(props.rand, props.gameState));
     const [round, setRound] = React.useState(0);
     const [correct, setCorrect] = React.useState(0);
     const [bonus, setBonus] = React.useState(0);
@@ -89,6 +92,21 @@ function ZoomIn(props: CompProps) {
     );
 }
 
+function simulateZoomIn(ctx: SimContext, skill: number, noise: Rand): SimResult {
+    // the same photos: a bot recognizes each one after some time (or never, and guesses)
+    const rounds = generateZoomRounds(seededRand(ctx.seed), ctx.gameState);
+    let bonus = 0;
+    const answers = rounds.map((r) => {
+        const seconds = 1.5 + (1 - skill) * 6 + gaussian(noise);
+        if (seconds < ZOOM_SECONDS) {
+            bonus += Math.max(0, (ZOOM_SECONDS - seconds) / ZOOM_SECONDS) * (99 / ZOOM_ROUNDS);
+            return true;
+        }
+        return chance(noise, 1 / r.options.length);
+    });
+    return { score: answers.filter(Boolean).length * 100 + bonus, answers };
+}
+
 export const ZoomInComp: CompDefinition = {
     id: "zoom-in",
     name: "Zoom In",
@@ -97,6 +115,7 @@ export const ZoomInComp: CompDefinition = {
     rules: `A super zoomed-in photo of a houseguest slowly zooms out. Name them as fast as you can. ${ZOOM_ROUNDS} rounds, ${ZOOM_SECONDS} seconds each. Most right wins; faster answers break ties.`,
     maxSeconds: ZOOM_ROUNDS * ZOOM_SECONDS + 20,
     Component: ZoomIn,
+    simulate: simulateZoomIn,
     botScore: (p) => {
         const c = Math.min(ZOOM_ROUNDS, Math.round(ZOOM_ROUNDS * (0.35 + 0.65 * p)));
         return c * 100 + c * (99 / ZOOM_ROUNDS) * (0.3 + 0.5 * p);
@@ -114,7 +133,7 @@ interface Fact {
     truth: boolean;
 }
 
-function makeFacts(gs: GameState, rand: Rand): Fact[] {
+export function makeFacts(gs: GameState, rand: Rand): Fact[] {
     const everyone = gs.houseguests;
     const inHouse = nonEvictedHouseguests(gs);
     const gens: (() => Fact)[] = [
@@ -212,6 +231,15 @@ function FactOrFiction(props: CompProps) {
     );
 }
 
+function simulateFactOrFiction(ctx: SimContext, skill: number, noise: Rand): SimResult {
+    // the same statements; a bot either knows the truth or guesses
+    const facts = makeFacts(ctx.gameState, seededRand(ctx.seed));
+    const knows = clamp(0.45 + 0.5 * skill + 0.05 * gaussian(noise), 0.05, 0.98);
+    const answers = facts.map(() => answerQuestion(noise, knows, 2));
+    const seconds = facts.length * (2.5 + (1 - skill) * 3);
+    return { score: answers.filter(Boolean).length * 100 + Math.max(0, 99 - seconds * 1.2), answers };
+}
+
 export const FactOrFictionComp: CompDefinition = {
     id: "fact-or-fiction",
     name: "Fact or Fiction",
@@ -220,6 +248,7 @@ export const FactOrFictionComp: CompDefinition = {
     rules: `${FACTS} statements about your fellow houseguests' games: HoH wins, nominations, vetoes. Is each one FACT or FICTION? ${FACT_SECONDS} seconds each. Most right wins; ties go to the fastest.`,
     maxSeconds: FACTS * FACT_SECONDS + 20,
     Component: FactOrFiction,
+    simulate: simulateFactOrFiction,
     botScore: (p) => Math.min(FACTS, Math.round(FACTS * (0.45 + 0.5 * p))) * 100 + p * 60,
     format: (s) => `${Math.floor(s / 100)}/${FACTS} right`,
     available: (_gs, history) => history.length >= 1,

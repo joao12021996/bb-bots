@@ -93,7 +93,7 @@ export function opponentCorrectAfter(opponentId: number, finalScore: number, tot
 export function QuizScoreboard(props: {
     human: { id: number; name: string; imageURL: string };
     humanCorrect: number;
-    opponents: { hg: { id: number; name: string; imageURL: string }; score: number }[];
+    opponents: { hg: { id: number; name: string; imageURL: string }; score: number; answers?: boolean[] }[];
     answered: number;
     total: number;
 }) {
@@ -101,7 +101,10 @@ export function QuizScoreboard(props: {
         { hg: props.human, correct: props.humanCorrect, you: true },
         ...props.opponents.map((o) => ({
             hg: o.hg,
-            correct: opponentCorrectAfter(o.hg.id, o.score, props.total, props.answered),
+            // bots answered the same questions: show their real results so far
+            correct: o.answers
+                ? o.answers.slice(0, props.answered).filter(Boolean).length
+                : opponentCorrectAfter(o.hg.id, o.score, props.total, props.answered),
             you: false,
         })),
     ];

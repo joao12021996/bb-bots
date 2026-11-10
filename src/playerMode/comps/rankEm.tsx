@@ -1,8 +1,9 @@
 import React from "react";
 import { Houseguest } from "../../model";
 import { BigButton, Face, Grid, Subtle, Title } from "../ui/common";
-import { CompDefinition, CompProps } from "./compTypes";
-import { pick, Rand, sample, shuffled } from "./random";
+import { GameState } from "../../model";
+import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
+import { gaussian, pick, Rand, sample, seededRand, shuffled } from "./random";
 
 const ROUNDS = 3;
 const PER_ROUND = 5;
@@ -49,16 +50,37 @@ function pairScore(order: Houseguest[], criterion: Criterion): number {
     return total === 0 ? 1 : right / total;
 }
 
-function RankEm(props: CompProps) {
-    const [rounds] = React.useState(() => {
-        const used = new Set<string>();
-        return Array.from({ length: ROUNDS }, () => {
-            const hgs = sample(props.rand, props.gameState.houseguests, PER_ROUND);
-            const criterion = pickCriterion(hgs, used, props.rand);
-            used.add(criterion.label);
-            return { hgs, criterion };
-        });
+// The three rounds (who to rank, and by what). Same for every player and bot.
+export function generateRankRounds(rand: Rand, gs: GameState) {
+    const used = new Set<string>();
+    return Array.from({ length: ROUNDS }, () => {
+        const hgs = sample(rand, gs.houseguests, PER_ROUND);
+        const criterion = pickCriterion(hgs, used, rand);
+        used.add(criterion.label);
+        return { hgs, criterion };
     });
+}
+
+function simulateRankEm(ctx: SimContext, skill: number, noise: Rand): SimResult {
+    const rounds = generateRankRounds(seededRand(ctx.seed), ctx.gameState);
+    let total = 0;
+    rounds.forEach(({ hgs, criterion }) => {
+        // start from the right order, then make some mistakes (adjacent swaps); weaker bots make more
+        const order = [...hgs].sort((a, b) => (criterion.key(a) < criterion.key(b) ? -1 : criterion.key(a) > criterion.key(b) ? 1 : 0));
+        const mistakes = Math.max(0, Math.round((1 - skill) * 3 + 0.8 * gaussian(noise)));
+        for (let m = 0; m < mistakes; m++) {
+            const i = Math.floor(noise() * (order.length - 1));
+            [order[i], order[i + 1]] = [order[i + 1], order[i]];
+        }
+        total += pairScore(order, criterion);
+    });
+    const pct = (total / ROUNDS) * 100;
+    const seconds = 40 + (1 - skill) * 100;
+    return { score: pct + Math.max(0, 1 - seconds / 180) * 0.99 };
+}
+
+function RankEm(props: CompProps) {
+    const [rounds] = React.useState(() => generateRankRounds(props.rand, props.gameState));
     const [round, setRound] = React.useState(0);
     const [order, setOrder] = React.useState<Houseguest[]>(() => shuffled(props.rand, rounds[0].hgs));
     const [picked, setPicked] = React.useState<number | null>(null);
@@ -126,6 +148,7 @@ export const RankEmComp: CompDefinition = {
     rules: `Three rounds. Each round, put ${PER_ROUND} houseguests in order: by HoH wins, veto wins, nominations, or alphabetically. Tap two to swap them. The most accurate rankings win; ties go to the fastest.`,
     maxSeconds: 180,
     Component: RankEm,
+    simulate: simulateRankEm,
     botScore: (p) => Math.min(100, 45 + 55 * Math.pow(p, 0.8)) + p * 0.9,
     format: (s) => `${Math.floor(s)}% correct`,
 };

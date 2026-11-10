@@ -1,6 +1,7 @@
 import React from "react";
 import { Subtle, Title } from "../ui/common";
-import { CompDefinition, CompProps } from "./compTypes";
+import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
+import { clamp, gaussian, Rand, seededRand } from "./random";
 
 const LIMIT = 300;
 const PUSH = 2.0; // strength of the player's lean
@@ -154,6 +155,21 @@ function HoldTheWall(props: CompProps) {
     );
 }
 
+function simulateHoldTheWall(ctx: SimContext, skill: number, noise: Rand): SimResult {
+    // the exact same gusts as the players face; a bot falls at the first gust stronger than it can hold
+    const rand = seededRand(ctx.seed);
+    const strength = clamp(0.7 + 1.3 * skill + 0.1 * gaussian(noise), 0.4, 2.4);
+    let nextGust = 1;
+    while (nextGust < LIMIT) {
+        const t = nextGust;
+        const amplitude = 0.6 + 0.012 * t;
+        const wind = (rand() * 2 - 1) * amplitude;
+        nextGust = t + 0.6 + rand() * 1.4;
+        if (Math.abs(wind) > strength) return { score: t + 0.5 };
+    }
+    return { score: LIMIT };
+}
+
 export const HoldTheWallComp: CompDefinition = {
     id: "hold-the-wall",
     name: "Hold the Wall",
@@ -165,6 +181,7 @@ export const HoldTheWallComp: CompDefinition = {
     } minutes, you've done all you can.`,
     maxSeconds: LIMIT,
     Component: HoldTheWall,
+    simulate: simulateHoldTheWall,
     botScore: (p) => 25 + 245 * Math.pow(p, 1.2),
     format: (s) => `lasted ${s.toFixed(1)}s`,
 };

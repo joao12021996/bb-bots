@@ -8,6 +8,7 @@ import { seededRand } from "./random";
 export interface CompResult {
     id: number;
     score: number;
+    answers?: boolean[]; // quiz comps: right/wrong per question
 }
 
 // Ranks results best first. Players win ties against bots.

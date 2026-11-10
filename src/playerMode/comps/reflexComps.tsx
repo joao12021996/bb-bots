@@ -1,9 +1,9 @@
 import React from "react";
 import { nonEvictedHouseguests } from "../../model";
 import { BigButton, Subtle, Title } from "../ui/common";
-import { CompDefinition, CompProps } from "./compTypes";
+import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { useAnimationFrame } from "./compUi";
-import { pick, randInt, shuffled } from "./random";
+import { chance, clamp, gaussian, pick, Rand, randInt, seededRand, shuffled } from "./random";
 
 // ---------------- Whack-a-Houseguest ----------------
 
@@ -87,6 +87,22 @@ function Whack(props: CompProps) {
     );
 }
 
+function simulateWhack(ctx: SimContext, skill: number, noise: Rand): SimResult {
+    // the same pop-ups as on the players' screens: each uses a hole, a face, and the time to the next one
+    const rand = seededRand(ctx.seed);
+    let t = 0.6;
+    let score = 0;
+    while (t < WHACK_SECONDS) {
+        rand(); // hole
+        rand(); // face
+        const life = Math.max(0.55, 1.15 - t / 60);
+        if (chance(noise, clamp((0.3 + 0.65 * skill) * Math.sqrt(life / 1.15), 0.05, 0.97))) score++;
+        t += 0.35 + rand() * 0.5;
+    }
+    score -= Math.max(0, Math.round((1 - skill) * 3 + gaussian(noise)));
+    return { score };
+}
+
 export const WhackComp: CompDefinition = {
     id: "whack",
     name: "Whack-a-Houseguest",
@@ -95,6 +111,7 @@ export const WhackComp: CompDefinition = {
     rules: `Houseguests pop out of holes for a split second. Tap them before they hide! +1 per hit, −1 for tapping an empty hole. ${WHACK_SECONDS} seconds.`,
     maxSeconds: WHACK_SECONDS,
     Component: Whack,
+    simulate: simulateWhack,
     botScore: (p) => Math.round(6 + 28 * p),
     format: (s) => `${s} points`,
 };
@@ -181,6 +198,16 @@ function ReactionLights(props: CompProps) {
     );
 }
 
+function simulateReactionLights(ctx: SimContext, skill: number, noise: Rand): SimResult {
+    const rand = seededRand(ctx.seed);
+    const delays = Array.from({ length: LIGHT_ROUNDS }, () => 1.2 + rand() * 2.8);
+    // long waits tempt false starts
+    const times = delays.map((d) =>
+        chance(noise, (1 - skill) * 0.05 * d) ? 1000 : Math.max(150, 190 + (1 - skill) * 300 + 40 * gaussian(noise))
+    );
+    return { score: -Math.round(times.reduce((a, b) => a + b, 0) / times.length) };
+}
+
 export const ReactionLightsComp: CompDefinition = {
     id: "reaction-lights",
     name: "Reaction Lights",
@@ -189,6 +216,7 @@ export const ReactionLightsComp: CompDefinition = {
     rules: `${LIGHT_ROUNDS} rounds. The light turns red, then green after a random wait. Tap as soon as it turns green. Tapping too early counts as 1 second. The fastest average wins.`,
     maxSeconds: 90,
     Component: ReactionLights,
+    simulate: simulateReactionLights,
     botScore: (p) => -Math.round(210 + (1 - p) * 330),
     format: (s) => `${-s} ms average`,
 };
@@ -202,14 +230,17 @@ const COLORS = [
     { name: "YELLOW", css: "#ffd23f" },
 ];
 
+// Cards come from the comp's seed in order, so card N is the same for everyone.
+export function nextColorCard(rand: Rand) {
+    const word = randInt(rand, 0, 3);
+    let ink = randInt(rand, 0, 3);
+    if (ink === word && rand() < 0.75) ink = (ink + randInt(rand, 1, 3)) % 4;
+    return { word, ink };
+}
+
 function ColorClash(props: CompProps) {
     const { rand } = props;
-    const next = React.useCallback(() => {
-        const word = randInt(rand, 0, 3);
-        let ink = randInt(rand, 0, 3);
-        if (ink === word && rand() < 0.75) ink = (ink + randInt(rand, 1, 3)) % 4;
-        return { word, ink };
-    }, [rand]);
+    const next = React.useCallback(() => nextColorCard(rand), [rand]);
     const [card, setCard] = React.useState(next);
     const [score, setScore] = React.useState(0);
     const answer = (i: number) => {
@@ -242,6 +273,20 @@ function ColorClash(props: CompProps) {
     );
 }
 
+function simulateColorClash(ctx: SimContext, skill: number, noise: Rand): SimResult {
+    const rand = seededRand(ctx.seed);
+    let time = 0;
+    let score = 0;
+    while (true) {
+        const card = nextColorCard(rand);
+        const tricky = card.word !== card.ink;
+        time += 0.8 + (1 - skill) * 1.5 + Math.abs(0.2 * gaussian(noise)) + (tricky ? 0.2 : 0);
+        if (time > 45) break;
+        score += chance(noise, tricky ? 0.75 + 0.23 * skill : 0.97) ? 1 : -1;
+    }
+    return { score };
+}
+
 export const ColorClashComp: CompDefinition = {
     id: "color-clash",
     name: "Color Clash",
@@ -250,6 +295,7 @@ export const ColorClashComp: CompDefinition = {
     rules: "A color word appears in a different color of ink. Tap the button for the INK color. +1 if right, −1 if wrong. 45 seconds.",
     maxSeconds: 45,
     Component: ColorClash,
+    simulate: simulateColorClash,
     botScore: (p) => Math.round(6 + 26 * p),
     format: (s) => `${s} points`,
 };
@@ -302,6 +348,12 @@ function NumberGrid(props: CompProps) {
     );
 }
 
+function simulateNumberGrid(_ctx: SimContext, skill: number, noise: Rand): SimResult {
+    const seconds = Math.max(8, 14 + (1 - skill) * 36 + 4 * gaussian(noise));
+    const penalties = Math.max(0, Math.round((1 - skill) * 3 * noise() * 2));
+    return { score: seconds + penalties > GRID_LIMIT ? -(GRID_LIMIT + 10) : -(seconds + penalties) };
+}
+
 export const NumberGridComp: CompDefinition = {
     id: "number-grid",
     name: "Number Grid",
@@ -310,6 +362,7 @@ export const NumberGridComp: CompDefinition = {
     rules: `The numbers 1 to ${GRID_MAX} are scattered on a grid. Tap them in order as fast as you can. Each wrong tap adds a 1-second penalty. The fastest time wins.`,
     maxSeconds: GRID_LIMIT,
     Component: NumberGrid,
+    simulate: simulateNumberGrid,
     botScore: (p) => -(16 + (1 - p) * 38),
     format: (s) => (s < -GRID_LIMIT ? "didn't finish" : `${(-s).toFixed(1)}s`),
 };
@@ -382,6 +435,16 @@ function Bullseye(props: CompProps) {
     );
 }
 
+function simulateBullseye(_ctx: SimContext, skill: number, noise: Rand): SimResult {
+    let total = 0;
+    for (let i = 0; i < THROWS; i++) {
+        const speed = 2.2 + i * 0.7; // the needle speeds up each throw, same as for players
+        const miss = Math.abs(gaussian(noise)) * (0.05 + (1 - skill) * 0.35) * (speed / 2.2);
+        total += Math.round(100 * (1 - Math.min(1, miss)));
+    }
+    return { score: total };
+}
+
 export const BullseyeComp: CompDefinition = {
     id: "bullseye",
     name: "Bullseye",
@@ -390,6 +453,7 @@ export const BullseyeComp: CompDefinition = {
     rules: `A needle swings back and forth across the target. Tap THROW when it's on the gold center line. Up to 100 points per throw, ${THROWS} throws, and the needle gets faster each time.`,
     maxSeconds: 90,
     Component: Bullseye,
+    simulate: simulateBullseye,
     botScore: (p) => Math.round(180 + 300 * p),
     format: (s) => `${s} points`,
 };

@@ -1,7 +1,8 @@
 import React from "react";
 import { BigButton, Subtle, Title, useElapsed } from "../ui/common";
-import { CompDefinition, CompProps } from "./compTypes";
-import { pick, Rand } from "./random";
+import { Houseguest } from "../../model";
+import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
+import { gaussian, pick, Rand, seededRand } from "./random";
 
 const N = 3;
 const BLANK = N * N - 1;
@@ -38,9 +39,52 @@ function scrambled(rand: Rand): number[] {
 
 const placed = (board: number[]) => board.filter((v, i) => v === i && v !== BLANK).length;
 
+// The photo and the scramble, the same for every player and bot.
+export function generateSlidePuzzle(rand: Rand, participants: Houseguest[]) {
+    const image = pick(rand, participants).imageURL;
+    return { image, board: scrambled(rand) };
+}
+
+// Fewest moves to solve a board (A* with Manhattan distance; 3x3 boards solve instantly).
+export function minimumMoves(board: number[]): number {
+    const manhattan = (b: number[]) =>
+        b.reduce((sum, tile, i) => (tile === BLANK ? sum : sum + Math.abs(Math.floor(tile / N) - Math.floor(i / N)) + Math.abs((tile % N) - (i % N))), 0);
+    const start = board.join(",");
+    const goal = Array.from({ length: N * N }, (_, i) => i).join(",");
+    const best = new Map<string, number>([[start, 0]]);
+    let frontier: { b: number[]; g: number; f: number }[] = [{ b: board, g: 0, f: manhattan(board) }];
+    while (frontier.length) {
+        frontier.sort((x, y) => x.f - y.f);
+        const { b, g } = frontier.shift()!;
+        const key = b.join(",");
+        if (key === goal) return g;
+        if ((best.get(key) ?? Infinity) < g) continue;
+        const blank = b.indexOf(BLANK);
+        for (const n of neighbors(blank)) {
+            const next = [...b];
+            [next[blank], next[n]] = [next[n], next[blank]];
+            const k = next.join(",");
+            if ((best.get(k) ?? Infinity) <= g + 1) continue;
+            best.set(k, g + 1);
+            frontier.push({ b: next, g: g + 1, f: g + 1 + manhattan(next) });
+        }
+    }
+    return 0;
+}
+
+function simulateSlidePuzzle(ctx: SimContext, skill: number, noise: Rand): SimResult {
+    const { board } = generateSlidePuzzle(seededRand(ctx.seed), ctx.participants);
+    // harder scrambles (more moves needed) take longer
+    const moves = minimumMoves(board);
+    const seconds = 5 + moves * (1 + (1 - skill) * 5) + 8 * gaussian(noise);
+    if (seconds < LIMIT) return { score: 1000 + (LIMIT - Math.max(5, seconds)) };
+    return { score: Math.round(2 + 5 * skill) * 10 };
+}
+
 function SlidePuzzle(props: CompProps) {
-    const [image] = React.useState(() => pick(props.rand, props.participants).imageURL);
-    const [board, setBoard] = React.useState(() => scrambled(props.rand));
+    const [initial] = React.useState(() => generateSlidePuzzle(props.rand, props.participants));
+    const image = initial.image;
+    const [board, setBoard] = React.useState(initial.board);
     const [showNumbers, setShowNumbers] = React.useState(true);
     const elapsed = useElapsed();
 
@@ -134,6 +178,7 @@ export const SlidePuzzleComp: CompDefinition = {
     } minutes, whoever has the most tiles in place wins.`,
     maxSeconds: LIMIT,
     Component: SlidePuzzle,
+    simulate: simulateSlidePuzzle,
     botScore: (p) => {
         const t = 20 + 260 * Math.pow(1 - p, 1.3);
         return t < LIMIT ? 1000 + (LIMIT - t) : Math.round(2 + 5 * p) * 10;

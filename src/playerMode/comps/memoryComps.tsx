@@ -1,8 +1,8 @@
 import React from "react";
 import { BigButton, Subtle, Title } from "../ui/common";
-import { CompDefinition, CompProps } from "./compTypes";
+import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { Keypad, sleep } from "./compUi";
-import { pick, randInt, sample, shuffled } from "./random";
+import { chance, clamp, gaussian, pick, Rand, randInt, sample, seededRand, shuffled } from "./random";
 
 const EMOJIS = ["🍕", "🎸", "👑", "🔑", "🐍", "💎", "🎲", "🧸", "🍩", "🚀", "🌵", "🎩"];
 
@@ -83,6 +83,11 @@ function SimonSays(props: CompProps) {
     );
 }
 
+function simulateSimonSays(_ctx: SimContext, skill: number, noise: Rand): SimResult {
+    // the longest sequence this bot repeats correctly
+    return { score: clamp(Math.round(2 + 10 * skill + 1.5 * gaussian(noise)), 0, 39) };
+}
+
 export const SimonSaysComp: CompDefinition = {
     id: "simon-says",
     name: "Simon Says",
@@ -91,6 +96,7 @@ export const SimonSaysComp: CompDefinition = {
     rules: "Watch the pads light up, then tap them back in the same order. Each round adds one more. One mistake and you're out. The longest sequence wins.",
     maxSeconds: 180,
     Component: SimonSays,
+    simulate: simulateSimonSays,
     botScore: (p) => 2 + Math.round(10 * p),
     format: (s) => `sequence of ${s}`,
 };
@@ -99,11 +105,14 @@ export const SimonSaysComp: CompDefinition = {
 
 const CONC_LIMIT = 180;
 
+// The face-down deck, the same for every player and bot.
+export function generateConcentrationDeck(rand: Rand): string[] {
+    const icons = sample(rand, EMOJIS, 6);
+    return shuffled(rand, [...icons, ...icons]);
+}
+
 function Concentration(props: CompProps) {
-    const [cards] = React.useState(() => {
-        const icons = sample(props.rand, EMOJIS, 6);
-        return shuffled(props.rand, [...icons, ...icons]);
-    });
+    const [cards] = React.useState(() => generateConcentrationDeck(props.rand));
     const [open, setOpen] = React.useState<number[]>([]);
     const [matched, setMatched] = React.useState<Set<number>>(new Set());
     const [start] = React.useState(() => performance.now());
@@ -162,6 +171,48 @@ function Concentration(props: CompProps) {
     );
 }
 
+function simulateConcentration(ctx: SimContext, skill: number, noise: Rand): SimResult {
+    // the bot plays the actual deck, remembering cards it has seen (better memory with more skill)
+    const deck = generateConcentrationDeck(seededRand(ctx.seed));
+    const memory = clamp(0.4 + 0.55 * skill + 0.05 * gaussian(noise), 0.1, 0.99);
+    const known = new Map<number, string>();
+    const matched = new Set<number>();
+    const unseen = () => deck.map((_, i) => i).filter((i) => !matched.has(i) && !known.has(i));
+    const see = (i: number) => chance(noise, memory) && known.set(i, deck[i]);
+    let turns = 0;
+    while (matched.size < deck.length && turns < 200) {
+        turns++;
+        // a pair we already know?
+        const pair = Array.from(known.entries()).find(
+            ([i, icon]) => !matched.has(i) && Array.from(known.entries()).some(([j, other]) => j !== i && other === icon && !matched.has(j))
+        );
+        if (pair) {
+            const [i, icon] = pair;
+            const j = Array.from(known.entries()).find(([k, other]) => k !== i && other === icon && !matched.has(k))![0];
+            matched.add(i).add(j);
+            known.delete(i);
+            known.delete(j);
+            continue;
+        }
+        const options = unseen();
+        const a = options.length ? options[Math.floor(noise() * options.length)] : deck.findIndex((_, i) => !matched.has(i));
+        const remembered = Array.from(known.entries()).find(([k, icon]) => k !== a && icon === deck[a] && !matched.has(k));
+        const rest = unseen().filter((i) => i !== a);
+        const b = remembered ? remembered[0] : rest.length ? rest[Math.floor(noise() * rest.length)] : deck.findIndex((_, i) => i !== a && !matched.has(i));
+        if (deck[a] === deck[b]) {
+            matched.add(a).add(b);
+            known.delete(a);
+            known.delete(b);
+        } else {
+            see(a);
+            see(b);
+        }
+    }
+    const seconds = turns * (1.6 + (1 - skill) * 0.8);
+    if (matched.size === deck.length && seconds < CONC_LIMIT) return { score: 1000 + (CONC_LIMIT - seconds) };
+    return { score: Math.floor(matched.size / 2) * 10 };
+}
+
 export const ConcentrationComp: CompDefinition = {
     id: "concentration",
     name: "Concentration",
@@ -170,6 +221,7 @@ export const ConcentrationComp: CompDefinition = {
     rules: "Twelve face-down cards hide six pairs. Flip two at a time to find matches. Clear the board fastest to win.",
     maxSeconds: CONC_LIMIT,
     Component: Concentration,
+    simulate: simulateConcentration,
     botScore: (p) => {
         const t = 25 + (1 - p) * 130;
         return t < CONC_LIMIT ? 1000 + (CONC_LIMIT - t) : Math.round(2 + 3 * p) * 10;
@@ -219,6 +271,10 @@ function DigitSpan(props: CompProps) {
     );
 }
 
+function simulateDigitSpan(_ctx: SimContext, skill: number, noise: Rand): SimResult {
+    return { score: clamp(Math.round(4 + 6 * skill + gaussian(noise)), 3, 15) };
+}
+
 export const DigitSpanComp: CompDefinition = {
     id: "digit-span",
     name: "Digit Span",
@@ -227,6 +283,7 @@ export const DigitSpanComp: CompDefinition = {
     rules: "A number flashes on screen. Type it back from memory. Each round adds a digit, and one mistake ends your run. The longest number wins.",
     maxSeconds: 180,
     Component: DigitSpan,
+    simulate: simulateDigitSpan,
     botScore: (p) => 4 + Math.round(6 * p),
     format: (s) => `${s} digits`,
 };
@@ -235,16 +292,19 @@ export const DigitSpanComp: CompDefinition = {
 
 const COUNT_ROUNDS = 5;
 
+// The piles and the questions, the same for every player and bot.
+export function generateCountRounds(rand: Rand) {
+    return Array.from({ length: COUNT_ROUNDS }, (_, r) => {
+        const types = sample(rand, EMOJIS, 4);
+        const size = 20 + r * 4;
+        const grid = Array.from({ length: size }, () => pick(rand, types));
+        const target = pick(rand, types);
+        return { grid, target, answer: grid.filter((g) => g === target).length };
+    });
+}
+
 function CountEm(props: CompProps) {
-    const [rounds] = React.useState(() =>
-        Array.from({ length: COUNT_ROUNDS }, (_, r) => {
-            const types = sample(props.rand, EMOJIS, 4);
-            const size = 20 + r * 4;
-            const grid = Array.from({ length: size }, () => pick(props.rand, types));
-            const target = pick(props.rand, types);
-            return { grid, target, answer: grid.filter((g) => g === target).length };
-        })
-    );
+    const [rounds] = React.useState(() => generateCountRounds(props.rand));
     const [round, setRound] = React.useState(0);
     const [phase, setPhase] = React.useState<"show" | "answer" | "feedback">("show");
     const [value, setValue] = React.useState("");
@@ -308,6 +368,16 @@ function CountEm(props: CompProps) {
     );
 }
 
+function simulateCountEm(ctx: SimContext, skill: number, noise: Rand): SimResult {
+    // same piles: bigger counts are harder to get exactly right
+    const rounds = generateCountRounds(seededRand(ctx.seed));
+    const error = rounds.reduce(
+        (sum, r) => sum + Math.round(Math.abs(gaussian(noise)) * (0.3 + (1 - skill) * 2.5) * (r.answer / 6)),
+        0
+    );
+    return { score: -error };
+}
+
 export const CountEmComp: CompDefinition = {
     id: "count-em",
     name: "Count 'Em",
@@ -316,6 +386,7 @@ export const CountEmComp: CompDefinition = {
     rules: `${COUNT_ROUNDS} rounds. A pile of items flashes for 3 seconds, then you're asked how many of one kind there were. The smallest total error wins.`,
     maxSeconds: 150,
     Component: CountEm,
+    simulate: simulateCountEm,
     botScore: (p) => -Math.round((1 - p) * 14),
     format: (s) => `${-s} off in total`,
 };
@@ -427,6 +498,16 @@ function FindTheKey(props: CompProps) {
     );
 }
 
+function simulateFindTheKey(_ctx: SimContext, skill: number, noise: Rand): SimResult {
+    // each round has more and faster shuffles, the same as for players
+    let found = 0;
+    for (let round = 0; round < KEY_ROUNDS; round++) {
+        const p = clamp(0.98 - (1 - skill) * 0.25 - round * 0.08 * (1 - skill), 1 / SLOTS, 0.98);
+        if (chance(noise, p)) found++;
+    }
+    return { score: found };
+}
+
 export const FindTheKeyComp: CompDefinition = {
     id: "find-the-key",
     name: "Find the Key",
@@ -435,6 +516,7 @@ export const FindTheKeyComp: CompDefinition = {
     rules: `A key goes in one of three boxes, then the boxes shuffle. Pick the box with the key. ${KEY_ROUNDS} rounds, and the shuffles get faster. Most keys found wins.`,
     maxSeconds: 120,
     Component: FindTheKey,
+    simulate: simulateFindTheKey,
     botScore: (p) => Math.round(1 + 4 * p),
     format: (s) => `${s} of ${KEY_ROUNDS} found`,
 };

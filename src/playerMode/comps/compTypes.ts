@@ -8,6 +8,20 @@ import { Rand } from "./random";
 export interface Opponent {
     hg: Houseguest;
     score: number;
+    answers?: boolean[]; // quiz comps: right/wrong for each question, in order (bots only)
+}
+
+// Everything a bot needs to play the exact same comp instance the players get.
+export interface SimContext {
+    seed: number; // the comp's seed: seededRand(seed) recreates the players' exact layout/questions
+    gameState: GameState;
+    history: WeekRecord[];
+    participants: Houseguest[];
+}
+
+export interface SimResult {
+    score: number;
+    answers?: boolean[];
 }
 
 export interface CompProps {
@@ -36,8 +50,11 @@ export interface CompDefinition {
     hideTimer?: boolean; // for comps about judging time: don't show the countdown
     finaleOnly?: boolean; // reserved for the final HoH
     Component: React.ComponentType<CompProps>;
-    // Converts a bot's performance percentile (0 = worst, 1 = best) into a score on this comp's scale.
-    // Scores are always "higher is better". May use rng() (seeded) for luck-based comps.
+    // A bot plays the same instance the players got (same questions, dice, maze...). `skill` is the bot's
+    // performance percentile from its Comp score (0 = worst, 1 = best); `noise` is the bot's own seeded randomness.
+    // Scores are always "higher is better".
+    simulate: (ctx: SimContext, skill: number, noise: Rand) => SimResult;
+    // A rough score for a given percentile, without playing; used as a fallback (e.g. time ran out with no score).
     botScore: (percentile: number, ctx: { gameState: GameState; history: WeekRecord[] }) => number;
     format: (score: number) => string;
     available?: (gameState: GameState, history: WeekRecord[]) => boolean;

@@ -1,7 +1,8 @@
 import React from "react";
 import { Subtle, Title } from "../ui/common";
-import { CompDefinition, CompProps } from "./compTypes";
+import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { useAnimationFrame } from "./compUi";
+import { chance, clamp, gaussian, Rand, seededRand } from "./random";
 
 // ---------------- Steady Hand ----------------
 
@@ -85,6 +86,16 @@ function SteadyHand(props: CompProps) {
     );
 }
 
+function simulateSteadyHand(ctx: SimContext, skill: number, noise: Rand): SimResult {
+    // the same spotlight path: faster wobble is harder to follow
+    const rand = seededRand(ctx.seed);
+    const a = 0.9 + rand() * 0.6;
+    const b = 1.1 + rand() * 0.6;
+    const difficulty = (a + b) / 2.4;
+    const share = clamp(0.18 + 0.65 * skill + 0.05 * gaussian(noise) - (difficulty - 1) * 0.2, 0.02, 0.97);
+    return { score: Math.round(STEADY_SECONDS * share * 10) / 10 };
+}
+
 export const SteadyHandComp: CompDefinition = {
     id: "steady-hand",
     name: "Spotlight",
@@ -93,6 +104,7 @@ export const SteadyHandComp: CompDefinition = {
     rules: `A spotlight drifts around a dark stage and speeds up over time. Keep your finger or mouse inside it. Most time in the spotlight after ${STEADY_SECONDS} seconds wins.`,
     maxSeconds: STEADY_SECONDS,
     Component: SteadyHand,
+    simulate: simulateSteadyHand,
     botScore: (p) => Math.round((8 + 26 * p) * 10) / 10,
     format: (s) => `${s.toFixed(1)}s in the light`,
 };
@@ -200,6 +212,28 @@ function CatchTheKeys(props: CompProps) {
     );
 }
 
+function simulateCatchTheKeys(ctx: SimContext, skill: number, noise: Rand): SimResult {
+    // the same rain of keys and bombs as on the players' screens
+    const rand = seededRand(ctx.seed);
+    let t = 0.3;
+    let score = 0;
+    while (t < CATCH_SECONDS) {
+        rand(); // x position
+        const bomb = rand() < 0.28;
+        const speed = 0.32 + t / 90 + rand() * 0.15;
+        const lands = t + 0.91 / speed;
+        if (lands < CATCH_SECONDS) {
+            if (bomb) {
+                if (chance(noise, 0.35 * (1 - skill))) score -= 2;
+            } else if (chance(noise, 0.45 + 0.5 * skill)) {
+                score += 1;
+            }
+        }
+        t += Math.max(0.35, 0.9 - t / 70);
+    }
+    return { score };
+}
+
 export const CatchTheKeysComp: CompDefinition = {
     id: "catch-the-keys",
     name: "Catch the Keys",
@@ -208,6 +242,7 @@ export const CatchTheKeysComp: CompDefinition = {
     rules: `Keys and bombs rain down. Drag the basket (or use ← →) to catch keys for +1 and dodge bombs worth −2. Highest score after ${CATCH_SECONDS} seconds wins.`,
     maxSeconds: CATCH_SECONDS,
     Component: CatchTheKeys,
+    simulate: simulateCatchTheKeys,
     botScore: (p) => Math.round(6 + 26 * p),
     format: (s) => `${s} points`,
 };
@@ -306,6 +341,20 @@ function TowerStack(props: CompProps) {
     );
 }
 
+function simulateTowerStack(_ctx: SimContext, skill: number, noise: Rand): SimResult {
+    // same rules: each drop trims the overhang, and the block speeds up as the tower grows
+    let width = 0.6;
+    let height = 0;
+    while (height < 60) {
+        const speed = 0.45 + (height + 1) * 0.05;
+        const offset = Math.abs(gaussian(noise)) * (0.015 + (1 - skill) * 0.07) * (speed / 0.5);
+        width -= offset;
+        if (width <= 0.01) break;
+        height++;
+    }
+    return { score: height };
+}
+
 export const TowerStackComp: CompDefinition = {
     id: "tower-stack",
     name: "Tower Stack",
@@ -314,6 +363,7 @@ export const TowerStackComp: CompDefinition = {
     rules: "A block slides back and forth. Tap to drop it on the tower. Any overhang gets chopped off, so your blocks shrink. Miss completely and you're done. The tallest tower wins.",
     maxSeconds: 120,
     Component: TowerStack,
+    simulate: simulateTowerStack,
     botScore: (p) => Math.round(4 + 18 * p),
     format: (s) => `${s} blocks high`,
 };

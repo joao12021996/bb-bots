@@ -122,3 +122,118 @@ describe("comp runner screens", () => {
         });
     });
 });
+
+describe("fairness: everyone plays the same comp", () => {
+    const { buildQuiz } = require("./beforeOrAfter");
+    const { generateMemoryWall } = require("./memoryWall");
+    const { makeFacts } = require("./houseComps");
+
+    async function renderHtml(comp: any, seed: number, gs: GameState) {
+        const participants = nonEvictedHouseguests(gs).slice(0, 4);
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        const Component = comp.Component;
+        await act(async () => {
+            ReactDOM.render(
+                <Component
+                    participants={participants}
+                    human={participants[0]}
+                    gameState={gs}
+                    history={history}
+                    rand={seededRand(seed)}
+                    opponents={[]}
+                    report={() => undefined}
+                    finish={() => undefined}
+                />,
+                container
+            );
+        });
+        // strip things that legitimately differ between renders (timers, a zoom animation in progress)
+        const html = container.innerHTML.replace(/\d+(\.\d+)?s\b/g, "#s").replace(/\d+:\d\d/g, "#:##").replace(/scale\([\d.]+\)/g, "scale(#)");
+        act(() => {
+            ReactDOM.unmountComponentAtNode(container);
+        });
+        container.remove();
+        return html;
+    }
+
+    it.each(ALL_COMPS.map((c) => [c.name, c]))("%s shows every player the identical layout for the same seed", async (_n, comp: any) => {
+        const gs = game();
+        const a = await renderHtml(comp, 4242, gs);
+        const b = await renderHtml(comp, 4242, gs);
+        expect(a).toBe(b);
+    });
+
+    it("bots roll the same dice the players roll in Bank or Bust", async () => {
+        const comp = ALL_COMPS.find((c) => c.id === "bank-or-bust")!;
+        const gs = game();
+        const participants = nonEvictedHouseguests(gs).slice(0, 4);
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        const Component = comp.Component;
+        await act(async () => {
+            ReactDOM.render(
+                <Component
+                    participants={participants}
+                    human={participants[0]}
+                    gameState={gs}
+                    history={history}
+                    rand={seededRand(99)}
+                    opponents={[]}
+                    report={() => undefined}
+                    finish={() => undefined}
+                />,
+                container
+            );
+        });
+        const faces = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+        const seen: number[] = [];
+        for (let i = 0; i < 6; i++) {
+            const roll = Array.from(container.querySelectorAll("button")).find((b) => b.textContent!.includes("Roll"));
+            const next = Array.from(container.querySelectorAll("button")).find((b) => b.textContent!.includes("Next round"));
+            await act(async () => (roll || next)!.click());
+            const face = faces.findIndex((f) => container.textContent!.includes(f));
+            if (roll && face >= 0) seen.push(face + 1);
+        }
+        const expected = seededRand(99);
+        seen.forEach((die) => expect(die).toBe(1 + Math.floor(expected() * 6)));
+        expect(seen.length).toBeGreaterThan(0);
+        act(() => {
+            ReactDOM.unmountComponentAtNode(container);
+        });
+    });
+
+    it("bots answer exactly the questions the players get", () => {
+        const gs = game();
+        const ctx = { seed: 777, gameState: gs, history, participants: nonEvictedHouseguests(gs) };
+        const counts: { [id: string]: number } = {
+            "memory-wall": generateMemoryWall(seededRand(777), gs).questions.length,
+            "before-or-after": buildQuiz(gs, history, seededRand(777)).length,
+            "fact-or-fiction": makeFacts(gs, seededRand(777)).length,
+            "zoom-in": 6,
+        };
+        Object.entries(counts).forEach(([id, n]) => {
+            const comp = ALL_COMPS.find((c) => c.id === id)!;
+            const result = comp.simulate(ctx, 0.5, seededRand(1));
+            expect(result.answers!.length).toBe(n);
+            expect(Math.floor(result.score / 100)).toBe(result.answers!.filter(Boolean).length);
+        });
+    });
+
+    it("bot results are reproducible, and better bots do better on every skill comp", () => {
+        const gs = game();
+        ALL_COMPS.filter((c) => c.kind !== "luck").forEach((comp) => {
+            let weak = 0;
+            let strong = 0;
+            for (let seed = 1; seed <= 40; seed++) {
+                const ctx = { seed, gameState: gs, history, participants: nonEvictedHouseguests(gs) };
+                const a = comp.simulate(ctx, 0.9, seededRand(seed * 7));
+                const again = comp.simulate(ctx, 0.9, seededRand(seed * 7));
+                expect(again.score).toBe(a.score);
+                strong += a.score;
+                weak += comp.simulate(ctx, 0.1, seededRand(seed * 7)).score;
+            }
+            if (strong <= weak) throw new Error(`${comp.name}: strong bots (${strong}) should beat weak bots (${weak})`);
+        });
+    });
+});

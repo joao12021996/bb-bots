@@ -33,3 +33,23 @@ export function shuffled<T>(rand: Rand, arr: T[]): T[] {
 export function sample<T>(rand: Rand, arr: T[], k: number): T[] {
     return shuffled(rand, arr).slice(0, Math.min(k, arr.length));
 }
+
+// ---------- helpers for bots playing comps ----------
+
+export function gaussian(noise: Rand): number {
+    const u = Math.max(1e-9, noise());
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * noise());
+}
+
+export function chance(noise: Rand, probability: number): boolean {
+    return noise() < probability;
+}
+
+export function clamp(n: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, n));
+}
+
+// Answers a multiple-choice question: right if the bot knows it, otherwise a guess among `options`.
+export function answerQuestion(noise: Rand, knowProbability: number, options: number): boolean {
+    return chance(noise, knowProbability) || chance(noise, 1 / Math.max(1, options));
+}
