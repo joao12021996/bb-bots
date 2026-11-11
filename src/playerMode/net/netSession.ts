@@ -118,9 +118,17 @@ export function stateHash(state: PlayerSave): string {
 // Inputs are copied as they'd arrive over the wire (undefined survives), and the sender uses the copy too,
 // so every device runs the input with exactly the same arguments.
 function wireCopy(args: any[]): any[] {
-    const trimmed = [...args];
+    // buttons often pass an action straight to onClick, which hands it the click event: never part of the input
+    const trimmed = args.map((a) => (isEvent(a) ? undefined : a));
     while (trimmed.length > 0 && trimmed[trimmed.length - 1] === undefined) trimmed.pop();
     return fromWire(toWire(trimmed));
+}
+
+// a React synthetic event or a DOM event
+function isEvent(a: any): boolean {
+    if (!a || typeof a !== "object") return false;
+    if (typeof Event !== "undefined" && a instanceof Event) return true;
+    return "nativeEvent" in a && "currentTarget" in a;
 }
 
 function toWire(args: any[]): any {

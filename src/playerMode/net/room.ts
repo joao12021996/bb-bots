@@ -14,6 +14,10 @@ export interface NetRoom {
 
 const APP_ID = "bb-bots-online-1";
 
+// Where devices find each other: big, well-run public Nostr relays. Trystero's own pick of 5 from its built-in
+// list included dead ones. Every device must use the same list to meet, so change it with care.
+const RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://nostr.mom", "wss://offchain.pub"];
+
 // Room codes: easy to read out loud (no 0/O, 1/I/L).
 const CODE_LETTERS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
@@ -47,7 +51,7 @@ export async function openRoom(code: string): Promise<NetRoom> {
     // loaded on demand: only online games need it
     // @ts-ignore: typed loosely, so the build doesn't depend on its type definitions
     const trystero: any = await import("trystero");
-    const room = trystero.joinRoom({ appId: APP_ID }, `room-${code}`, {
+    const room = trystero.joinRoom({ appId: APP_ID, relayConfig: { urls: RELAYS } }, `room-${code}`, {
         onJoinError: (e: any) => console.error("Online: couldn't connect to a device", e),
     });
     // Trystero 0.25: actions are objects ({ send, onMessage }), and room events are properties to assign
