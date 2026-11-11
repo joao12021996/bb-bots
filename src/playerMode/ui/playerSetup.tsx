@@ -12,14 +12,13 @@ import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
 import { initialsAvatar } from "./avatar";
 import { FaceEditor, Look } from "./faceEditor";
 import { PlayerModeScreen } from "./playerModeScreen";
-import { startHosting } from "./onlineLobby";
 
 export function launch(controller: PlayerModeController) {
     activatePlayerMode(controller, () => <PlayerModeScreen controller={controller} />);
 }
 
 // The cast to pick from, and season settings from the season editor if the user set one up.
-function castSource(): { cast: PlayerProfile[]; hohPlaysVeto: boolean } {
+export function castSource(): { cast: PlayerProfile[]; hohPlaysVeto: boolean } {
     const current = episodes$.value;
     if (current && current.gameState.phase === 0 && current.gameState.houseguests.length > 2) {
         return { cast: current.gameState.houseguests, hohPlaysVeto: current.gameState.hohPlaysVeto };
@@ -29,7 +28,7 @@ function castSource(): { cast: PlayerProfile[]; hohPlaysVeto: boolean } {
 
 const MIN_HOUSEGUESTS = 4;
 
-function Stepper(props: { label: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
+export function Stepper(props: { label: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
     return (
         <div className="bbb-stepper">
             <span className="bbb-stepper-label">{props.label}</span>
@@ -74,9 +73,6 @@ export function PlayerSetup() {
     // secret powers: none, a surprise (picked at random, never shown), or hand-picked
     const [powerMode, setPowerMode] = React.useState<"off" | "surprise" | "choose">("off");
     const [chosenPowers, setChosenPowers] = React.useState<PowerId[]>([]);
-    // with 2+ players: pass one device around, or everyone on their own device
-    const [online, setOnline] = React.useState(false);
-    const [error, setError] = React.useState<string | null>(null);
 
     const basePool = [...cast, ...customs];
     const pool: PlayerProfile[] = basePool.map((hg, i) => (looks[i] && selected.includes(i) ? { ...hg, ...looks[i] } : hg));
@@ -125,9 +121,7 @@ export function PlayerSetup() {
     const start = async () => {
         if (!ready) return;
         setStarting(true);
-        setError(null);
-        const isOnline = online && playerCount > 1;
-        if (!isOnline) clearSave(); // an online season is saved separately: keep the solo one
+        clearSave();
         // skill randomizer: everyone gets secret, random Social and Comp scores
         const roll = () => Math.round(1 + 9 * ((Math.random() + Math.random()) / 2));
         const players = hideSkills ? pool.map((hg) => ({ ...hg, social: roll(), comp: roll() })) : pool;
@@ -136,16 +130,6 @@ export function PlayerSetup() {
         await inlineBlobImages(setup.gameState.houseguests);
         const powers = powerMode === "surprise" ? "surprise" : powerMode === "choose" ? chosenPowers : [];
         const save = newPlayerSave(setup.gameState, setup.humanIds, setup.castOptions, hideSkills, { difficulty, powers });
-        if (isOnline) {
-            try {
-                await startHosting(save);
-            } catch (e) {
-                console.error(e);
-                setError("Couldn't open an online room. Check your internet connection and try again.");
-                setStarting(false);
-            }
-            return;
-        }
         await newEpisode(null);
         await newEpisode(new PregameEpisode(setup.gameState));
         launch(new PlayerModeController(save));
@@ -166,31 +150,13 @@ export function PlayerSetup() {
                 <Title>Set up your season</Title>
                 <Subtle>
                     Choose how many people are playing and how many bots join them. With 2 or more players, pass
-                    one device around, or play online with everyone on their own device.
+                    this device around for secret moves. (To play on separate devices, use Play online on the start screen.)
                 </Subtle>
             </div>
             <div className="bbb-steppers">
                 <Stepper label="🎮 Players" value={playerCount} min={1} max={maxPlayers} onChange={changePlayers} />
                 <Stepper label="🤖 Bots" value={effectiveBots} min={minBots} max={maxBots} onChange={setBotCount} />
             </div>
-            {playerCount > 1 && (
-                <div className="bbb-setting">
-                    <b>📱 How you're playing</b>
-                    <div className="bbb-segmented">
-                        <button type="button" className={!online ? "is-active" : ""} onClick={() => setOnline(false)}>
-                            One device
-                        </button>
-                        <button type="button" className={online ? "is-active" : ""} onClick={() => setOnline(true)}>
-                            Online
-                        </button>
-                    </div>
-                    <Subtle>
-                        {online
-                            ? "Everyone plays on their own phone or computer, from anywhere. You'll get a room code to share; your device runs the show, so keep this tab open."
-                            : "Pass this device around for secret moves."}
-                    </Subtle>
-                </div>
-            )}
             <form
                 className="bbb-add-yourself"
                 onSubmit={(e) => {
@@ -347,9 +313,8 @@ export function PlayerSetup() {
                 Bots use both. For players, Social boosts your social moves and your sway in alliances; your comp results
                 are all you.
             </Subtle>
-            {error && <Subtle style={{ color: "#f87171" }}>{error}</Subtle>}
             <BigButton kind="success" disabled={!ready || starting} onClick={start}>
-                {starting ? "Starting…" : online && playerCount > 1 ? "Open the online room" : "Enter the house"}
+                {starting ? "Starting…" : "Enter the house"}
             </BigButton>
         </Panel>
     );

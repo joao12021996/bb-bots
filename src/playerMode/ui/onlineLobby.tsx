@@ -1,13 +1,15 @@
 import React from "react";
-import { getById } from "../../model";
-import { pushToMainContentStream } from "../../subjects/subjects";
+import { getById, PlayerProfile } from "../../model";
+import { cast$, pushToMainContentStream } from "../../subjects/subjects";
 import { Screens } from "../../components/topbar/topBar";
-import { actorOf, PlayerModeController, PlayerSave, Prompt } from "../playerModeController";
+import { actorOf, Difficulty, PlayerModeController, PlayerSave, Prompt } from "../playerModeController";
 import { NetSession, NetStatus, SessionOptions, setActiveSession } from "../net/netSession";
 import { cleanRoomCode, joinLink, newRoomCode, openRoom } from "../net/room";
-import { readOnlineSave } from "../save/serialize";
+import { buildOnlineSeason, defaultSetup, houseOf, maxHouse, minHouse } from "../net/lobby";
+import { inlineBlobImages, readOnlineSave } from "../save/serialize";
 import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
-import { launch, showSeasonSoFar } from "./playerSetup";
+import { initialsAvatar } from "./avatar";
+import { castSource, launch, showSeasonSoFar, Stepper } from "./playerSetup";
 
 // ---------- starting and joining ----------
 
@@ -18,13 +20,50 @@ const sessionOptions: SessionOptions = {
     },
 };
 
-// The host's side: open a room for a season that's been set up, and wait in the lobby for everyone.
-export async function startHosting(save: PlayerSave) {
+// What the host builds the season from (only the host's device has it).
+let hostCast: { cast: PlayerProfile[]; hohPlaysVeto: boolean } | null = null;
+
+// The host's side: open a room right away. The house starts full of bots; friends take their places.
+export async function hostOnlineGame(): Promise<void> {
+    const source = castSource();
+    // uploaded portraits only work on this device: inline them so everyone can see them
+    const cast = source.cast.map((hg) => ({ ...hg }));
+    await inlineBlobImages(cast);
+    hostCast = { cast, hohPlaysVeto: source.hohPlaysVeto };
     const code = newRoomCode();
     const room = await openRoom(code);
-    const session = NetSession.host(room, code, save, sessionOptions);
+    const cards = cast.map((hg) => ({ name: hg.name, imageURL: hg.imageURL }));
+    const session = NetSession.hostLobby(room, code, defaultSetup(cast.length), cards, sessionOptions);
     setActiveSession(session);
     pushToMainContentStream(<OnlineLobby session={session} />, Screens.Ingame);
+}
+
+// The start screen's button: shows any trouble opening the room instead of failing silently.
+export function HostOnlineButton(props: { disabled?: boolean }) {
+    const [busy, setBusy] = React.useState(false);
+    const [error, setError] = React.useState<string | null>(null);
+    return (
+        <>
+            <button
+                className="button is-warning"
+                disabled={props.disabled || busy}
+                onClick={async () => {
+                    setBusy(true);
+                    setError(null);
+                    try {
+                        await hostOnlineGame();
+                    } catch (e) {
+                        console.error(e);
+                        setError("Couldn't open a room. Check your internet connection and try again.");
+                        setBusy(false);
+                    }
+                }}
+            >
+                {busy ? "Opening a room…" : "Host a game"}
+            </button>
+            {error && <span style={{ color: "#f87171", flexBasis: "100%" }}>{error}</span>}
+        </>
+    );
 }
 
 export function showJoinScreen(code?: string) {
@@ -69,37 +108,274 @@ function CopyButton(props: { text: string; label: string }) {
     );
 }
 
+function RoomCode(props: { code: string }) {
+    return (
+        <div className="bbb-room-code">
+            <span>Room code</span>
+            <b>{props.code}</b>
+            <div className="bbb-room-actions">
+                <CopyButton text={props.code} label="📋 Copy code" />
+                <CopyButton text={joinLink(props.code)} label="🔗 Copy invite link" />
+            </div>
+        </div>
+    );
+}
+
+// your name for online games, remembered on this device (never required: storage can be unavailable)
+const NAME_KEY = "bbb-online-name";
+
+function loadName(): string {
+    try {
+        return window.localStorage.getItem(NAME_KEY) || "";
+    } catch (e) {
+        return "";
+    }
+}
+
+function saveName(name: string) {
+    try {
+        window.localStorage.setItem(NAME_KEY, name);
+    } catch (e) {
+        // fine: it just won't be remembered
+    }
+}
+
+// a photo, shrunk to a small data URL so it can be sent to everyone
+async function photoURL(file: File): Promise<string> {
+    const hg = { imageURL: URL.createObjectURL(file) };
+    await inlineBlobImages([hg], 128);
+    return hg.imageURL.startsWith("data:") ? hg.imageURL : "";
+}
+
 // ---------- the lobby ----------
 
 export function OnlineLobby(props: { session: NetSession }) {
-    const { session } = props;
-    const status = useStatus(session);
-    const mine = status.localPlayerId;
-    const connected = (peerId?: string) => !!peerId && (peerId === status.selfId || status.peers.includes(peerId));
-    const claimed = status.slots.filter((s) => connected(status.claims[s.id])).length;
-    const watching = status.peers.length + 1 - claimed;
+    const status = useStatus(props.session);
+    if (status.setup) return <LobbyRoom session={props.session} status={status} />;
+    return <SeatPicker session={props.session} status={status} />;
+}
+
+// Before the season: the house, full of bots, and everyone joining takes a bot's place.
+function LobbyRoom(props: { session: NetSession; status: NetStatus }) {
+    const { session, status } = props;
+    const setup = status.setup!;
+    const cast = status.cast;
+    const mine = status.mySeat;
+    const [name, setName] = React.useState(() => (mine ? mine.name : loadName()));
+    const [photo, setPhoto] = React.useState<string | null>(mine && mine.castIndex === null ? mine.imageURL : null);
+    const [starting, setStarting] = React.useState(false);
+    const [startError, setStartError] = React.useState<string | null>(null);
+    const house = houseOf(setup, cast);
+    const players = setup.seats.length;
+    const bots = house.length - players;
+    const connected = (peerId: string) => peerId === status.selfId || status.peers.includes(peerId);
+
+    const joinAsMe = () => {
+        const clean = name.trim();
+        if (!clean) return;
+        saveName(clean);
+        session.takeSeat({ name: clean, imageURL: photo || initialsAvatar(clean), castIndex: null });
+    };
+
+    const joinAs = (castIndex: number) => {
+        const card = cast[castIndex];
+        session.takeSeat({ name: card.name, imageURL: card.imageURL, castIndex });
+    };
+
+    const start = async () => {
+        if (!hostCast) return;
+        setStarting(true);
+        setStartError(null);
+        try {
+            const { save, claims } = buildOnlineSeason(setup, hostCast.cast, cast$.value.options || {}, hostCast.hohPlaysVeto);
+            session.startSeason(save, claims);
+        } catch (e) {
+            console.error(e);
+            setStartError("Couldn't start the season. Try again.");
+            setStarting(false);
+        }
+    };
+
     return (
         <Panel>
             <div className="bbb-hero small">
                 <div className="bbb-hero-kicker">Online season</div>
-                <Title>{status.isHost ? "Invite your friends" : "You're in!"}</Title>
+                <Title>{status.isHost ? "Your house is open" : "You're in the lobby"}</Title>
                 <Subtle>
-                    Everyone plays on their own phone or computer. {status.isHost && "Keep this tab open while you play: your device runs the show."}
+                    Everyone plays on their own phone or computer. Each friend who joins takes a bot's place.
+                    {status.isHost && " Keep this tab open while you play: your device runs the show."}
                 </Subtle>
             </div>
-            <div className="bbb-room-code">
-                <span>Room code</span>
-                <b>{status.code}</b>
-                <div className="bbb-room-actions">
-                    <CopyButton text={status.code} label="📋 Copy code" />
-                    <CopyButton text={joinLink(status.code)} label="🔗 Copy invite link" />
+            <RoomCode code={status.code} />
+
+            <div className="bbb-lobby-me">
+                {mine ? (
+                    <div className="bbb-lobby-seated">
+                        <img src={mine.imageURL} alt="" />
+                        <div>
+                            <b>You're in as {mine.name}</b>
+                            <br />
+                            <a onClick={() => session.leaveSeat()}>Leave the house</a>
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <b>Join the house</b>
+                        <form
+                            className="bbb-add-yourself"
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                joinAsMe();
+                            }}
+                        >
+                            <input
+                                className="input"
+                                type="text"
+                                maxLength={24}
+                                placeholder="Your name"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                            />
+                            <label className="button is-light" title="Optional photo">
+                                {photo ? "📷 ✓" : "📷"}
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    style={{ display: "none" }}
+                                    onChange={async (e) => {
+                                        const file = e.target.files && e.target.files[0];
+                                        if (file) setPhoto((await photoURL(file)) || null);
+                                    }}
+                                />
+                            </label>
+                            <button type="submit" className="button is-warning" disabled={!name.trim()}>
+                                🎮 Join
+                            </button>
+                        </form>
+                        <Subtle>…or tap a houseguest below to play as them.</Subtle>
+                    </>
+                )}
+                {status.notice && <Subtle style={{ color: "#fbbf24" }}>{status.notice}</Subtle>}
+            </div>
+
+            {status.isHost ? (
+                <HostSettings session={session} status={status} />
+            ) : (
+                <Subtle>
+                    <b>{house.length}</b> houseguests · {setup.difficulty} difficulty
+                    {setup.powers === "surprise" && " · secret powers"}
+                    {setup.hideSkills && " · skill randomizer"}
+                </Subtle>
+            )}
+
+            <div className="bbb-setup-summary">
+                🎮 <b>{players}</b> player{players === 1 ? "" : "s"} · 🤖 <b>{bots}</b> bot{bots === 1 ? "" : "s"}
+            </div>
+            <Grid>
+                {house.map((spot) =>
+                    spot.kind === "player" ? (
+                        <Face
+                            key={`p-${spot.seat.peerId}`}
+                            hg={spot.seat}
+                            selected={spot.seat.peerId === status.selfId}
+                            caption={
+                                spot.seat.peerId === status.selfId ? (
+                                    <b>🎮 You</b>
+                                ) : (
+                                    <span>{connected(spot.seat.peerId) ? "🎮 player" : "⚪ away"}</span>
+                                )
+                            }
+                        />
+                    ) : (
+                        <Face
+                            key={`b-${spot.castIndex}`}
+                            hg={spot.card}
+                            onClick={() => joinAs(spot.castIndex)}
+                            caption={<span>🤖 tap to play</span>}
+                        />
+                    )
+                )}
+            </Grid>
+
+            {status.isHost ? (
+                <>
+                    {!mine && <Subtle>Join the house yourself before you start.</Subtle>}
+                    {startError && <Subtle style={{ color: "#f87171" }}>{startError}</Subtle>}
+                    <BigButton kind="success" disabled={!mine || starting || !hostCast} onClick={start}>
+                        {starting ? "Starting…" : `Start the season (${players} player${players === 1 ? "" : "s"})`}
+                    </BigButton>
+                </>
+            ) : (
+                <Subtle>⏳ The host starts the season when everyone's in.</Subtle>
+            )}
+        </Panel>
+    );
+}
+
+function HostSettings(props: { session: NetSession; status: NetStatus }) {
+    const { session, status } = props;
+    const setup = status.setup!;
+    const min = minHouse(setup);
+    const max = maxHouse(setup, status.cast.length);
+    return (
+        <div className="bbb-lobby-settings">
+            <div className="bbb-steppers">
+                <Stepper label="🏠 Houseguests" value={setup.size} min={min} max={max} onChange={(size) => session.updateSetup({ size })} />
+            </div>
+            <div className="bbb-setting">
+                <b>🎚️ Difficulty</b>
+                <div className="bbb-segmented">
+                    {(["easy", "normal", "hard"] as Difficulty[]).map((d) => (
+                        <button
+                            key={d}
+                            type="button"
+                            className={setup.difficulty === d ? "is-active" : ""}
+                            onClick={() => session.updateSetup({ difficulty: d })}
+                        >
+                            {d === "easy" ? "Easy" : d === "normal" ? "Normal" : "Hard"}
+                        </button>
+                    ))}
                 </div>
             </div>
+            <div className="bbb-setting">
+                <b>🤫 Secret powers</b>
+                <div className="bbb-segmented">
+                    {(["off", "surprise"] as const).map((m) => (
+                        <button key={m} type="button" className={setup.powers === m ? "is-active" : ""} onClick={() => session.updateSetup({ powers: m })}>
+                            {m === "off" ? "Off" : "Surprise me"}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <label className="bbb-toggle">
+                <input type="checkbox" checked={setup.hideSkills} onChange={(e) => session.updateSetup({ hideSkills: e.target.checked })} />
+                <span>
+                    🎲 <b>Skill randomizer</b>: secret, random Social and Comp scores for everyone, revealed when the season ends.
+                </span>
+            </label>
+        </div>
+    );
+}
+
+// After the season started: a returning (or late) device picks which player it is.
+function SeatPicker(props: { session: NetSession; status: NetStatus }) {
+    const { session, status } = props;
+    const mine = status.localPlayerId;
+    const connected = (peerId?: string) => !!peerId && (peerId === status.selfId || status.peers.includes(peerId));
+    const claimed = status.slots.filter((s) => connected(status.claims[s.id])).length;
+    return (
+        <Panel>
+            <div className="bbb-hero small">
+                <div className="bbb-hero-kicker">Online season</div>
+                <Title>{status.started ? "The season's already on" : "Connecting…"}</Title>
+                <Subtle>Everyone plays on their own phone or computer.</Subtle>
+            </div>
+            <RoomCode code={status.code} />
             {status.slots.length === 0 ? (
-                <Subtle>Connecting to the room… If nothing happens, check the code, and that the host has the lobby open.</Subtle>
+                <Subtle>Connecting to the room… If nothing happens, check the code, and that the host has the game open.</Subtle>
             ) : (
                 <>
-                    <Subtle>{mine === null ? "Who are you? Tap your houseguest." : "Waiting for everyone to pick who they are."}</Subtle>
+                    <Subtle>{mine === null ? "Which player are you? Tap yourself to jump back in." : "Loading the season…"}</Subtle>
                     <Grid>
                         {status.slots.map((slot) => {
                             const holder = status.claims[slot.id];
@@ -112,28 +388,15 @@ export function OnlineLobby(props: { session: NetSession }) {
                                     selected={isMine}
                                     dim={taken}
                                     onClick={taken || isMine ? undefined : () => session.claim(slot.id)}
-                                    caption={isMine ? <b>🎮 You</b> : taken ? <span>🟢 joined</span> : <span>tap to play</span>}
+                                    caption={isMine ? <b>🎮 You</b> : taken ? <span>🟢 playing</span> : <span>tap if this is you</span>}
                                 />
                             );
                         })}
                     </Grid>
                     <Subtle>
-                        {claimed}/{status.slots.length} players here
-                        {watching > 0 && ` · ${watching} device${watching === 1 ? "" : "s"} still picking`}
+                        {claimed}/{status.slots.length} players connected
                     </Subtle>
                 </>
-            )}
-            {status.isHost ? (
-                <>
-                    {claimed < status.slots.length && (
-                        <Subtle>You can start now: you'll play for anyone who hasn't joined, until they do.</Subtle>
-                    )}
-                    <BigButton kind="success" disabled={mine === null} onClick={() => session.start()}>
-                        Enter the house
-                    </BigButton>
-                </>
-            ) : (
-                status.slots.length > 0 && <Subtle>⏳ The host starts the season once everyone's in.</Subtle>
             )}
         </Panel>
     );

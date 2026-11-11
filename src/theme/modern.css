@@ -1673,3 +1673,31 @@ input[type="number"] {
         animation: none;
     }
 }
+.bbb-lobby-me {
+    margin: 12px auto;
+    padding: 12px;
+    max-width: 520px;
+    border-radius: var(--bbb-radius);
+    background: var(--bbb-card);
+    border: 1px solid var(--bbb-border);
+}
+.bbb-lobby-me .bbb-add-yourself {
+    margin-top: 8px;
+}
+.bbb-lobby-seated {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    text-align: left;
+}
+.bbb-lobby-seated img {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid var(--bbb-accent);
+}
+.bbb-lobby-settings {
+    margin: 8px auto;
+}

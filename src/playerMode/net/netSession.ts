@@ -4,6 +4,7 @@ import { actorOf, migrateSave, PlayerModeController, PlayerSave, Prompt } from "
 import { clearOnlineSave, deserialize, serialize, writeOnlineSave } from "../save/serialize";
 import { seedRng } from "../seeding";
 import { NetRoom } from "./room";
+import { canJoin, CastCard, LobbySeat, LobbySetup, normalizeSetup } from "./lobby";
 
 // Online play without a server.
 //
@@ -67,6 +68,10 @@ export interface NetStatus {
     peers: string[]; // connected devices (not counting this one)
     localPlayerId: number | null;
     notice?: string;
+    // before the season starts, in a lobby the host is setting up
+    setup: LobbySetup | null;
+    cast: CastCard[];
+    mySeat: LobbySeat | null;
 }
 
 export interface SessionOptions {
@@ -164,7 +169,9 @@ export class NetSession {
     private slots: Slot[] = [];
     private claims: { [playerId: number]: string } = {};
     private notice?: string;
-    private pendingSave: PlayerSave | null = null; // the host's season, before it starts
+    private pendingSave: PlayerSave | null = null; // the host's season, before it starts (fixed players)
+    private setup: LobbySetup | null = null; // or the lobby, where the players are whoever joins
+    private cast: CastCard[] = [];
     private wantPlayerId: number | null = null; // a returning player claims their old seat automatically
     private fallbackJson: string | null = null; // a returning device's own copy of the season
 
@@ -201,6 +208,15 @@ export class NetSession {
         session.pendingSave = save;
         session.slots = slotsOf(save);
         session.lastSavedJson = serialize(save);
+        session.emit();
+        return session;
+    }
+
+    // Hosts a lobby: the house starts out full of bots, and everyone who joins takes a bot's place.
+    static hostLobby(room: NetRoom, code: string, setup: LobbySetup, cast: CastCard[], opts: SessionOptions): NetSession {
+        const session = new NetSession(room, code, opts, true);
+        session.cast = cast;
+        session.setup = normalizeSetup(setup, cast.length);
         session.emit();
         return session;
     }
@@ -259,6 +275,9 @@ export class NetSession {
             peers: this.room.peers(),
             localPlayerId: this.localPlayerId,
             notice: this.notice,
+            setup: this.setup,
+            cast: this.cast,
+            mySeat: (this.setup && this.setup.seats.find((s) => s.peerId === this.room.selfId)) || null,
         };
     }
 
@@ -273,12 +292,79 @@ export class NetSession {
         else if (this.hostId) this.room.send("claim", { playerId }, this.hostId);
     }
 
+    // ---------- the lobby (before the season starts) ----------
+
+    // The host changes the settings (size, difficulty...).
+    public updateSetup(change: Partial<LobbySetup>) {
+        if (!this.isHost || !this.setup || this.started) return;
+        this.setup = normalizeSetup({ ...this.setup, ...change }, this.cast.length);
+        this.broadcastLobby();
+    }
+
+    // Join the house (as yourself, or as a cast member), or change how you're joining.
+    public takeSeat(seat: Omit<LobbySeat, "peerId">) {
+        if (this.isHost) this.seatPeer(this.room.selfId, seat);
+        else if (this.hostId) this.room.send("seat", seat, this.hostId);
+    }
+
+    public leaveSeat() {
+        if (this.isHost) this.unseatPeer(this.room.selfId);
+        else if (this.hostId) this.room.send("unseat", {}, this.hostId);
+    }
+
+    private seatPeer(peerId: string, seat: Omit<LobbySeat, "peerId">) {
+        if (!this.setup || this.started) return;
+        const others = { ...this.setup, seats: this.setup.seats.filter((s) => s.peerId !== peerId) };
+        const clean = {
+            name: String(seat.name || "").trim().slice(0, 24) || "Player",
+            imageURL: String(seat.imageURL || ""),
+            castIndex: typeof seat.castIndex === "number" && seat.castIndex >= 0 && seat.castIndex < this.cast.length ? seat.castIndex : null,
+        };
+        if (!canJoin(others, this.cast.length, clean)) {
+            if (peerId === this.room.selfId) {
+                this.notice = "That houseguest is taken, or the house is full.";
+                this.emit();
+            } else {
+                this.room.send("full", {}, peerId);
+            }
+            return;
+        }
+        // keep their place in line if they're only changing their name or face
+        const index = this.setup.seats.findIndex((s) => s.peerId === peerId);
+        const seats = [...others.seats];
+        seats.splice(index >= 0 ? index : seats.length, 0, { ...clean, peerId });
+        if (peerId === this.room.selfId) this.notice = undefined;
+        this.setup = normalizeSetup({ ...this.setup, seats }, this.cast.length);
+        this.broadcastLobby();
+    }
+
+    private unseatPeer(peerId: string) {
+        if (!this.setup || this.started) return;
+        if (!this.setup.seats.some((s) => s.peerId === peerId)) return;
+        this.setup = normalizeSetup({ ...this.setup, seats: this.setup.seats.filter((s) => s.peerId !== peerId) }, this.cast.length);
+        this.broadcastLobby();
+    }
+
+    // The host starts a lobby's season: built from whoever's in the house.
+    public startSeason(save: PlayerSave, claims: { [playerId: number]: string }) {
+        if (!this.isHost || this.started) return;
+        this.slots = slotsOf(save);
+        this.claims = { ...claims };
+        this.setup = null;
+        this.lastSavedJson = serialize(save);
+        this.begin();
+    }
+
     // The host starts the season for everyone.
     public start() {
         if (!this.isHost || this.started || !this.pendingSave) return;
+        this.pendingSave = null;
+        this.begin();
+    }
+
+    private begin() {
         this.started = true;
         const json = this.lastSavedJson;
-        this.pendingSave = null;
         this.room.send("snap", { json, log: [], seq: 0 } as Snapshot);
         this.broadcastLobby();
         this.loadSnapshot(json, [], 0);
@@ -308,7 +394,7 @@ export class NetSession {
     }
 
     private lobbyData() {
-        return { slots: this.slots, claims: this.claims, started: this.started };
+        return { slots: this.slots, claims: this.claims, started: this.started, setup: this.setup, cast: this.setup ? this.cast : [] };
     }
 
     private broadcastLobby() {
@@ -336,6 +422,10 @@ export class NetSession {
             Object.keys(this.claims).forEach((id) => {
                 if (this.claims[Number(id)] === peerId) delete this.claims[Number(id)];
             });
+            if (this.setup && !this.started) {
+                // they left the lobby: a bot takes their place again
+                this.setup = normalizeSetup({ ...this.setup, seats: this.setup.seats.filter((s) => s.peerId !== peerId) }, this.cast.length);
+            }
             this.broadcastLobby();
         } else {
             this.emit();
@@ -367,6 +457,18 @@ export class NetSession {
             case "claim":
                 if (this.isHost) this.grantClaim(data.playerId, from);
                 return;
+            case "seat":
+                if (this.isHost) this.seatPeer(from, data);
+                return;
+            case "unseat":
+                if (this.isHost) this.unseatPeer(from);
+                return;
+            case "full":
+                if (from === this.hostId) {
+                    this.notice = "That houseguest is taken, or the house is full.";
+                    this.emit();
+                }
+                return;
             case "input":
                 return this.receiveInput(data as Input);
             case "hash":
@@ -388,7 +490,10 @@ export class NetSession {
         }
     }
 
-    private onLobby(data: { slots: Slot[]; claims: { [id: number]: string }; started: boolean }, from: string) {
+    private onLobby(
+        data: { slots: Slot[]; claims: { [id: number]: string }; started: boolean; setup?: LobbySetup | null; cast?: CastCard[] },
+        from: string
+    ) {
         if (this.isHost && from !== this.room.selfId) {
             // two hosts (both thought they were alone): the smaller id stays host
             if (this.room.selfId < from) {
@@ -401,6 +506,9 @@ export class NetSession {
         this.hostId = from;
         this.slots = data.slots;
         this.claims = { ...data.claims };
+        this.setup = data.setup || null;
+        if (data.cast && data.cast.length > 0) this.cast = data.cast;
+        if (this.setup && this.setup.seats.some((s) => s.peerId === this.room.selfId)) this.notice = undefined;
         this.started = data.started || this.started;
         const mine = this.localPlayerId;
         if (mine === null && this.wantPlayerId !== null && !this.connected(this.claims[this.wantPlayerId])) {

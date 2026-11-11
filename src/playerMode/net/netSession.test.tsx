@@ -3,6 +3,8 @@ import { actorOf, newPlayerSave, PlayerModeController, Prompt, Step } from "../p
 import { answer, newGame } from "../testing";
 import { NetSession, SessionOptions, stateHash } from "./netSession";
 import { FakeHub } from "./room";
+import { buildOnlineSeason, defaultSetup, houseOf } from "./lobby";
+import { cast as testCast } from "../testing";
 
 const opts: SessionOptions = { launch: (controller) => controller.start(), hostWaitMs: 50, hashDelayMs: 10 };
 
@@ -201,5 +203,77 @@ describe("online play", () => {
         let guard = 0;
         while (guard++ < 5000 && step(hub, [back])) {}
         expect(prompt(back).kind).toBe("gameOver");
+    });
+
+    it("a lobby starts full of bots, and everyone who joins takes a bot's place", () => {
+        const hub = new FakeHub();
+        const cast = testCast(8);
+        const cards = cast.map((hg) => ({ name: hg.name, imageURL: hg.imageURL }));
+        const setup = { ...defaultSetup(cast.length), size: 6 };
+        const host: NetSession | null = NetSession.hostLobby(hub.join("h"), "TEST", setup, cards, opts);
+        const a = NetSession.join(hub.join("a"), "TEST", opts);
+        const b = NetSession.join(hub.join("b"), "TEST", opts);
+        hub.flush();
+        const status = () => host!.status$.value;
+        const kinds = () => houseOf(status().setup!, cards).map((s) => s.kind);
+        expect(kinds()).toEqual(["bot", "bot", "bot", "bot", "bot", "bot"]);
+        // a joiner sees the lobby too
+        expect(a.status$.value.setup!.size).toBe(6);
+
+        host!.takeSeat({ name: "Host", imageURL: "", castIndex: null });
+        a.takeSeat({ name: "Ana", imageURL: "", castIndex: null });
+        const botToPlay = houseOf(status().setup!, cards).find((s) => s.kind === "bot") as { castIndex: number };
+        b.takeSeat({ name: "", imageURL: "", castIndex: botToPlay.castIndex });
+        hub.flush();
+        // the house stays at 6: three players, three bots, and B plays as the cast member they tapped
+        expect(kinds()).toEqual(["player", "player", "player", "bot", "bot", "bot"]);
+        expect(b.status$.value.mySeat!.castIndex).toBe(botToPlay.castIndex);
+        // nobody else can take the same houseguest
+        a.takeSeat({ name: "", imageURL: "", castIndex: botToPlay.castIndex });
+        hub.flush();
+        expect(a.status$.value.mySeat!.name).toBe("Ana");
+        expect(a.status$.value.notice).toBeDefined();
+
+        // the host shrinks the house: never below the players
+        host!.updateSetup({ size: 2 });
+        hub.flush();
+        expect(status().setup!.size).toBe(4);
+        // someone leaving gives their place back to a bot
+        b.leave();
+        hub.flush();
+        expect(kinds()).toEqual(["player", "player", "bot", "bot"]);
+
+        // start: the season has exactly these players, and each device plays its own
+        const { save, claims } = buildOnlineSeason(status().setup!, cast, {}, true);
+        expect(save.gameState.houseguests.length).toBe(4);
+        expect(save.humanIds.length).toBe(2);
+        host!.startSeason(save, claims);
+        hub.flush();
+        const all = [host!, a];
+        const names = all.map((s) => getById(s.controller!.gameState, s.localPlayerId!).name);
+        expect(names).toEqual(["Host", "Ana"]);
+        let guard = 0;
+        while (guard++ < 5000 && step(hub, all)) {
+            host!.sendHash();
+            hub.flush();
+        }
+        expectInSync(all);
+        expect(prompt(a).kind).toBe("gameOver");
+    });
+
+    it("the house grows when more people join than there are bots", () => {
+        const hub = new FakeHub();
+        const cast = testCast(4);
+        const cards = cast.map((hg) => ({ name: hg.name, imageURL: hg.imageURL }));
+        const host = NetSession.hostLobby(hub.join("h"), "TEST", defaultSetup(cast.length), cards, opts);
+        const others = ["a", "b", "c", "d"].map((id) => NetSession.join(hub.join(id), "TEST", opts));
+        hub.flush();
+        host.takeSeat({ name: "H", imageURL: "", castIndex: null });
+        others.forEach((s, i) => s.takeSeat({ name: `P${i}`, imageURL: "", castIndex: null }));
+        hub.flush();
+        const setup = host.status$.value.setup!;
+        expect(setup.seats.length).toBe(5);
+        expect(setup.size).toBe(5);
+        expect(houseOf(setup, cards).every((s) => s.kind === "player")).toBe(true);
     });
 });
