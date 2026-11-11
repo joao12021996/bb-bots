@@ -81,7 +81,7 @@ describe("comp runner screens", () => {
         await act(async () => {
             ReactDOM.render(
                 <CompPlay
-                    title="Head of Household Competition"
+                    title="Head of House Competition"
                     comp={ALL_COMPS[1]}
                     participants={participants}
                     player={participants[0]}
@@ -101,7 +101,7 @@ describe("comp runner screens", () => {
         await act(async () => {
             ReactDOM.render(
                 <CompResults
-                    title="Head of Household Competition"
+                    title="Head of House Competition"
                     comp={ALL_COMPS[0]}
                     participants={participants}
                     humanIds={[participants[2].id]}
@@ -133,21 +133,28 @@ describe("fairness: everyone plays the same comp", () => {
         const container = document.createElement("div");
         document.body.appendChild(container);
         const Component = comp.Component;
-        await act(async () => {
-            ReactDOM.render(
-                <Component
-                    participants={participants}
-                    human={participants[0]}
-                    gameState={gs}
-                    history={history}
-                    rand={seededRand(seed)}
-                    opponents={[]}
-                    report={() => undefined}
-                    finish={() => undefined}
-                />,
-                container
-            );
-        });
+        // this compares the starting layout: don't let an animation frame sneak in and move things
+        const raf = window.requestAnimationFrame;
+        window.requestAnimationFrame = (() => 0) as any;
+        try {
+            await act(async () => {
+                ReactDOM.render(
+                    <Component
+                        participants={participants}
+                        human={participants[0]}
+                        gameState={gs}
+                        history={history}
+                        rand={seededRand(seed)}
+                        opponents={[]}
+                        report={() => undefined}
+                        finish={() => undefined}
+                    />,
+                    container
+                );
+            });
+        } finally {
+            window.requestAnimationFrame = raf;
+        }
         // strip things that legitimately differ between renders (timers, a zoom animation in progress)
         const html = container.innerHTML.replace(/\d+(\.\d+)?s\b/g, "#s").replace(/\d+:\d\d/g, "#:##").replace(/scale\([\d.]+\)/g, "scale(#)");
         act(() => {
@@ -209,7 +216,7 @@ describe("fairness: everyone plays the same comp", () => {
         const counts: { [id: string]: number } = {
             "memory-wall": generateMemoryWall(seededRand(777), gs).questions.length,
             "before-or-after": buildQuiz(gs, history, seededRand(777)).length,
-            "fact-or-fiction": makeFacts(gs, seededRand(777)).length,
+            "fact-or-fiction": makeFacts(gs, seededRand(777), history).length,
             "zoom-in": 6,
         };
         Object.entries(counts).forEach(([id, n]) => {
@@ -222,6 +229,7 @@ describe("fairness: everyone plays the same comp", () => {
 
     it("bot results are reproducible, and better bots do better on every skill comp", () => {
         const gs = game();
+        [1, 2].forEach((id) => (gs.houseguests.find((h) => h.id === id)!.isEvicted = true)); // as in the history
         ALL_COMPS.filter((c) => c.kind !== "luck").forEach((comp) => {
             let weak = 0;
             let strong = 0;
@@ -235,5 +243,54 @@ describe("fairness: everyone plays the same comp", () => {
             }
             if (strong <= weak) throw new Error(`${comp.name}: strong bots (${strong}) should beat weak bots (${weak})`);
         });
+    });
+});
+
+describe("knockout rounds", () => {
+    it("between rounds, shows who just dropped out and who's still in", () => {
+        const { knockoutRound } = require("./compUi");
+        const opp = [3, 4, 5, 6, 8].map((score, i) => ({ hg: { id: i, name: `B${i}`, imageURL: "" }, score }));
+        // first round cleared at 4: everyone below 4 is out
+        let r = knockoutRound(opp, 4, true);
+        expect(r.out.map((o: any) => o.score)).toEqual([3]);
+        expect(r.still.length).toBe(4);
+        // clearing 6: only the one who stopped at 5 drops out now
+        r = knockoutRound(opp, 6, false);
+        expect(r.out.map((o: any) => o.score)).toEqual([5]);
+        expect(r.still.map((o: any) => o.score)).toEqual([6, 8]);
+    });
+});
+
+describe("Fact or Fiction", () => {
+    const { makeFacts, FactOrFictionComp } = require("./houseComps");
+    it("is a late-game comp, and only asks about former houseguests", () => {
+        const gs = game();
+        expect(FactOrFictionComp.available(gs, history)).toBe(false);
+        expect(makeFacts(gs, seededRand(3), history)).toEqual([]);
+        const gone = [1, 2, 5, 6];
+        gone.forEach((id) => (gs.houseguests.find((h) => h.id === id)!.isEvicted = true));
+        const hist = gone.map((id, i) => ({ week: i + 1, hohId: 0, nomineeIds: [id, 3], evictedIds: [id] }));
+        expect(FactOrFictionComp.available(gs, hist)).toBe(true);
+        const facts = makeFacts(gs, seededRand(3), hist);
+        expect(facts.length).toBeGreaterThan(5);
+        const stillIn = gs.houseguests.filter((h) => !h.isEvicted).map((h) => h.name);
+        facts.forEach((f: any) => stillIn.forEach((name) => expect(f.text).not.toMatch(new RegExp(`\b${name}\b`))));
+    });
+});
+
+describe("the Last Chance comp", () => {
+    it("is always a quick comp, never a long puzzle like Tainted Wine", () => {
+        const { pickQuickComp, QUICK_COMPS } = require("./index");
+        const gs = game();
+        const seen = new Set<string>();
+        const used: string[] = [];
+        for (let i = 0; i < 40; i++) {
+            const c = pickQuickComp(gs, history, used);
+            used.push(c.id);
+            seen.add(c.id);
+            expect(c.id).not.toBe("tainted-wine");
+            expect(c.maxSeconds).toBeLessThanOrEqual(120);
+        }
+        expect(seen.size).toBe(QUICK_COMPS.length);
     });
 });

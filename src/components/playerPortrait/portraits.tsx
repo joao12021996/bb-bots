@@ -2,6 +2,7 @@ import React from "react";
 import { ProfileHouseguest } from "../memoryWall";
 import { houseguestToPortrait, memoryWallPortrait } from "./houseguestToPortrait";
 import { Tooltip } from "../tooltip/tooltip";
+import { relationshipsHidden } from "../../subjects/subjects";
 
 let key = -1;
 
@@ -20,7 +21,7 @@ export function Portrait(props: { houseguest: ProfileHouseguest; centered?: bool
     const result = (
         <PortraitWrapper centered={props.centered}>{houseguestToPortrait(props.houseguest)}</PortraitWrapper>
     );
-    if (props.houseguest.tooltip) {
+    if (props.houseguest.tooltip && !relationshipsHidden()) {
         return (
             <PortraitWrapper centered={props.centered}>
                 <Tooltip text={props.houseguest.tooltip}>{houseguestToPortrait(props.houseguest)}</Tooltip>
@@ -56,7 +57,7 @@ export function Portraits(props: {
         } else {
             result = houseguestToPortrait(houseguest, key++);
         }
-        if (houseguest !== "⬅️" && houseguest !== "➡️" && houseguest.tooltip) {
+        if (houseguest !== "⬅️" && houseguest !== "➡️" && houseguest.tooltip && !relationshipsHidden()) {
             result = (
                 <Tooltip key={key++} text={houseguest.tooltip}>
                     {result}

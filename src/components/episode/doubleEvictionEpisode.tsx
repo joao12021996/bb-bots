@@ -11,7 +11,7 @@ export const DoubleEviction: EpisodeType = {
     emoji: "⏩",
     chainable: true,
     name: "Double Eviction",
-    description: "A second round of Big Brother plays out in a single scene.",
+    description: "A second round of the game plays out in a single scene.",
     generate: generateDoubleEviction,
 };
 

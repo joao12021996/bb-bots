@@ -2,7 +2,7 @@ import React from "react";
 import { popularityMode, powerMode } from "../../model/portraitDisplayMode";
 import { ViewBarTag } from "./viewBarTag";
 import { GameState, inJury } from "../../model";
-import { displayMode$ } from "../../subjects/subjects";
+import { displayMode$, relationshipsHidden } from "../../subjects/subjects";
 
 export class ViewsBar extends React.Component<{ gameState: GameState }, {}> {
     public constructor(props: { gameState: GameState }) {
@@ -19,6 +19,7 @@ export class ViewsBar extends React.Component<{ gameState: GameState }, {}> {
     }
 
     render() {
+        if (relationshipsHidden()) return null;
         return (
             <div className="level is-mobile" key="viewsbar" style={{ marginBottom: 0 }}>
                 <ViewBarTag mode={popularityMode} text={"Relationships"}></ViewBarTag>

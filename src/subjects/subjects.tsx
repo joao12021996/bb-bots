@@ -88,3 +88,18 @@ export const continueOverride$ = new BehaviorSubject<(() => void) | null>(null);
 // Player mode: when set, the season is being played by a human. Moving past the last scene in the
 // sidebar returns to the player mode screen instead of auto-generating the next episode.
 export const playerModeScreen$ = new BehaviorSubject<(() => JSX.Element) | null>(null);
+
+// While a player mode season is running, relationships are secret: players have to find out how people
+// feel by talking to them. The classic views (portrait colors, popularity, friend/enemy counts, clicking a
+// houseguest to see their relationships, bots' reasoning in tooltips) stay hidden until the season is over.
+export const secretRelationships$ = new BehaviorSubject<boolean>(false);
+export function relationshipsHidden(): boolean {
+    return secretRelationships$.value;
+}
+// ...but clicking a houseguest opens what you DO know about them (null: closed)
+export const knownProfile$ = new BehaviorSubject<number | null>(null);
+// leaving player mode (or finishing the season) reveals everything again
+playerModeScreen$.subscribe((screen) => {
+    if (!screen && secretRelationships$.value) secretRelationships$.next(false);
+    if (!screen && knownProfile$.value !== null) knownProfile$.next(null);
+});

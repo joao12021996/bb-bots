@@ -15,10 +15,10 @@ export const GameOver: EpisodeType = {
     generate: generateGameOver,
 };
 
-export function generateGameOver(gameState: GameState): Episode {
+export function generateGameOver(gameState: GameState, weekLabel?: (week: number) => string): Episode {
     const title = "Game Over";
     const scenes: Scene[] = [];
-    const content = generateVotingTable(gameState);
+    const content = generateVotingTable(gameState, weekLabel);
     gameState.houseguests.forEach((hg) => {
         evictHouseguest(gameState, hg.id);
     });

@@ -90,7 +90,7 @@ export class Topbar extends React.Component<{ style?: any }, { tab: Screens }> {
             <Box className="bbb-topbar" style={style}>
                 <div className="bbb-brand">
                     <span className="bbb-brand-eye">👁️</span>
-                    Big Brother <span className="dim">Bots</span>
+                    Houseguest <span className="dim">Bots</span>
                 </div>
                 <nav className="bbb-nav">
                     <ChooseCastLink />

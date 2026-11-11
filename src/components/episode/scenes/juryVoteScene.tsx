@@ -55,7 +55,7 @@ export function juryVoteScene(
                     ))}
                 </div>
                 <Portraits houseguests={finalists} centered={true} />
-                <CenteredBold>{`Congratulations, ${winner.name}... you are the winner of Big Brother!`}</CenteredBold>
+                <CenteredBold>{`Congratulations, ${winner.name}... you are the winner of The Houseguests!`}</CenteredBold>
                 <NextEpisodeButton />
             </div>
         ),

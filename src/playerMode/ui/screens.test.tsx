@@ -1,12 +1,24 @@
 import React from "react";
 import ReactDOM from "react-dom";
 import { act } from "react-dom/test-utils";
-import { GameState, MutableGameState, PlayerProfile } from "../../model";
+import { GameState, getById, MutableGameState, PlayerProfile } from "../../model";
 import { newPlayerSave, PlayerModeController, Prompt } from "../playerModeController";
 import { createAlliance } from "../social/alliances";
 import { SocialScreen } from "./socialScreen";
 import { AllianceScreen } from "./allianceScreen";
 import { FaceEditor } from "./faceEditor";
+import { HohRoomScreen, HohVisitScreen } from "./hohRoomScreen";
+import { openHohRoom } from "../social/hohRoom";
+import { SpeechPrompt } from "./speechPrompt";
+import { makeTiebreaker, TiebreakPlay, TiebreakResults } from "../comps/tiebreaker";
+import { PlayerModeScreen } from "./playerModeScreen";
+import { JuryReveal } from "./finaleScreens";
+import { HouseWall } from "./houseWall";
+import { CompResults } from "../comps/compRunner";
+import { FactOrFictionComp } from "../comps/houseComps";
+import { FindTheKeyComp } from "../comps/memoryComps";
+import { seededRand } from "../comps/random";
+import { useQuizClock } from "../comps/compUi";
 
 // Mounts the social, alliance and face editor screens, clicks through them, and checks nothing throws.
 
@@ -67,6 +79,13 @@ describe("player mode screens", () => {
         expect(c.textContent).toContain("Invite to The Vault");
         click(c, "Start it");
         expect(controller.state.actionsLeft).toBe(1);
+        // pitch HG5 to HG4, with a reason
+        act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG4"))[0].click());
+        click(c, "Pitch a target");
+        act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG5"))[0].click());
+        expect(c.textContent).toContain("Why should HG4 go after HG5?");
+        click(c, "Great social game");
+        expect(controller.state.actionsLeft).toBe(0);
         click(c, "alliance time");
         expect(controller.state.socialStage).toBe("alliance");
     });
@@ -98,6 +117,485 @@ describe("player mode screens", () => {
         click(c, "Leak to HG6");
         expect(c.textContent).toMatch(/You told HG6 all about The Bank/);
         click(c, "Done");
+    });
+
+    // A controller with the HoH room open: `hohId` won HoH in a 7-player game where HG0 is the player.
+    function controllerInHohRoom(hohId: number): PlayerModeController {
+        const controller = controllerAtSocial();
+        controller.state.week.hohId = hohId;
+        const gs = new MutableGameState(controller.gameState);
+        controller.state.week.room = openHohRoom(gs, controller.state.book, hohId, [0], []);
+        controller.state.gameState = new GameState(gs);
+        return controller;
+    }
+
+    it("HoH room: the HoH hears visitors one by one and makes promises", () => {
+        const controller = controllerInHohRoom(0);
+        const room = controller.room!;
+        room.visitors = [
+            { kind: "plea", fromId: 3 },
+            { kind: "deal", fromId: 4 },
+            { kind: "target", fromId: 5, targetId: 6 },
+            { kind: "chat", fromId: 1 },
+        ];
+        const c = mount(<HohRoomScreen controller={controller} actorId={0} />);
+        expect(c.textContent).toContain("Visitor 1 of 4");
+        click(c, "You're safe");
+        expect(room.promised).toEqual([3]);
+        expect(c.textContent).toContain("Visitor 2 of 4");
+        click(c, "No deal");
+        expect(controller.deals.length).toBe(0);
+        click(c, "HG6 is going up");
+        expect(room.targets).toEqual([{ fromId: 5, targetId: 6 }]);
+        click(c, "Thanks for coming up");
+        expect(c.textContent).toContain("You owe safety to: HG3");
+        expect(c.textContent).toContain("Didn't come up: HG2, HG6");
+        click(c, "Nomination Ceremony");
+        expect(room.done).toBe(true);
+    });
+
+    it("HoH room: a player goes up to pitch a nominee, or stays downstairs", () => {
+        const controller = controllerInHohRoom(2);
+        const c = mount(<HohVisitScreen controller={controller} actorId={0} />);
+        expect(c.textContent).toContain("HG2 is Head of House");
+        click(c, "Pitch a nominee");
+        act(() => Array.from(c.querySelectorAll("button")).find((b) => (b.textContent || "").startsWith("HG5"))!.click());
+        expect(c.textContent).toContain("Why should HG2 nominate HG5?");
+        click(c, "Comp threat");
+        expect(controller.room!.asked).toEqual([0]);
+        expect(c.textContent).toMatch(/HG5/);
+        expect(c.textContent).toMatch(/heading up to the HoH room|Nobody else was seen/);
+
+        const stay = controllerInHohRoom(2);
+        const c2 = mount(<HohVisitScreen controller={stay} actorId={0} />);
+        click(c2, "Stay downstairs");
+        expect(c2.textContent).toContain("You stayed downstairs");
+        expect(stay.room!.promised).toEqual([]);
+    });
+
+    it("speech: pick a tone, pick who it's aimed at, and see how it landed", () => {
+        const controller = controllerAtSocial();
+        const hgs = [1, 2].map((id) => controller.player(id));
+        const given: [string, number[]][] = [];
+        let done = false;
+        const c = mount(
+            <SpeechPrompt
+                title="Nomination Speech"
+                text="Pick a tone."
+                actor={controller.player(0)}
+                tones={[
+                    { id: "gracious", label: "Gracious", blurb: "Nothing personal." },
+                    { id: "pawn", label: "Pawn talk", blurb: "Not the target.", pick: { text: "Who?", options: hgs, max: 2 } },
+                ]}
+                deliver={(tone, ids) => {
+                    given.push([tone, ids]);
+                    return ["“You are not my target.”", "HG1 believes you."];
+                }}
+                next={() => (done = true)}
+            />
+        );
+        click(c, "Pawn talk");
+        act(() => Array.from(c.querySelectorAll("button")).find((b) => (b.textContent || "").startsWith("HG1"))!.click());
+        click(c, "Give the speech");
+        expect(given).toEqual([["pawn", [1]]]);
+        expect(c.textContent).toContain("HG1 believes you.");
+        click(c, "Continue");
+        expect(done).toBe(true);
+    });
+
+    it("tiebreaker: shows the box, takes a guess, and shows who was closest", () => {
+        const controller = controllerAtSocial();
+        const tied = [0, 1].map((id) => controller.player(id));
+        const question = makeTiebreaker(9);
+        let guess = -1;
+        const c = mount(
+            <TiebreakPlay title="HoH Competition" player={tied[0]} tied={tied} question={question} moreToPlay={false} onGuess={(g) => (guess = g)} />
+        );
+        expect(c.textContent).toContain("It's a tie between HG0, HG1");
+        click(c, "I'm ready");
+        expect(c.querySelectorAll(".bbb-tiebreak-box span").length).toBe(question.answer);
+        const r = mount(
+            <TiebreakResults
+                title="HoH Competition"
+                question={question}
+                tied={tied}
+                guesses={[
+                    { id: 0, guess: question.answer + 2 },
+                    { id: 1, guess: question.answer - 20 },
+                ]}
+                winnerId={0}
+                humanIds={[0]}
+                onDone={() => undefined}
+            />
+        );
+        expect(r.textContent).toContain(`There were ${question.answer}`);
+        expect(r.textContent).toContain("off by 20");
+        expect(guess).toBe(-1);
+    });
+
+    it("campaign time: a nominee can make a vote deal, count votes, and see their promises", () => {
+        const controller = controllerAtSocial();
+        controller.state.step = "SocialCampaign" as any;
+        controller.state.week.hohId = 1;
+        controller.state.week.nomineeIds = [0, 2];
+        controller.state.actionsLeft = 3;
+        const c = mount(<SocialScreen controller={controller} blockName="Campaign time" />);
+        expect(c.textContent).toContain("Your vote count");
+        expect(c.textContent).toContain("Your word");
+        act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG4"))[0].click());
+        expect(c.textContent).toContain("Campaign for HG4's vote");
+        click(c, "Ask about the vote");
+        expect(c.textContent).toMatch(/HG4: ".*HG[02]/); // in HG4's own words
+        expect(controller.state.actionsLeft).toBe(3); // asking is free
+        click(c, "Vote deal");
+        expect(controller.state.actionsLeft).toBe(2);
+        act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG5"))[0].click());
+        click(c, "Under the bus");
+        expect(c.textContent).toContain("Why should HG5 go after HG2?");
+    });
+
+    it("you only see what you've picked up: no read until you talk to someone, and bots can fake it", () => {
+        const controller = controllerAtSocial();
+        controller.state.personalities = { 4: "mastermind", 5: "loyalSoldier" };
+        controller.state.reads = {};
+        controller.state.approaches[0] = [];
+        const me = controller.player(0);
+        [4, 5].forEach((id) => {
+            me.relationships[id] = -0.8;
+            controller.player(id).relationships[0] = -0.8;
+        });
+        controller.state.showmances = [{ a: 5, b: 6, week: 1 }];
+        const caption = (c: HTMLElement, name: string) =>
+            Array.from(c.querySelectorAll("button")).find((b) => (b.textContent || "").startsWith(name))!.textContent!;
+        const before = mount(<SocialScreen controller={controller} blockName="Morning in the house" />);
+        expect(caption(before, "HG4")).toContain("No read");
+        expect(caption(before, "HG5")).toContain("No read");
+        expect(before.textContent).not.toMatch(/Enemy|Wary|Friendly|Close friend/);
+        expect(caption(before, "HG6")).toContain("💕"); // showmances are public knowledge
+        // after talking to them, you have a read: the mastermind smiles, the loyal soldier doesn't hide it
+        controller.noteRead(0, 4);
+        controller.noteRead(0, 5);
+        const c = mount(<SocialScreen controller={controller} blockName="Morning in the house" />);
+        expect(caption(c, "HG4")).not.toContain("Enemy");
+        expect(caption(c, "HG5")).toContain("Enemy");
+        act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG5"))[0].click());
+        expect(c.textContent).toContain("in a showmance with HG6");
+        expect(c.textContent).toContain("Last time you two talked (Day 1)");
+        expect(c.textContent).toContain("don't know yet how much HG5 believes");
+        // dealing with them tells you how much they believe you
+        click(c, "Flirt");
+        expect(controller.state.actionsLeft).toBe(2);
+        act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG5"))[0].click());
+        expect(c.textContent).toMatch(/As of Day 1, HG5 (takes you at your word|mostly believes you|has doubts about you|doesn't believe a word you say)/);
+    });
+
+    it("drama: pick a side in a fight, snoop, start a rumour, and see your threat level", () => {
+        const controller = controllerAtSocial();
+        controller.state.approaches[0] = [{ kind: "sides", fromId: 3, otherId: 4 }];
+        const c = mount(<SocialScreen controller={controller} blockName="Morning in the house" />);
+        expect(c.textContent).toContain("blew up at each other");
+        expect(c.textContent).toContain("Threat level");
+        click(c, "Stay out of it");
+        expect(controller.approachesFor(0).length).toBe(0);
+        click(c, "Snoop around the house");
+        expect(controller.state.actionsLeft).toBe(2);
+        act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG5"))[0].click());
+        click(c, "Start a rumour");
+        act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG6"))[0].click());
+        click(c, "coming after you");
+        expect(controller.state.actionsLeft).toBe(1);
+        act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG5"))[0].click());
+        expect(c.textContent).not.toContain("House meeting"); // needs two actions
+        click(c, "Confront");
+        expect(controller.state.actionsLeft).toBe(0);
+        expect(c.textContent).toContain("had it out");
+    });
+
+    it("finale night: votes are read one at a time until someone clinches", () => {
+        const controller = controllerAtSocial();
+        const [a, b] = [controller.player(1), controller.player(2)];
+        const jurors = [3, 4, 5, 6, 0].map((id) => controller.player(id));
+        let done = false;
+        const c = mount(
+            <JuryReveal
+                finalists={[a, b]}
+                jurors={jurors}
+                votes={[
+                    { jurorId: 3, finalistId: 1 },
+                    { jurorId: 4, finalistId: 2 },
+                    { jurorId: 5, finalistId: 1 },
+                    { jurorId: 6, finalistId: 1 },
+                    { jurorId: 0, finalistId: 2 },
+                ]}
+                onDone={() => (done = true)}
+            />
+        );
+        expect(c.textContent).toContain("3 votes wins");
+        click(c, "Read the first vote");
+        expect(c.textContent).toContain("HG3's key");
+        click(c, "Read the next vote");
+        click(c, "Read the next vote");
+        expect(c.textContent).not.toContain("The winner of The Houseguests");
+        click(c, "Read the next vote");
+        expect(c.textContent).toContain("The winner of The Houseguests");
+        expect(c.textContent).toContain("The remaining 1 votes won't be read");
+        click(c, "Continue");
+        expect(done).toBe(true);
+    });
+
+    it("memory wall: crown on the HoH, necklace on the veto holder, keys on the nominees, grey faces for the evicted", () => {
+        const controller = controllerAtSocial();
+        const gs = new MutableGameState(controller.gameState);
+        gs.houseguests.find((hg) => hg.id === 6)!.isEvicted = true;
+        controller.state.gameState = new GameState(gs);
+        controller.state.week.hohId = 1;
+        controller.state.week.povId = 2;
+        controller.state.week.nomineeIds = [2, 3];
+        const c = mount(<HouseWall controller={controller} />);
+        const tile = (name: string) => Array.from(c.querySelectorAll(".bbb-mwall-tile")).find((t) => t.textContent!.includes(name))!;
+        expect(tile("HG1").querySelector(".is-crown")).not.toBeNull();
+        expect(tile("HG2").querySelector(".is-necklace")).not.toBeNull();
+        expect(tile("HG2").querySelector(".is-key")).not.toBeNull();
+        expect(tile("HG3").querySelector(".is-key")).not.toBeNull();
+        expect(tile("HG4").querySelector(".bbb-mwall-badge")).toBeNull();
+        expect(tile("HG6").className).toContain("is-out");
+        expect(tile("HG0").className).toContain("is-player");
+        // and it sits on top of the player mode screen, collapsible
+        const screen = mount(<PlayerModeScreen controller={controller} />);
+        expect(screen.querySelector(".bbb-mwall")).not.toBeNull();
+        click(screen, "House wall");
+        expect(screen.querySelector(".bbb-mwall")).toBeNull();
+        click(screen, "House wall");
+        expect(screen.querySelector(".bbb-mwall")).not.toBeNull();
+    });
+
+    it("watching a comp: results come in from last place, or skip straight to them", () => {
+        const controller = controllerAtSocial();
+        const bots = [1, 2, 3].map((id) => controller.player(id));
+        let winner = -1;
+        const c = mount(
+            <CompResults
+                title="Veto Competition"
+                comp={FactOrFictionComp}
+                participants={bots}
+                humanIds={[0]}
+                results={[
+                    { id: 1, score: 300 },
+                    { id: 2, score: 900 },
+                    { id: 3, score: 500 },
+                ]}
+                spectating={true}
+                onDone={(id) => (winner = id)}
+            />
+        );
+        expect(c.textContent).toContain("watching from the sidelines");
+        expect(c.textContent).toContain("3 still in it");
+        click(c, "Skip to the results");
+        expect(c.textContent).toContain("Winner");
+        click(c, "Continue");
+        expect(winner).toBe(2);
+    });
+
+    it("question comps pause after each answer and show what everyone else answered", () => {
+        const controller = controllerAtSocial();
+        const gs = controller.gameState;
+        const [me, bot1, bot2] = [0, 1, 2].map((id) => controller.player(id));
+        const paused: boolean[] = [];
+        const history = [3, 4, 5, 6].map((id, i) => ({ week: i + 1, hohId: 1, nomineeIds: [2, id], povId: 0, evictedIds: [id] }));
+        [3, 4, 5, 6].forEach((id) => (getById(gs, id).isEvicted = true)); // Fact or Fiction asks about former houseguests
+        const Component = FactOrFictionComp.Component;
+        const c = mount(
+            <Component
+                participants={[me, bot1, bot2]}
+                human={me}
+                gameState={gs}
+                history={history}
+                rand={seededRand(5)}
+                opponents={[
+                    { hg: bot1, score: 900, answers: Array(10).fill(true) },
+                    { hg: bot2, score: 100, answers: Array(10).fill(false) },
+                ]}
+                report={() => undefined}
+                finish={() => undefined}
+                pauseClock={(p: boolean) => paused.push(p)}
+                recordAnswer={() => undefined}
+            />
+        );
+        expect(c.textContent).toContain("Fact 1 of 10");
+        click(c, "FACT");
+        expect(c.textContent).toMatch(/Right!|Wrong!/);
+        expect(c.textContent).toContain("The answer:");
+        const rows = Array.from(c.querySelectorAll(".bbb-answer")).map((r) => r.textContent);
+        expect(rows.find((r) => r!.startsWith("HG1"))).toContain("✅");
+        expect(rows.find((r) => r!.startsWith("HG2"))).toContain("❌");
+        expect(paused).toEqual([true]);
+        click(c, "Next question");
+        expect(paused).toEqual([true, false]);
+        expect(c.textContent).toContain("Fact 2 of 10");
+    });
+
+    it("the quiz clock stops while the answers are being revealed", () => {
+        let clock: ReturnType<typeof useQuizClock> | null = null;
+        function Probe() {
+            clock = useQuizClock();
+            return null;
+        }
+        mount(<Probe />);
+        const realNow = performance.now;
+        let t = 1000;
+        (performance as any).now = () => t;
+        try {
+            const start = clock!.now();
+            t += 500;
+            clock!.pause();
+            t += 10000; // a long pause
+            clock!.resume();
+            t += 500;
+            expect(clock!.now() - start).toBe(1000);
+        } finally {
+            (performance as any).now = realNow;
+        }
+    });
+
+    it("find the key: the boxes shuffle and then you can pick one (it used to get stuck)", async () => {
+        jest.useFakeTimers();
+        try {
+            const controller = controllerAtSocial();
+            const me = controller.player(0);
+            const Component = FindTheKeyComp.Component;
+            const finished: number[] = [];
+            const c = mount(
+                <Component
+                    participants={[me]}
+                    human={me}
+                    gameState={controller.gameState}
+                    history={[]}
+                    rand={seededRand(3)}
+                    opponents={[]}
+                    report={() => undefined}
+                    finish={(s: number) => finished.push(s)}
+                />
+            );
+            const wait = async (ms: number) => {
+                for (let i = 0; i < ms / 100; i++) {
+                    // eslint-disable-next-line no-loop-func
+                    await (act as any)(async () => {
+                        jest.advanceTimersByTime(100);
+                        await Promise.resolve();
+                    });
+                }
+            };
+            // mid-swap: the two moving boxes take opposite paths (one over, one under), never through each other
+            await wait(1400);
+            const lifts = Array.from(c.querySelectorAll("button[aria-label^='Box']")).map((b) => (b as HTMLElement).style.transform);
+            expect(lifts.some((t) => t.includes("translateY(-62px)"))).toBe(true);
+            expect(lifts.some((t) => t.includes("translateY(62px)"))).toBe(true);
+            await wait((4 * 600) - 100);
+            for (let round = 1; round <= 5; round++) {
+                if (round > 1) await wait(1300 + (4 + (round - 1) * 2) * 600);
+                expect(c.textContent).toContain("Which box has the key?");
+                const box = c.querySelector("button[aria-label^='Box']") as HTMLButtonElement;
+                act(() => box.click());
+                expect(c.textContent).toMatch(/You found it!|Wrong box!/);
+                click(c, round < 5 ? "Next question" : "See how I did");
+            }
+            expect(finished.length).toBe(1);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it("every scene in a season can be continued with its own Continue button (the finale used to get stuck)", () => {
+        const { rankResults } = require("../comps/compRunner");
+        for (const humanId of [0, 3]) {
+            const cast: PlayerProfile[] = Array.from({ length: 8 }, (_, i) => ({ name: `HG${i}`, imageURL: "", social: 5, comp: 5 }));
+            const controller = new PlayerModeController(newPlayerSave(new GameState({ players: cast, jury: 3 }), [humanId]));
+            controller.state.seed = 900 + humanId;
+            let prompt: Prompt | null = null;
+            controller.prompt$.subscribe((p) => (prompt = p));
+            controller.start();
+            const container = mount(<PlayerModeScreen controller={controller} />);
+            const titles = new Set<string>();
+            for (let guard = 0; guard < 3000; guard++) {
+                const p = prompt as unknown as Prompt;
+                if (p.kind === "gameOver") break;
+                if (p.kind === "scene") {
+                    titles.add(p.scene.title);
+                    const button = Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Continue");
+                    if (!button) throw new Error(`The "${p.scene.title}" scene has no Continue button`);
+                    act(() => button.click());
+                    if ((prompt as unknown as Prompt) === p) throw new Error(`Continue did nothing on "${p.scene.title}"`);
+                    continue;
+                }
+                act(() => {
+                    if (p.kind === "handoff") p.next();
+                    else if (p.kind === "social") controller.endSocial();
+                    else if (p.kind === "alliance") controller.endAlliance();
+                    else if (p.kind === "compPlay") p.onScore(humanId === 0 ? 1e9 : -1e9);
+                    else if (p.kind === "compResults") p.onDone(rankResults(p.results)[0].id);
+                    else if (p.kind === "tiebreak") p.onGuess(p.question.answer);
+                    else if (p.kind === "tiebreakResults" || p.kind === "knockout" || p.kind === "juryReveal") p.onDone();
+                    else if (p.kind === "choose") p.resolve(p.noneLabel ? [] : p.options.slice(0, p.count).map((o) => o.id));
+                    else if (p.kind === "speech") {
+                        p.deliver(p.tones[0].id, p.tones[0].pick ? [p.tones[0].pick.options[0].id] : []);
+                        p.next();
+                    } else if (p.kind === "hohVisit") {
+                        controller.hohVisit(p.actorId, null);
+                        controller.continue();
+                    } else if (p.kind === "hohRoom") controller.endHohRoom();
+                    else if (p.kind === "ownMoves") p.onDone([]);
+                    else if (p.kind === "juryQuestion") p.onAnswer("own");
+                    else throw new Error(`unhandled ${(p as any).kind}`);
+                });
+            }
+            expect((prompt as unknown as Prompt).kind).toBe("gameOver");
+            if (humanId === 0) expect(titles.has("Final Two")).toBe(true);
+            expect(titles.has("Jury Roundtable")).toBe(true);
+        }
+    });
+
+    it("secret powers: only the holder sees their power card; sealed results hide the winner; the live feed ticks", () => {
+        const { LiveFeed } = require("./liveFeed");
+        const { PowerCard } = require("./dealsPanel");
+        const controller = controllerAtSocial();
+        controller.state.powers = { enabled: ["immunity"], slots: [{ id: "immunity", week: 1, holderId: 0 }] };
+        expect(mount(<PowerCard controller={controller} actorId={0} />).textContent).toContain("Hidden Immunity");
+        expect(mount(<PowerCard controller={controller} actorId={1} />).textContent).toBe("");
+        // on the social screen too
+        expect(mount(<SocialScreen controller={controller} blockName="Morning in the house" />).textContent).toContain("Your secret power");
+
+        const bots = [1, 2, 3].map((id) => controller.player(id));
+        const sealed = mount(
+            <CompResults
+                title="Head of House Competition"
+                comp={FactOrFictionComp}
+                participants={bots}
+                humanIds={[0]}
+                results={[
+                    { id: 1, score: 300 },
+                    { id: 2, score: 900 },
+                    { id: 3, score: 500 },
+                ]}
+                sealed={true}
+                onDone={() => undefined}
+            />
+        );
+        expect(sealed.textContent).toContain("Results sealed");
+        expect(sealed.textContent).not.toContain("HG2");
+
+        controller.state.feed = [
+            { day: 3, text: "HG4 is cooking dinner for the whole house." },
+            { day: 3, text: "HG5 and HG6 are whispering by the pool." },
+        ];
+        const feed = mount(<LiveFeed controller={controller} />);
+        expect(feed.textContent).toContain("LIVE");
+        expect(feed.textContent).toMatch(/HG4 is cooking|HG5 and HG6/);
+    });
+
+    it("the main screen shows the day of the season", () => {
+        const controller = controllerAtSocial();
+        const c = mount(<PlayerModeScreen controller={controller} />);
+        expect(c.textContent).toContain("📅 Day 1");
     });
 
     it("face editor: changes the name and picks an emoji face", () => {

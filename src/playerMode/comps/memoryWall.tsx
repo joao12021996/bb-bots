@@ -3,7 +3,7 @@ import { GameState, nonEvictedHouseguests } from "../../model";
 import { BigButton, Face, Grid, Subtle, Title, useElapsed } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { answerQuestion, chance, clamp, gaussian, Rand, sample, seededRand, shuffled } from "./random";
-import { QuizScoreboard } from "./compUi";
+import { AnswerReveal, QuizScoreboard, Reveal, revealRows, useQuizClock, wrongOption } from "./compUi";
 
 const ITEMS = ["🍕", "🎸", "👑", "🔑", "🐍", "💎", "🎲", "🧸", "🍩", "🚀", "🌵", "🎩"];
 const QUESTIONS = 8;
@@ -92,14 +92,16 @@ function MemoryWall(props: CompProps) {
     const [index, setIndex] = React.useState(0);
     const [correct, setCorrect] = React.useState(0);
     const [quizStart, setQuizStart] = React.useState(0);
+    const [reveal, setReveal] = React.useState<Reveal | null>(null);
+    const clock = useQuizClock(props.pauseClock);
     const elapsed = useElapsed(phase === "study");
 
     React.useEffect(() => {
         if (phase === "study" && elapsed >= STUDY_SECONDS) {
             setPhase("quiz");
-            setQuizStart(Date.now());
+            setQuizStart(clock.now());
         }
-    }, [phase, elapsed]);
+    }, [phase, elapsed, clock]);
 
     if (phase === "study") {
         return (
@@ -114,7 +116,7 @@ function MemoryWall(props: CompProps) {
                 <BigButton
                     onClick={() => {
                         setPhase("quiz");
-                        setQuizStart(Date.now());
+                        setQuizStart(clock.now());
                     }}
                 >
                     I'm ready
@@ -124,14 +126,35 @@ function MemoryWall(props: CompProps) {
     }
 
     const q = questions[index];
+    const labelOf = (key: string) => {
+        const card = cards.find((c) => `${c.hg.id}` === key);
+        return card ? card.hg.name : key;
+    };
     const answer = (key: string) => {
-        const c = correct + (key === q.answer ? 1 : 0);
+        if (reveal) return;
+        const right = key === q.answer;
+        const c = correct + (right ? 1 : 0);
         setCorrect(c);
-        const secs = (Date.now() - quizStart) / 1000;
-        const score = c * 100 + Math.max(0, 99 - secs);
         props.report(c * 100);
+        if (props.recordAnswer) props.recordAnswer(index, right, labelOf(key));
+        clock.pause();
+        const labels = q.options.map((o) => labelOf(o.key));
+        const truth = labelOf(q.answer);
+        setReveal({
+            index,
+            verdict: right ? "✅ Right!" : "❌ Wrong!",
+            correctText: truth,
+            rows: revealRows(props, index, { correct: right, answer: labelOf(key) }, (ok, pick, id) =>
+                ok ? truth : typeof pick === "string" ? pick : wrongOption(labels, truth, `${id}:${index}`)
+            ),
+        });
+    };
+    const next = () => {
+        setReveal(null);
+        clock.resume();
         if (index + 1 >= questions.length) {
-            props.finish(score);
+            const secs = (clock.now() - quizStart) / 1000;
+            props.finish(correct * 100 + Math.max(0, 99 - secs));
         } else {
             setIndex(index + 1);
         }
@@ -142,33 +165,37 @@ function MemoryWall(props: CompProps) {
                 human={props.human}
                 humanCorrect={correct}
                 opponents={props.opponents}
-                answered={index}
+                answered={reveal ? index + 1 : index}
                 total={questions.length}
             />
             <Title>
                 Question {index + 1} of {questions.length}
             </Title>
             <p style={{ fontSize: "1.2rem", margin: "8px 0" }}>{q.prompt}</p>
-            <Grid>
-                {q.options.map((o) => (
-                    <button
-                        type="button"
-                        key={o.key}
-                        className="button"
-                        style={{ height: "auto", padding: 6, touchAction: "manipulation" }}
-                        onClick={() => answer(o.key)}
-                    >
-                        {o.node}
-                    </button>
-                ))}
-            </Grid>
+            {reveal ? (
+                <AnswerReveal reveal={reveal} last={index + 1 >= questions.length} onNext={next} />
+            ) : (
+                <Grid>
+                    {q.options.map((o) => (
+                        <button
+                            type="button"
+                            key={o.key}
+                            className="button"
+                            style={{ height: "auto", padding: 6, touchAction: "manipulation" }}
+                            onClick={() => answer(o.key)}
+                        >
+                            {o.node}
+                        </button>
+                    ))}
+                </Grid>
+            )}
         </div>
     );
 }
 
 export const MemoryWallComp: CompDefinition = {
     id: "memory-wall",
-    name: "Memory Wall",
+    name: "Who Had What",
     emoji: "🧠",
     kind: "memory",
     rules: `Houseguests appear with a mystery item each. You have ${STUDY_SECONDS} seconds to memorize who had what, then answer ${QUESTIONS} questions. Most right answers wins; ties go to whoever answered fastest.`,

@@ -1,6 +1,6 @@
 import { PortraitProps, HouseguestPortrait } from "../memoryWall";
 import { Subscription } from "rxjs";
-import { selectedPlayer$, displayMode$, getSelectedPlayer } from "../../subjects/subjects";
+import { selectedPlayer$, displayMode$, getSelectedPlayer, relationshipsHidden } from "../../subjects/subjects";
 import { SelectedPlayerData } from "./selectedPortrait";
 import { Rgb } from "../../model/color";
 import { heroIsPregame } from "./subtitle";
@@ -36,6 +36,7 @@ export class HouseguestPortraitController {
                 "#98ca89",
             ])[0];
         }
+        if (relationshipsHidden()) return undefined; // no popularity colors in player mode
         const selectedPlayer = getSelectedPlayer();
         if (selectedPlayer !== null && selectedPlayer.id === props.id) {
             return selectedColor.toHex();
@@ -71,7 +72,7 @@ export class HouseguestPortraitController {
 
     private refreshData = (data: SelectedPlayerData | null) => {
         const playerIsSelected = data && data.id === this.view.props.id;
-        if (!data || (!playerIsSelected && this.view.props.ignoreSelected)) {
+        if (!data || relationshipsHidden() || (!playerIsSelected && this.view.props.ignoreSelected)) {
             this.view.setState(this.defaultState);
         } else {
             if (playerIsSelected) {

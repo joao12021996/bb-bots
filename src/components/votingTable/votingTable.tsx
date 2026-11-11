@@ -78,7 +78,11 @@ const BlackRow = styled.tr`
     background-color: #000000;
 `;
 let anotherKey = 0;
-export function generateVotingTable(gameState: GameState): JSX.Element {
+// `weekLabel` names a week in the table's headers (player mode counts days instead of weeks).
+export function generateVotingTable(
+    gameState: GameState,
+    weekLabel: (week: number) => string = (week) => `Week ${week}`
+): JSX.Element {
     const masterLog: EpisodeLog[][] = gameState.log;
     const houseguestCells: JSX.Element[][] = [];
     gameState.houseguests.forEach((hg, i) => {
@@ -102,7 +106,8 @@ export function generateVotingTable(gameState: GameState): JSX.Element {
             week,
             topRowCells,
             masterLog.length - 1,
-            logs ? logs.length : -1 // -1 doesn't matter because its unread
+            logs ? logs.length : -1, // -1 doesn't matter because its unread
+            weekLabel
         );
         const iterateLogs = logs ? logs : [undefined]; // this is incredibly dank
         let pseudoCount = 0;
@@ -169,7 +174,7 @@ export function generateVotingTable(gameState: GameState): JSX.Element {
     evictionOrder.reverse().forEach(([id, week], i) => {
         if (i === 0) desiredLength = houseguestCells[id].length;
         if (i > 1) {
-            const weekText = i === 2 ? "(Finale)" : `(Week ${week})`;
+            const weekText = i === 2 ? "(Finale)" : `(${weekLabel(week)})`;
             const evicted = (
                 <Evicted
                     colSpan={desiredLength - houseguestCells[id].length}
@@ -381,7 +386,8 @@ function generateTopRow(
     week: number,
     cells: JSX.Element[],
     max: number,
-    colspan: number
+    colspan: number,
+    weekLabel: (week: number) => string
 ) {
     if (!log) {
         cells.push(<GrayCell key={`toprow--${week}`} />);
@@ -397,7 +403,7 @@ function generateTopRow(
     }
     cells.push(
         <GrayCell key={`toprow--${week}`} colSpan={colspan}>
-            <CenteredBold noMargin={true}>{`Week ${week}${
+            <CenteredBold noMargin={true}>{`${weekLabel(week)}${
                 log.weekEmoji ? ` ${log.weekEmoji}` : ""
             }`}</CenteredBold>
         </GrayCell>

@@ -47,7 +47,7 @@ export function Tabs(): JSX.Element {
     return (
         <div className="tabs is-centered is-fullwidth is-medium" style={{ marginBottom: 0 }}>
             <ul style={{ paddingLeft: 0 }}>
-                <Tab text={"Memory Wall"} active={active} setActive={setActive} id={0} />
+                <Tab text={"House Wall"} active={active} setActive={setActive} id={0} />
                 <Tab text={"Alliances"} active={active} setActive={setActive} id={1} />
             </ul>
         </div>

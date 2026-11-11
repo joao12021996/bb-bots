@@ -68,7 +68,7 @@ export function generateBotbNomCeremonyScene(
         content: (
             <div>
                 <Centered>
-                    This is the nomination ceremony. It is our responsibility as Heads of Household to each
+                    This is the nomination ceremony. It is our responsibility as Heads of House to each
                     nominate two houseguests for eviction.
                 </Centered>
                 <div className="columns is-marginless is-centered">

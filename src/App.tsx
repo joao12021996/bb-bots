@@ -6,6 +6,7 @@ import { ColorTheme, darkTheme } from "./theme/theme";
 import { GlobalStyles } from "./theme/globalTheme";
 import "./theme/modern.css";
 import { Subscription } from "rxjs";
+import { KnownProfileModal } from "./playerMode/ui/knownProfile";
 
 class App extends React.Component<{}, { theme: ColorTheme }> {
     private sub: Subscription | null = null;
@@ -22,6 +23,7 @@ class App extends React.Component<{}, { theme: ColorTheme }> {
                 <>
                     <GlobalStyles />
                     <MainPage controller={new MainPageController()} />
+                    <KnownProfileModal />
                 </>
             </ThemeProvider>
         );

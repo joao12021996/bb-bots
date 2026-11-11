@@ -7,7 +7,15 @@ import {
     RelationshipType as Relationship,
     classifyRelationship,
 } from "../../utils/ai/classifyRelationship";
-import { getSelectedPlayer } from "../../subjects/subjects";
+import { getSelectedPlayer, relationshipsHidden } from "../../subjects/subjects";
+
+// Player mode: comp wins only (relationships and popularity are secret).
+function secretSubtitle(hero: PortraitProps): any[] {
+    const subtitle: any[] = [];
+    const key = addCompsLine(hero, subtitle, 0);
+    if (subtitle.length === 0) subtitle.push(<br key={key} />);
+    return subtitle;
+}
 
 export function heroIsPregame(hero: PortraitProps): boolean {
     const heroIsZero =
@@ -20,6 +28,7 @@ export function generatePowerSubtitle(
     state: PortraitState,
     _: boolean | undefined
 ): any[] {
+    if (relationshipsHidden()) return secretSubtitle(hero);
     let key = 0;
     let subtitle: any[] = [];
     key = addPopularityLine(state, hero, !!_, subtitle, key);
@@ -48,6 +57,7 @@ export function generatePopularitySubtitle(
     state: PortraitState,
     detailed: boolean = false
 ): any[] {
+    if (relationshipsHidden()) return secretSubtitle(hero);
     let key = 0;
     let subtitle: any[] = [];
     // popularity

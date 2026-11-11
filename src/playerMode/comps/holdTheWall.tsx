@@ -1,5 +1,5 @@
 import React from "react";
-import { Subtle, Title } from "../ui/common";
+import { BigButton, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { clamp, gaussian, Rand, seededRand } from "./random";
 
@@ -15,7 +15,14 @@ function HoldTheWall(props: CompProps) {
     const [survived, setSurvived] = React.useState(0);
     const lean = React.useRef(0); // -1, 0, 1
     const finished = React.useRef(false);
-    const { report, finish, rand } = props;
+    const { report, finish, rand, deals } = props;
+    // deals on the wall: bots who dropped for safety, bots already asked, and a bot's offer to the player
+    const [dropped, setDropped] = React.useState<{ [id: number]: number }>({});
+    const [asked, setAsked] = React.useState<number[]>([]);
+    const [offer, setOffer] = React.useState<number | null>(null);
+    const [offered, setOffered] = React.useState(false);
+    const [dealNews, setDealNews] = React.useState("");
+    const opponents = props.opponents.map((o) => (dropped[o.hg.id] !== undefined ? { ...o, score: dropped[o.hg.id] } : o));
 
     React.useEffect(() => {
         let raf = 0;
@@ -93,13 +100,41 @@ function HoldTheWall(props: CompProps) {
     );
 
     // last one standing: once every opponent has fallen, you've won the endurance comp
-    const everyoneElseDown = props.opponents.length > 0 && props.opponents.every((o) => o.score < survived);
+    const everyoneElseDown = opponents.length > 0 && opponents.every((o) => o.score < survived);
     React.useEffect(() => {
         if (everyoneElseDown && !finished.current) {
             finished.current = true;
             finish(survived);
         }
     }, [everyoneElseDown, survived, finish]);
+
+    const standing = opponents.filter((o) => o.score > survived);
+    const lastId = standing.length === 1 ? standing[0].hg.id : null;
+    React.useEffect(() => {
+        // down to the player and one bot: the bot may offer safety for dropping
+        if (!deals || offered || lastId === null || !deals.offerFrom.includes(lastId)) return;
+        const t = setTimeout(() => {
+            setOffered(true);
+            setOffer(lastId);
+        }, 4000);
+        return () => clearTimeout(t);
+    }, [deals, offered, lastId]);
+
+    const askToDrop = (botId: number, name: string) => {
+        if (!deals || asked.includes(botId)) return;
+        setAsked([...asked, botId]);
+        if (deals.askBot(botId, survived)) {
+            setDropped({ ...dropped, [botId]: survived });
+            setDealNews(`🤝 ${name} took the deal and dropped. You owe ${name} safety this week.`);
+        } else setDealNews(`😤 ${name} isn't letting go.`);
+    };
+    const takeOffer = () => {
+        if (!deals || offer === null || finished.current) return;
+        deals.accept(offer);
+        finished.current = true;
+        setFallen(true);
+        finish(survived);
+    };
 
     const pct = ((Math.max(-ZONE, Math.min(ZONE, x)) + ZONE) / (2 * ZONE)) * 100;
     const danger = Math.abs(x) > 0.7;
@@ -135,8 +170,37 @@ function HoldTheWall(props: CompProps) {
                 {leanButton(1, "Lean ▶")}
             </div>
             <Subtle>Hold a button to lean against the wind (or use the ← → keys).</Subtle>
+            {deals && !fallen && offer !== null && standing.some((o) => o.hg.id === offer) && (
+                <div className="bbb-card-box" style={{ textAlign: "center" }}>
+                    <div className="bbb-quote">“{standing[0].hg.name}: Drop, and you're safe this week. You have my word.”</div>
+                    <BigButton kind="success" onClick={takeOffer}>
+                        🤝 Take the deal and drop
+                    </BigButton>
+                    <BigButton kind="light" onClick={() => setOffer(null)}>
+                        No way
+                    </BigButton>
+                </div>
+            )}
+            {deals && !fallen && standing.length > 0 && standing.length <= 3 && (
+                <div>
+                    {standing
+                        .filter((o) => !asked.includes(o.hg.id))
+                        .map((o) => (
+                            <button
+                                type="button"
+                                key={o.hg.id}
+                                className="button is-small is-warning"
+                                style={{ margin: 3, touchAction: "manipulation" }}
+                                onClick={() => askToDrop(o.hg.id, o.hg.name)}
+                            >
+                                🤝 "{o.hg.name}, drop and you're safe"
+                            </button>
+                        ))}
+                </div>
+            )}
+            {dealNews && <Subtle>{dealNews}</Subtle>}
             <div className="bbb-wall">
-                {[{ hg: props.human, score: fallen ? survived : Infinity }, ...props.opponents].map((o) => {
+                {[{ hg: props.human, score: fallen ? survived : Infinity }, ...opponents].map((o) => {
                     const standing = o.score > survived || (o.hg.id === props.human.id && !fallen);
                     return (
                         <div key={o.hg.id} className={`bbb-wall-player ${standing ? "" : "is-down"}`}>
@@ -148,7 +212,7 @@ function HoldTheWall(props: CompProps) {
                 })}
             </div>
             <Subtle>
-                {props.opponents.filter((o) => o.score > survived).length} of {props.opponents.length} opponents still
+                {standing.length} of {opponents.length} opponents still
                 standing
             </Subtle>
         </div>
@@ -175,10 +239,9 @@ export const HoldTheWallComp: CompDefinition = {
     name: "Hold the Wall",
     emoji: "🧗",
     kind: "endurance",
-    finaleOnly: true,
     rules: `Endurance! You're hanging on a swaying wall. Gusts push you around and get stronger over time. Hold the lean buttons to stay in the green. The last one on the wall wins. If you last ${
         LIMIT / 60
-    } minutes, you've done all you can.`,
+    } minutes, you've done all you can. In a Head of House comp, deals get made on the wall: "drop and you're safe this week".`,
     maxSeconds: LIMIT,
     Component: HoldTheWall,
     simulate: simulateHoldTheWall,

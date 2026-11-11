@@ -2,10 +2,12 @@ import { Houseguest } from "../../model";
 import { RelationshipMap } from "../../utils";
 import {
     displayMode$,
+    relationshipsHidden,
     getSelectedCastPlayers,
     getSelectedPlayer,
     selectedCastPlayer$,
     selectedPlayer$,
+    knownProfile$,
 } from "../../subjects/subjects";
 import { powerMode } from "../../model/portraitDisplayMode";
 import { PortraitProps } from "./houseguestPortrait";
@@ -23,6 +25,12 @@ export function isSomeoneElseSelected(data: null | SelectedPlayerData, hero: Por
     return !!(data && data.id !== hero.id);
 }
 export function selectPlayer(player: SelectedPlayerData | null) {
+    // in player mode, clicking a houseguest doesn't reveal who they like: it opens what you know about them
+    if (relationshipsHidden()) {
+        if (selectedPlayer$.value) selectedPlayer$.next(null);
+        knownProfile$.next(!player || knownProfile$.value === player.id ? null : player.id);
+        return;
+    }
     if (!player || (getSelectedPlayer() && (getSelectedPlayer() as Houseguest).id === player.id)) {
         selectedPlayer$.next(null);
         return;

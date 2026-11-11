@@ -16,8 +16,12 @@ export interface Alliance {
     formedWeek: number;
     target?: number; // agreed at the latest alliance meeting
     targetWeek?: number;
+    backup?: number; // plan B, if the target comes off the block (a used veto, a Last Chance comp)
+    backupSuggestions?: { [memberId: number]: number | null }; // players' plan B picks this social block
     suggestions: { [memberId: number]: number | null }; // players' suggestions in the current social block
     met: boolean; // has met in the current social block
+    positions?: { [memberId: number]: number | null }; // where everyone stood when the meeting ended
+    discussed?: boolean; // a split meeting has already been talked out
 }
 
 export interface AllianceBook {
@@ -119,8 +123,10 @@ function sameMembers(a: number[], b: number[]): boolean {
     return a.length === b.length && a.every((id) => b.includes(id));
 }
 
-export function maxAllianceSize(gs: GameState): number {
-    return Math.max(2, Math.floor(gs.remainingPlayers / 2));
+// Alliances have no size limit. Bots just won't grow one to the whole house: an alliance needs someone
+// outside it to go after.
+export function botAllianceCap(gs: GameState): number {
+    return Math.max(2, gs.remainingPlayers - 1);
 }
 
 export function chemistryLabel(chemistry: number): { label: string; emoji: string } {
@@ -196,15 +202,53 @@ export function loyalty(gs: GameState, book: AllianceBook, botId: number, allyId
 }
 
 // Who a bot wants the alliance to go after: the top of its hit list, outside the alliance.
-export function botSuggestion(gs: GameState, a: Alliance, botId: number): number | null {
+// After the veto, `block` is the nominees: the target has to be one of them, even an alliance member if
+// that's who's left. A bot on the block suggests someone else on it.
+export function botSuggestion(gs: GameState, a: Alliance, botId: number, block?: number[], exclude: number[] = []): number | null {
     const bot = getById(gs, botId);
+    if (block && block.length > 0) {
+        const options = block.filter((id) => id !== botId && getById(gs, id) && !getById(gs, id).isEvicted);
+        if (options.length === 0) return null;
+        // the nominee they like least, with allies a last resort. The plan already agreed (plan B, if it kicked in) holds.
+        const planned = (id: number) => a.target === id && a.targetWeek === gs.phase;
+        const cost = (id: number) => bot.relationships[id] + (a.memberIds.includes(id) ? 0.6 : 0) - (planned(id) ? 0.5 : 0);
+        return [...options].sort((x, y) => cost(x) - cost(y))[0];
+    }
     const entry = bot.hitList.find(
-        (e) => e.id !== botId && !a.memberIds.includes(e.id) && getById(gs, e.id) && !getById(gs, e.id).isEvicted
+        (e) => e.id !== botId && !exclude.includes(e.id) && !a.memberIds.includes(e.id) && getById(gs, e.id) && !getById(gs, e.id).isEvicted
     );
     return entry ? entry.id : null;
 }
 
+// A bot's plan B: the next name on its hit list (outside the alliance), or after the veto, whoever else is on the block.
+export function botBackup(gs: GameState, a: Alliance, botId: number, primary: number | null, block?: number[], exclude: number[] = []): number | null {
+    const bot = getById(gs, botId);
+    const ok = (id: number) => id !== botId && id !== primary && !exclude.includes(id) && getById(gs, id) && !getById(gs, id).isEvicted;
+    if (block && block.length > 0) {
+        const options = block.filter(ok);
+        if (options.length === 0) return null;
+        const cost = (id: number) => bot.relationships[id] + (a.memberIds.includes(id) ? 0.6 : 0);
+        return [...options].sort((x, y) => cost(x) - cost(y))[0];
+    }
+    const entry = bot.hitList.find((e) => ok(e.id) && !a.memberIds.includes(e.id));
+    return entry ? entry.id : null;
+}
+
+// The target is off the block (the veto, a Last Chance comp): alliances whose plan B is on it switch to plan B.
+export function fallBackToPlanB(gs: GameState, book: AllianceBook, block: number[]): { alliance: Alliance; from: number; to: number }[] {
+    const switched: { alliance: Alliance; from: number; to: number }[] = [];
+    book.alliances.forEach((a) => {
+        if (a.target === undefined || a.targetWeek !== gs.phase || block.includes(a.target)) return;
+        if (a.backup === undefined || !block.includes(a.backup) || getById(gs, a.backup).isEvicted) return;
+        switched.push({ alliance: a, from: a.target, to: a.backup });
+        a.target = a.backup;
+        a.backup = undefined;
+    });
+    return switched;
+}
+
 export interface MeetingResult {
+    backupId?: number | null;
     targetId: number | null;
     lines: string[]; // what happened, from the alliance's point of view
     chemistryChange: number;
@@ -212,13 +256,16 @@ export interface MeetingResult {
 
 // An alliance meeting: everyone suggests a target, the persuasive (high Social) members try to win the others
 // over, and the alliance goes with the most influential pick. Disagreement costs chemistry.
-export function holdMeeting(gs: MutableGameState, a: Alliance, humanIds: number[]): MeetingResult {
+export function holdMeeting(gs: MutableGameState, a: Alliance, humanIds: number[], block?: number[], exclude: number[] = []): MeetingResult {
     const members = aliveMembers(gs, a);
     const name = (id: number) => getById(gs, id).name;
     const isHuman = (id: number) => humanIds.includes(id);
     const sugg: { [id: number]: number | null } = {};
     members.forEach((m) => {
-        sugg[m.id] = isHuman(m.id) ? (a.suggestions[m.id] === undefined ? null : a.suggestions[m.id]) : botSuggestion(gs, a, m.id);
+        let pick = isHuman(m.id) ? (a.suggestions[m.id] === undefined ? null : a.suggestions[m.id]) : botSuggestion(gs, a, m.id, block, exclude);
+        if (pick !== null && exclude.includes(pick)) pick = null;
+        if (block && block.length > 0 && pick !== null && !block.includes(pick)) pick = null; // only the block counts now
+        sugg[m.id] = pick;
     });
     const lines: string[] = [];
 
@@ -282,15 +329,131 @@ export function holdMeeting(gs: MutableGameState, a: Alliance, humanIds: number[
         // the alliance turns on its target
         agree.forEach((m) => shiftRelationship(gs, m.id, targetId, -0.05));
     }
+
+    // plan B: everyone's backup pick, plus the targets that lost (at half weight)
+    let backupId: number | null = null;
+    if (targetId !== null) {
+        const backupWeights: { [target: number]: number } = {};
+        const add = (id: number | null | undefined, w: number) => {
+            if (id === null || id === undefined || id === targetId) return;
+            if (block && block.length > 0 && !block.includes(id)) return;
+            if (exclude.includes(id)) return;
+            backupWeights[id] = (backupWeights[id] || 0) + w;
+        };
+        members.forEach((m) => {
+            const own = isHuman(m.id) ? (a.backupSuggestions || {})[m.id] : botBackup(gs, a, m.id, targetId, block, exclude);
+            add(own, socialFactor(m));
+            add(sugg[m.id], socialFactor(m) / 2);
+        });
+        const backups = Object.keys(backupWeights)
+            .map(Number)
+            .sort((x, y) => backupWeights[y] - backupWeights[x]);
+        backupId = backups.length > 0 ? backups[0] : null;
+        if (backupId !== null) lines.splice(lines.length - 1, 0, `Plan B, if ${name(targetId)} comes off the block: ${name(backupId)}.`);
+    }
     // time together bonds the alliance a little, more so when it gets along
     for (let i = 0; i < members.length; i++)
         for (let j = i + 1; j < members.length; j++) shiftRelationship(gs, members[i].id, members[j].id, 0.02 * a.chemistry);
 
     a.chemistry = clamp(a.chemistry + chemistryChange, 0, 1);
+    a.positions = { ...sugg };
+    a.discussed = false;
     a.target = targetId === null ? undefined : targetId;
+    a.backup = backupId === null ? undefined : backupId;
     a.targetWeek = gs.phase;
     a.met = true;
-    return { targetId, lines, chemistryChange };
+    return { targetId, backupId, lines, chemistryChange };
+}
+
+// Did the meeting end split (somebody still wants someone else)?
+export function meetingSplit(gs: GameState, a: Alliance): boolean {
+    if (!a.met || a.discussed || a.target === undefined || !a.positions) return false;
+    return aliveMembers(gs, a).some((m) => {
+        const p = a.positions![m.id];
+        return p !== null && p !== undefined && p !== a.target;
+    });
+}
+
+// Who stands where: each target anyone in the alliance still wants, and who wants them.
+export function positionsOf(gs: GameState, a: Alliance): { targetId: number; memberIds: number[] }[] {
+    const groups: { [t: number]: number[] } = {};
+    aliveMembers(gs, a).forEach((m) => {
+        const p = (a.positions || {})[m.id];
+        if (p === null || p === undefined) return;
+        (groups[p] = groups[p] || []).push(m.id);
+    });
+    return Object.keys(groups)
+        .map(Number)
+        .map((t) => ({ targetId: t, memberIds: groups[t] }))
+        .sort((x, y) => y.memberIds.length - x.memberIds.length);
+}
+
+// A split meeting gets talked out. The player either argues for a target (bots who disagree may come round,
+// depending on the player's Social and how much they like them) or goes along with the alliance's pick.
+// Other players' minds are their own.
+export function discussTarget(
+    gs: MutableGameState,
+    a: Alliance,
+    speakerId: number,
+    humanIds: number[],
+    move: { kind: "argue"; targetId: number } | { kind: "concede" }
+): { lines: string[]; targetId: number | undefined } {
+    const name = (id: number) => getById(gs, id).name;
+    const speaker = getById(gs, speakerId);
+    const positions = { ...(a.positions || {}) };
+    const lines: string[] = [];
+    a.discussed = true;
+    if (move.kind === "concede") {
+        if (a.target === undefined) return { lines, targetId: undefined };
+        positions[speakerId] = a.target;
+        lines.push(`${speaker.name} went along with going after ${name(a.target)}.`);
+        a.chemistry = clamp(a.chemistry + 0.04, 0, 1);
+    } else {
+        const pick = move.targetId;
+        positions[speakerId] = pick;
+        aliveMembers(gs, a)
+            .filter((m) => m.id !== speakerId && !humanIds.includes(m.id) && positions[m.id] !== pick)
+            .forEach((bot) => {
+                const chance = clamp(
+                    0.15 + 0.05 * getSocial(speaker) + 0.35 * bot.relationships[speakerId] - 0.4 * Math.max(0, bot.relationships[pick]),
+                    0.05,
+                    0.85
+                );
+                if (rand() < chance) {
+                    positions[bot.id] = pick;
+                    lines.push(`${bot.name} came around to going after ${name(pick)}.`);
+                } else {
+                    const own = positions[bot.id];
+                    lines.push(`${bot.name} wasn't convinced${own !== null && own !== undefined ? `: still wants ${name(own)}` : ""}.`);
+                    shiftRelationship(gs, bot.id, speakerId, -0.02); // pushing too hard grates a little
+                }
+            });
+    }
+    // the new count
+    const weights: { [t: number]: number } = {};
+    aliveMembers(gs, a).forEach((m) => {
+        const p = positions[m.id];
+        if (p !== null && p !== undefined) weights[p] = (weights[p] || 0) + socialFactor(m);
+    });
+    const ranked = Object.keys(weights)
+        .map(Number)
+        .sort((x, y) => weights[y] - weights[x]);
+    const targetId = ranked.length > 0 ? ranked[0] : a.target;
+    const voters = aliveMembers(gs, a).filter((m) => positions[m.id] !== null && positions[m.id] !== undefined);
+    const united = targetId !== undefined && voters.every((m) => positions[m.id] === targetId);
+    if (targetId !== undefined && targetId !== a.target) {
+        if (a.backup === targetId) a.backup = a.target;
+        lines.push(`${a.name} changed its mind: ${name(targetId)} is the target now.`);
+    }
+    if (united && targetId !== undefined) {
+        a.chemistry = clamp(a.chemistry + 0.05, 0, 1);
+        lines.push(`${a.name} is united after all: ${name(targetId)} it is.`);
+    } else if (targetId !== undefined) {
+        lines.push(`${a.name} is still split, but it's going after ${name(targetId)}.`);
+    }
+    a.positions = positions;
+    a.target = targetId;
+    return { lines, targetId };
 }
 
 // Someone turned on their alliance. If they were caught, they're out and the rest of the alliance resents them.
@@ -332,8 +495,8 @@ function currentTargets(book: AllianceBook, gs: GameState, id: number): number[]
     return alliancesOf(book, id)
         .filter((a) => a.target !== undefined && a.targetWeek === gs.phase)
         .sort((x, y) => y.chemistry - x.chemistry)
-        .map((a) => a.target!)
-        .filter((t) => getById(gs, t) && !getById(gs, t).isEvicted);
+        .reduce((ids: number[], a) => [...ids, a.target!, ...(a.backup !== undefined ? [a.backup] : [])], [])
+        .filter((t, i, all) => all.indexOf(t) === i && getById(gs, t) && !getById(gs, t).isEvicted);
 }
 
 export interface BotPicks {
@@ -342,14 +505,25 @@ export interface BotPicks {
 }
 
 // Bot nominations (and replacement nominations): its alliances' targets first, then its hit list.
-// Allies go last, unless the bot decides to backstab them.
-export function botNominate(gs: GameState, book: AllianceBook, hero: Houseguest, options: Houseguest[], count: number): BotPicks {
+// Allies go last, unless the bot decides to backstab them. `sway` is what came out of the HoH room one-on-ones:
+// houseguests the bot means to keep safe, and nominees it was talked into.
+export function botNominate(
+    gs: GameState,
+    book: AllianceBook,
+    hero: Houseguest,
+    options: Houseguest[],
+    count: number,
+    sway?: { protect: number[]; targets: number[] }
+): BotPicks {
     const allies = alliesOf(book, hero.id);
     const targets = currentTargets(book, gs, hero.id);
     const protectedIds = new Set<number>();
     options.forEach((o) => allies.has(o.id) && rand() < loyalty(gs, book, hero.id, o.id) && protectedIds.add(o.id));
+    const swayed = sway ? sway.targets : [];
+    if (sway) sway.protect.forEach((id) => protectedIds.add(id));
     const score = (hg: Houseguest) => {
         if (protectedIds.has(hg.id)) return 10000 + hitListRank(hero, hg.id);
+        if (swayed.includes(hg.id)) return -200 + swayed.indexOf(hg.id);
         const t = targets.indexOf(hg.id);
         if (t >= 0) return -100 + t;
         return hitListRank(hero, hg.id);
@@ -425,7 +599,7 @@ export function botAcceptsInvite(gs: GameState, book: AllianceBook, bot: Housegu
 export function botAllianceTime(gs: MutableGameState, book: AllianceBook, humanIds: number[]): BotInvite[] {
     const invites: BotInvite[] = [];
     const everyone = nonEvictedHouseguests(gs);
-    const maxSize = maxAllianceSize(gs);
+    const maxSize = botAllianceCap(gs);
     if (everyone.length <= 3) return invites;
     everyone
         .filter((hg) => !humanIds.includes(hg.id))
@@ -485,8 +659,6 @@ export function proposeAlliance(
     const bot = getById(gs, botId);
     const existing = join.allianceId !== undefined ? getAlliance(book, join.allianceId) : undefined;
     if (existing && existing.memberIds.includes(botId)) return { text: `${bot.name} is already in ${existing.name}.`, good: true };
-    if (existing && existing.memberIds.length >= maxAllianceSize(gs))
-        return { text: `${existing.name} is already as big as it can get.`, good: false };
     const members = existing ? existing.memberIds : [humanId];
     if (botAcceptsInvite(gs, book, bot, members, getSocial(human))) {
         if (existing) {

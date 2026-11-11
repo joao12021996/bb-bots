@@ -70,7 +70,7 @@ export function generateHohCompScene(
         ? `${listNames([newHoH.name])} ${options.bottomText}`
         : `${coHoH ? listNames([newHoH.name, newHoH2.name]) : newHoH.name} ${
               coHoH ? "have" : "has"
-          } won Head of Household!`;
+          } won Head of House!`;
 
     const prevHohText = options.previousHoHcanCompete
         ? ""
@@ -91,7 +91,7 @@ export function generateHohCompScene(
                         </CenteredBold>
                     ) : (
                         <Centered>
-                            {`Houseguests, it's time to find a new Head of Household.${prevHohText}`}
+                            {`Houseguests, it's time to find a new Head of House.${prevHohText}`}
                         </Centered>
                     ))
                 )}

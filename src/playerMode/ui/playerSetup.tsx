@@ -1,9 +1,11 @@
 import React from "react";
+import { DAY_PART, dayLabel } from "../days";
 import { shuffle } from "lodash";
 import { defaultJurySize, Episode, EpisodeType, getById, getComp, getSocial, PlayerProfile } from "../../model";
 import { cast$, episodes$, getCast, newEpisode } from "../../subjects/subjects";
 import { PregameEpisode } from "../../components/episode/pregameEpisode";
-import { activatePlayerMode, migrateSave, newPlayerSave, PlayerModeController } from "../playerModeController";
+import { activatePlayerMode, Difficulty, migrateSave, newPlayerSave, PlayerModeController } from "../playerModeController";
+import { ALL_POWERS, PowerId, POWERS } from "../social/powers";
 import { clearSave, inlineBlobImages, readSave } from "../save/serialize";
 import { buildSeason } from "../setupGame";
 import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
@@ -67,6 +69,10 @@ export function PlayerSetup() {
     const [looks, setLooks] = React.useState<{ [i: number]: Look }>({});
     const [editing, setEditing] = React.useState<number | null>(null);
     const [hideSkills, setHideSkills] = React.useState(false);
+    const [difficulty, setDifficulty] = React.useState<Difficulty>("normal");
+    // secret powers: none, a surprise (picked at random, never shown), or hand-picked
+    const [powerMode, setPowerMode] = React.useState<"off" | "surprise" | "choose">("off");
+    const [chosenPowers, setChosenPowers] = React.useState<PowerId[]>([]);
 
     const basePool = [...cast, ...customs];
     const pool: PlayerProfile[] = basePool.map((hg, i) => (looks[i] && selected.includes(i) ? { ...hg, ...looks[i] } : hg));
@@ -124,7 +130,8 @@ export function PlayerSetup() {
         await inlineBlobImages(setup.gameState.houseguests);
         await newEpisode(null);
         await newEpisode(new PregameEpisode(setup.gameState));
-        launch(new PlayerModeController(newPlayerSave(setup.gameState, setup.humanIds, setup.castOptions, hideSkills)));
+        const powers = powerMode === "surprise" ? "surprise" : powerMode === "choose" ? chosenPowers : [];
+        launch(new PlayerModeController(newPlayerSave(setup.gameState, setup.humanIds, setup.castOptions, hideSkills, { difficulty, powers })));
     };
 
     const role = (i: number) => (selected.includes(i) ? "player" : bots.includes(i) ? "bot" : "out");
@@ -213,6 +220,53 @@ export function PlayerSetup() {
                     strongest. Revealed when the season ends.
                 </span>
             </label>
+            <div className="bbb-setting">
+                <b>🎚️ Difficulty</b>
+                <div className="bbb-segmented">
+                    {(["easy", "normal", "hard"] as Difficulty[]).map((d) => (
+                        <button key={d} type="button" className={difficulty === d ? "is-active" : ""} onClick={() => setDifficulty(d)}>
+                            {d === "easy" ? "Easy" : d === "normal" ? "Normal" : "Hard"}
+                        </button>
+                    ))}
+                </div>
+                <Subtle>
+                    {difficulty === "easy"
+                        ? "Bots are weaker in comps, and often vote with their gut instead of going after threats."
+                        : difficulty === "normal"
+                        ? "Bots play comps like real people of their skill, and go after big threats as the season goes on."
+                        : "Bots are sharper in comps, and ruthlessly target threats with their nominations and votes."}
+                </Subtle>
+            </div>
+            <div className="bbb-setting">
+                <b>🤫 Secret powers</b>
+                <div className="bbb-segmented">
+                    {(["off", "surprise", "choose"] as const).map((m) => (
+                        <button key={m} type="button" className={powerMode === m ? "is-active" : ""} onClick={() => setPowerMode(m)}>
+                            {m === "off" ? "Off" : m === "surprise" ? "Surprise me" : "Choose"}
+                        </button>
+                    ))}
+                </div>
+                <Subtle>
+                    {powerMode === "off"
+                        ? "A classic season: no twists."
+                        : powerMode === "surprise"
+                        ? "A few secret powers and twists, picked at random. Nobody (you included) knows which until they show up."
+                        : "Pick the powers and twists in play. The houseguests won't know which ones exist until they show up."}
+                </Subtle>
+                {powerMode === "choose" &&
+                    ALL_POWERS.map((id) => (
+                        <label key={id} className="bbb-toggle">
+                            <input
+                                type="checkbox"
+                                checked={chosenPowers.includes(id)}
+                                onChange={(e) => setChosenPowers(e.target.checked ? [...chosenPowers, id] : chosenPowers.filter((p) => p !== id))}
+                            />
+                            <span>
+                                {POWERS[id].emoji} <b>{POWERS[id].name}</b>: {POWERS[id].blurb}
+                            </span>
+                        </label>
+                    ))}
+            </div>
             <div className="bbb-setup-summary">
                 <b>{houseguests}</b> houseguests · jury of <b>{jury}</b> · final <b>2</b>
             </div>
@@ -290,11 +344,11 @@ export function resumeSavedSeason(): boolean {
             gameState: gs,
             content: (
                 <Panel>
-                    <Title>Previously on Big Brother…</Title>
+                    <Title>Previously on The Houseguests…</Title>
                     {save.history.length === 0 && <Subtle>The season just started.</Subtle>}
                     {save.history.map((w) => (
                         <p key={w.week}>
-                            <b>Week {w.week}:</b> 👑 {name(w.hohId)} won HoH · 🛡️ {name(w.povId)} won the veto · 🚪{" "}
+                            <b>{dayLabel(gs, w.week, DAY_PART.eviction)}:</b> 👑 {name(w.hohId)} won HoH · 🛡️ {name(w.povId)} won the veto · 🚪{" "}
                             {w.evictedIds.map(name).join(", ")} evicted
                         </p>
                     ))}

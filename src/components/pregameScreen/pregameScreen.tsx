@@ -49,7 +49,7 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
             <HasText>
                 <div className="bbb-hero">
                     <div className="bbb-hero-kicker">Reality TV, simulated</div>
-                    <h1>Big Brother Bots</h1>
+                    <h1>Houseguest Bots</h1>
                     <p>
                         Build a cast, add twists, and watch the bots scheme, compete and vote each other out, or move
                         into the house yourself and try to outlast them.

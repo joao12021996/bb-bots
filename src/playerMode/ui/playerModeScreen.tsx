@@ -7,12 +7,37 @@ import { ChoosePrompt } from "./choosePrompt";
 import { BigButton, Panel, Subtle, Title } from "./common";
 import { SocialScreen } from "./socialScreen";
 import { AllianceScreen } from "./allianceScreen";
+import { HohRoomScreen, HohVisitScreen } from "./hohRoomScreen";
+import { SpeechPrompt } from "./speechPrompt";
+import { JuryQuestionPrompt, JuryReveal, OwnMovesPrompt } from "./finaleScreens";
+import { HouseWall } from "./houseWall";
+import { LiveFeed } from "./liveFeed";
+import { TiebreakPlay, TiebreakResults } from "../comps/tiebreaker";
+import { KnockoutBoard } from "../comps/knockout";
 
 interface Props {
     controller: PlayerModeController;
 }
 
+// whether the memory wall is open, remembered per viewer (never required: storage can be unavailable)
+function loadWallOpen(): boolean {
+    try {
+        return window.localStorage.getItem("bbb-wall-open") !== "0";
+    } catch (e) {
+        return true;
+    }
+}
+
+function saveWallOpen(open: boolean) {
+    try {
+        window.localStorage.setItem("bbb-wall-open", open ? "1" : "0");
+    } catch (e) {
+        // fine: it just won't be remembered
+    }
+}
+
 interface State {
+    wallOpen?: boolean;
     prompt: Prompt | null;
     key: number; // forces child prompts to remount on every new prompt
 }
@@ -77,6 +102,12 @@ export class PlayerModeScreen extends React.Component<Props, State> {
             case "alliance":
                 body = <AllianceScreen key={this.state.key} controller={controller} blockName={prompt.blockName} />;
                 break;
+            case "hohRoom":
+                body = <HohRoomScreen key={this.state.key} controller={controller} actorId={prompt.actorId} />;
+                break;
+            case "hohVisit":
+                body = <HohVisitScreen key={this.state.key} controller={controller} actorId={prompt.actorId} />;
+                break;
             case "compPlay":
                 body = (
                     <CompPlay
@@ -90,6 +121,7 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                         seed={prompt.seed}
                         opponents={prompt.opponents}
                         moreToPlay={prompt.moreToPlay}
+                        deals={prompt.deals}
                         onScore={prompt.onScore}
                     />
                 );
@@ -103,7 +135,68 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                         participants={prompt.participants}
                         humanIds={controller.state.humanIds}
                         results={prompt.results}
+                        tiedIds={prompt.tiedIds}
+                        sealed={prompt.sealed}
+                        spectating={prompt.spectating}
                         onDone={prompt.onDone}
+                    />
+                );
+                break;
+            case "tiebreak":
+                body = (
+                    <TiebreakPlay
+                        key={this.state.key}
+                        title={prompt.title}
+                        player={controller.player(prompt.playerId)}
+                        tied={prompt.tied}
+                        question={prompt.question}
+                        moreToPlay={prompt.moreToPlay}
+                        heading={prompt.heading}
+                        intro={prompt.intro}
+                        onGuess={prompt.onGuess}
+                    />
+                );
+                break;
+            case "tiebreakResults":
+                body = (
+                    <TiebreakResults
+                        key={this.state.key}
+                        title={prompt.title}
+                        question={prompt.question}
+                        tied={prompt.tied}
+                        guesses={prompt.guesses}
+                        winnerId={prompt.winnerId}
+                        sealed={prompt.sealed}
+                        humanIds={controller.state.humanIds}
+                        onDone={prompt.onDone}
+                    />
+                );
+                break;
+            case "knockout":
+                body = (
+                    <KnockoutBoard
+                        key={this.state.key}
+                        title={prompt.title}
+                        lines={prompt.lines}
+                        remaining={prompt.remaining}
+                        out={prompt.out}
+                        winner={prompt.winnerId !== undefined ? controller.player(prompt.winnerId) : undefined}
+                        youWon={prompt.winnerId !== undefined && !controller.multiplayer && controller.isHuman({ id: prompt.winnerId })}
+                        onDone={prompt.onDone}
+                    />
+                );
+                break;
+            case "speech":
+                body = (
+                    <SpeechPrompt
+                        key={this.state.key}
+                        title={prompt.title}
+                        text={prompt.text}
+                        tones={prompt.tones}
+                        actor={controller.player(prompt.actorId)}
+                        readOf={(id: number) => controller.readOf(prompt.actorId, id)}
+                        deliver={prompt.deliver}
+                        next={prompt.next}
                     />
                 );
                 break;
@@ -118,11 +211,42 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                         noneLabel={prompt.noneLabel}
                         confirmLabel={prompt.confirmLabel}
                         actor={controller.player(prompt.actorId)}
+                        readOf={(id: number) => controller.readOf(prompt.actorId, id)}
                         allyIds={controller.allyIds(prompt.actorId)}
+                        promisedIds={prompt.promisedIds}
                         resolve={prompt.resolve}
                     />
                 );
                 break;
+            case "ownMoves":
+                body = (
+                    <OwnMovesPrompt key={this.state.key} finalist={controller.player(prompt.actorId)} moves={prompt.moves} onDone={prompt.onDone} />
+                );
+                break;
+            case "juryQuestion":
+                body = (
+                    <JuryQuestionPrompt
+                        key={this.state.key}
+                        juror={controller.player(prompt.jurorId)}
+                        finalist={controller.player(prompt.actorId)}
+                        question={prompt.question}
+                        onAnswer={prompt.onAnswer}
+                    />
+                );
+                break;
+            case "juryReveal": {
+                const gs = controller.gameState;
+                body = (
+                    <JuryReveal
+                        key={this.state.key}
+                        finalists={gs.houseguests.filter((hg) => !hg.isEvicted)}
+                        jurors={gs.houseguests.filter((hg) => hg.isJury && hg.isEvicted)}
+                        votes={prompt.votes}
+                        onDone={prompt.onDone}
+                    />
+                );
+                break;
+            }
             case "gameOver":
                 body = (
                     <Panel style={{ maxWidth: "none" }}>
@@ -132,14 +256,33 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                 );
                 break;
         }
+        const day = prompt.kind !== "gameOver" && prompt.kind !== "handoff" ? controller.dayText() : null;
         return (
             <div className="bbb-player-mode">
+                {day && <div className="bbb-day">📅 {day}</div>}
                 {banner &&
                     prompt.kind !== "handoff" &&
                     // don't spoil the eviction reveal
                     !(prompt.kind === "scene" && /Eviction/.test(prompt.scene.title)) && (
                         <div className="bbb-banner">{banner}</div>
                     )}
+                {!["handoff", "compPlay", "tiebreak", "gameOver", "juryReveal"].includes(prompt.kind) && <LiveFeed controller={controller} />}
+                {!["handoff", "compPlay", "tiebreak", "gameOver", "juryReveal"].includes(prompt.kind) && (
+                    <div className="bbb-mwall-box">
+                        <button
+                            type="button"
+                            className="bbb-mwall-toggle"
+                            onClick={() => {
+                                const open = !(this.state.wallOpen ?? loadWallOpen());
+                                saveWallOpen(open);
+                                this.setState({ wallOpen: open });
+                            }}
+                        >
+                            🧱 House wall {this.state.wallOpen ?? loadWallOpen() ? "▾" : "▸"}
+                        </button>
+                        {(this.state.wallOpen ?? loadWallOpen()) && <HouseWall controller={controller} />}
+                    </div>
+                )}
                 {body}
             </div>
         );

@@ -8,7 +8,8 @@ import { Rand } from "./random";
 export interface Opponent {
     hg: Houseguest;
     score: number;
-    answers?: boolean[]; // quiz comps: right/wrong for each question, in order (bots only)
+    answers?: boolean[]; // question comps: right/wrong for each question, in order
+    picks?: (number | string)[]; // question comps: what they answered (a number, or a label), when it matters
 }
 
 // Everything a bot needs to play the exact same comp instance the players get.
@@ -22,6 +23,16 @@ export interface SimContext {
 export interface SimResult {
     score: number;
     answers?: boolean[];
+    picks?: (number | string)[];
+}
+
+// Deals on the wall, in an endurance HoH comp: "drop and you're safe this week".
+export interface EnduranceDeals {
+    offerFrom: number[]; // bots who will offer the player safety for dropping, once it's down to the two of them
+    // the player asks a bot still on the wall to drop for safety: true if the bot takes the deal (and drops)
+    askBot: (botId: number, seconds: number) => boolean;
+    // the player takes a bot's offer (and drops)
+    accept: (botId: number) => void;
 }
 
 export interface CompProps {
@@ -36,6 +47,11 @@ export interface CompProps {
     report: (score: number) => void;
     // Call when the player finishes early.
     finish: (score: number) => void;
+    // Question comps: stop (true) or restart (false) the comp's time limit, for the pause after each answer.
+    pauseClock?: (paused: boolean) => void;
+    // Question comps: record the player's answer to question `index`, so players after them can see it.
+    recordAnswer?: (index: number, correct: boolean, pick?: number | string) => void;
+    deals?: EnduranceDeals; // endurance HoH comps only
 }
 
 export type CompKind = "endurance" | "skill" | "memory" | "quiz" | "luck" | "reflex";

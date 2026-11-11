@@ -55,7 +55,7 @@ export function finalHohCompScene(
                 <Centered>{`${enduranceWinner.name} and ${skillWinner.name} compete in the quiz competition.`}</Centered>
                 <Portraits houseguests={[enduranceWinner, skillWinner]} centered={true} />
                 <Portrait houseguest={finalHoH} centered={true} />
-                <CenteredBold>{`Congratulations ${finalHoH.name}, you are the final Head of Household!`}</CenteredBold>
+                <CenteredBold>{`Congratulations ${finalHoH.name}, you are the final Head of House!`}</CenteredBold>
                 <NextEpisodeButton />
             </div>
         ),

@@ -15,6 +15,8 @@ import { RankEmComp } from "./rankEm";
 import { BullseyeComp, ColorClashComp, NumberGridComp, ReactionLightsComp, WhackComp } from "./reflexComps";
 import { SlidePuzzleComp } from "./slidePuzzle";
 import { StopTheClockComp } from "./stopTheClock";
+import { TaintedWineComp } from "./taintedWine";
+import { BBComicsComp, DaysQuizComp, FaceMorphComp, HideAndGoVetoComp, OtevComp, OverOrUnderComp } from "./iconicComps";
 
 export const ALL_COMPS: CompDefinition[] = [
     // originals
@@ -43,6 +45,7 @@ export const ALL_COMPS: CompDefinition[] = [
     MazeRunnerComp,
     MathRushComp,
     GuessTheNumberComp,
+    TaintedWineComp,
     // action
     SteadyHandComp,
     CatchTheKeysComp,
@@ -53,6 +56,13 @@ export const ALL_COMPS: CompDefinition[] = [
     // house knowledge
     ZoomInComp,
     FactOrFictionComp,
+    // iconic formats
+    OtevComp,
+    HideAndGoVetoComp,
+    BBComicsComp,
+    OverOrUnderComp,
+    DaysQuizComp,
+    FaceMorphComp,
 ];
 
 export function compById(id: string): CompDefinition {
@@ -81,4 +91,28 @@ export function finaleComps(gameState: GameState, history: WeekRecord[], used: s
     const skill = pool[rng().randomInt(0, pool.length - 1)];
     const quiz = BeforeOrAfterComp.available!(gameState, history) ? BeforeOrAfterComp : MemoryWallComp;
     return [HoldTheWallComp, skill, quiz];
+}
+
+// The Last Chance comp is a quick one: under a minute or so of play, simple rules, no long puzzles or quizzes.
+export const QUICK_COMPS: CompDefinition[] = [
+    SteadyHandComp,
+    CatchTheKeysComp,
+    FaceOffComp,
+    WhackComp,
+    ReactionLightsComp,
+    ColorClashComp,
+    BullseyeComp,
+    OddOneOutComp,
+    MathRushComp,
+    HigherOrLowerComp,
+    StopTheClockComp,
+    ZoomInComp,
+];
+
+// Picks the Last Chance comp: a quick one, not played yet this season if possible.
+export function pickQuickComp(gameState: GameState, history: WeekRecord[], used: string[]): CompDefinition {
+    const available = QUICK_COMPS.filter((c) => !c.available || c.available(gameState, history));
+    const unused = available.filter((c) => !used.includes(c.id));
+    if (unused.length > 0) return unused[rng().randomInt(0, unused.length - 1)];
+    return available.reduce((best, c) => (used.lastIndexOf(c.id) < used.lastIndexOf(best.id) ? c : best));
 }

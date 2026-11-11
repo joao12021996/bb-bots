@@ -55,7 +55,7 @@ export function generateVetoCeremonyScene(
     initialNominees.forEach((nom) => nom.id === povWinner.id && (nomineeWonPov = true));
 
     povTarget = vetoChoice.decision;
-    const tousethepov = "to use the power of veto";
+    const tousethepov = "to use the veto";
     if (!povTarget) {
         descisionText += `...not ${tousethepov}.`;
     } else if (veto === BoomerangVeto) {

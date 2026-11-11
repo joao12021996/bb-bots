@@ -42,7 +42,7 @@ export function finalEvictionScene(
                 <CenteredBold>{`I vote to evict ${evictee.name}.`}</CenteredBold>
                 <Portraits houseguests={nominees} centered={true} />
                 <Centered>
-                    It's official... {evictee.name}, you will be the final person leaving the Big Brother
+                    It's official... {evictee.name}, you will be the final person leaving the
                     House.
                 </Centered>
                 <NextEpisodeButton />

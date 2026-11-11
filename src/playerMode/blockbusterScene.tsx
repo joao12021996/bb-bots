@@ -19,18 +19,18 @@ export function generateBlockbusterScene(
     log.nominationsPreVeto = log.nominationsPreVeto.filter((name) => name !== winner.name);
     log.strikethroughNominees = [...log.strikethroughNominees, winner.name];
     const scene = new Scene({
-        title: "Blockbuster",
+        title: "Last Chance",
         gameState: initialGameState,
         content: (
             <div>
                 <Centered>
-                    It's time for the Blockbuster. {listNames(nominees.map((n) => n.name))}, one of you will win this
+                    It's time for the Last Chance comp. {listNames(nominees.map((n) => n.name))}, one of you will win this
                     competition and come off the block.
                 </Centered>
                 <Portraits centered={true} houseguests={nominees} />
                 <Centered>...</Centered>
                 <Portrait centered={true} houseguest={winner} />
-                <CenteredBold>{`${winner.name} has won the Blockbuster and is safe this week!`}</CenteredBold>
+                <CenteredBold>{`${winner.name} has won the Last Chance comp and is safe this week!`}</CenteredBold>
                 <Centered>{`That means ${listNames(remaining.map((n) => n.name))} will face the eviction vote.`}</Centered>
                 <Portraits centered={true} houseguests={remaining} />
                 <NextEpisodeButton />

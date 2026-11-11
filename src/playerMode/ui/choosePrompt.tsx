@@ -1,6 +1,5 @@
 import React from "react";
 import { Houseguest } from "../../model";
-import { feelingLabel } from "../social/socialActions";
 import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
 
 interface ChoosePromptProps {
@@ -12,6 +11,8 @@ interface ChoosePromptProps {
     confirmLabel: string;
     actor: Houseguest; // the player making this choice
     allyIds?: number[]; // the player's alliance mates (picking them is a backstab)
+    promisedIds?: number[]; // houseguests the player promised safety in the HoH room
+    readOf?: (id: number) => { label: string; emoji: string; day: number } | null; // the player's last read on each one
     resolve: (ids: number[]) => void;
 }
 
@@ -36,13 +37,16 @@ export function ChoosePrompt(props: ChoosePromptProps) {
         props.resolve(ids);
     };
 
+    const promised = (props.promisedIds || []).filter((id) => props.options.some((o) => o.id === id));
+
     return (
         <Panel>
             <Title>{props.title}</Title>
             <Subtle>{props.text}</Subtle>
+            {promised.length > 0 && <Subtle>🛡️ You gave {promised.length === 1 ? "them" : "some of them"} your word. Picking them breaks it.</Subtle>}
             <Grid>
                 {props.options.map((hg) => {
-                    const feeling = feelingLabel(props.actor.relationships[hg.id] ?? 0);
+                    const read = props.readOf ? props.readOf(hg.id) : null;
                     return (
                         <Face
                             key={hg.id}
@@ -53,9 +57,10 @@ export function ChoosePrompt(props: ChoosePromptProps) {
                                 hg.id === props.actor.id ? (
                                     "(you)"
                                 ) : (
-                                    <span title={feeling.label}>
-                                        {feeling.emoji} {feeling.label}
+                                    <span title={read ? `Your read on them, as of Day ${read.day}` : "No read on them yet"}>
+                                        {read ? `${read.emoji} ${read.label}` : "❓"}
                                         {props.allyIds && props.allyIds.includes(hg.id) ? " 🤝" : ""}
+                                        {promised.includes(hg.id) ? " 🛡️" : ""}
                                     </span>
                                 )
                             }

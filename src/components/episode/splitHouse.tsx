@@ -13,7 +13,7 @@ export const SplitHouse: EpisodeType = {
     emoji: "↔️",
     name: "Split House",
     description:
-        "Houseguests are divided into two groups, and each group plays a round of Big Brother, isolated from the others.",
+        "Houseguests are divided into two groups, and each group plays a round of the game, isolated from the others.",
     splitFunction: splitHouseRandomly(["Indoors", "Outdoors"]),
     generate,
 };

@@ -38,6 +38,9 @@ interface EvictionSceneOptions {
     forcedVotes?: { [voterId: number]: number }; // player mode: voterId -> nominee id
     forcedTieBreak?: number; // player mode: nominee id chosen by the human tie breaker
     hideVoters?: boolean; // player mode: show only vote counts, not who voted for whom
+    voteAdjustments?: { [nomineeId: number]: number }; // player mode: extra votes (+) and nullified votes (-)
+    adjustmentNotes?: string[]; // player mode: announced with the result ("An extra vote was cast.")
+    secretTieBreaker?: boolean; // player mode: the tie breaker's identity is a secret
 }
 
 function forcedLogic(nominees: Houseguest[], nomineeId: number): NumberWithLogic {
@@ -84,7 +87,9 @@ export function generateEvictionScene(
             outOf++;
         }
     });
-    const voteCounts: number[] = votes.map((vote) => vote.length);
+    const voteCounts: number[] = votes.map(
+        (vote, i) => Math.max(0, vote.length + ((options.voteAdjustments && options.voteAdjustments[nominees[i].id]) || 0))
+    );
     const pluralities = getHighestIndicies(voteCounts);
     newGameState.currentLog.outOf = outOf;
     if (outOf === 1) {
@@ -169,7 +174,7 @@ export function generateEvictionScene(
         ? "By a unanimous vote..."
         : `By a vote of ${listVotes(voteCounts.map((v) => `${v}`))}...`;
 
-    const compWinner = options.tieBreaker ? options.tieBreaker.text : "current Head of Household";
+    const compWinner = options.tieBreaker ? options.tieBreaker.text : "current Head of House";
     const soleVoteText = `${
         tieBreakerHg!.name
     }, as ${compWinner}, you must cast the sole vote to ${options.votingTo.toLowerCase()}.`;
@@ -188,7 +193,7 @@ export function generateEvictionScene(
                         {votes.map((voters, i) => (
                             <DividerBox className="column" key={`voters${i}`}>
                                 {options.hideVoters ? (
-                                    <CenteredBold>{`${voters.length} vote${voters.length === 1 ? "" : "s"} to ${options.votingTo.toLowerCase()} ${nominees[i].name}`}</CenteredBold>
+                                    <CenteredBold>{`${voteCounts[i]} vote${voteCounts[i] === 1 ? "" : "s"} to ${options.votingTo.toLowerCase()} ${nominees[i].name}`}</CenteredBold>
                                 ) : (
                                     <Portraits houseguests={voters} centered={true} />
                                 )}
@@ -196,11 +201,18 @@ export function generateEvictionScene(
                         ))}
                     </div>
                 )}
+                {(options.adjustmentNotes || []).map((note, i) => (
+                    <Centered key={`note${i}`}>{note}</Centered>
+                ))}
                 {tieVote && (
                     <div>
                         {!zeroZeroTie && <CenteredBold> We have a tie.</CenteredBold>}
-                        <Centered>{soleVoteText}</Centered>
-                        <Portraits houseguests={[displayHoH]} centered={true} />
+                        <Centered>
+                            {options.secretTieBreaker
+                                ? `As the ${compWinner}, whose identity is still a secret, you must cast the sole vote to ${options.votingTo.toLowerCase()}.`
+                                : soleVoteText}
+                        </Centered>
+                        {!options.secretTieBreaker && <Portraits houseguests={[displayHoH]} centered={true} />}
                         <CenteredBold>
                             I vote to {options.votingTo.toLowerCase()}
                             {` ${nominees[pluralities[tieBreaker.decision]].name}.`}
@@ -222,7 +234,7 @@ export function generateEvictionScene(
                 )}
                 <CenteredBold>{`${options.votingTo === "Save" ? "That means " : ""}${listNames(
                     evictees.map((hg) => hg.name)
-                )}... you have been evicted from the Big Brother House.`}</CenteredBold>
+                )}... you have been evicted from the house.`}</CenteredBold>
                 <NextEpisodeButton />
             </div>
         ),

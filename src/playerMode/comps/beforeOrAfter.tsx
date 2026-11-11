@@ -1,10 +1,11 @@
 import React from "react";
+import { DAY_PART, dayLabel } from "../days";
 import { GameState, getById, Houseguest } from "../../model";
 import { WeekRecord } from "../history";
 import { Face, Grid, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { answerQuestion, clamp, gaussian, Rand, sample, seededRand, shuffled } from "./random";
-import { QuizScoreboard } from "./compUi";
+import { AnswerReveal, QuizScoreboard, Reveal, revealRows, useQuizClock, wrongOption } from "./compUi";
 
 const MAX_QUESTIONS = 8;
 const SECONDS_PER_QUESTION = 15;
@@ -34,21 +35,21 @@ export function buildQuiz(gs: GameState, history: WeekRecord[], rand: Rand): Que
     history.forEach((w) => {
         if (w.hohId !== undefined) {
             qs.push({
-                prompt: `Who won Head of Household in week ${w.week}?`,
+                prompt: `Who won Head of House on ${dayLabel(gs, w.week, DAY_PART.hoh)}?`,
                 options: faceOptions(gs, getById(gs, w.hohId), rand),
                 answer: `${w.hohId}`,
             });
         }
         if (w.povId !== undefined) {
             qs.push({
-                prompt: `Who won the Power of Veto in week ${w.week}?`,
+                prompt: `Who won the Veto on ${dayLabel(gs, w.week, DAY_PART.veto)}?`,
                 options: faceOptions(gs, getById(gs, w.povId), rand),
                 answer: `${w.povId}`,
             });
         }
         if (w.evictedIds.length > 0) {
             qs.push({
-                prompt: `Who was evicted in week ${w.week}?`,
+                prompt: `Who was evicted on ${dayLabel(gs, w.week, DAY_PART.eviction)}?`,
                 options: faceOptions(gs, getById(gs, w.evictedIds[0]), rand),
                 answer: `${w.evictedIds[0]}`,
             });
@@ -93,35 +94,61 @@ function BeforeOrAfter(props: CompProps) {
     const [questions] = React.useState(() => buildQuiz(props.gameState, props.history, props.rand));
     const [index, setIndex] = React.useState(0);
     const [correct, setCorrect] = React.useState(0);
-    const [start] = React.useState(Date.now());
-    const [questionStart, setQuestionStart] = React.useState(Date.now());
+    const [reveal, setReveal] = React.useState<Reveal | null>(null);
+    const clock = useQuizClock(props.pauseClock);
+    const [start] = React.useState(() => clock.now());
+    const [questionStart, setQuestionStart] = React.useState(() => clock.now());
     const [, tick] = React.useState(0);
-    const { finish, report } = props;
+    const { finish, report, recordAnswer } = props;
 
-    const advance = React.useCallback(
-        (wasCorrect: boolean) => {
-            const c = correct + (wasCorrect ? 1 : 0);
-            setCorrect(c);
-            report(c * 100);
-            if (index + 1 >= questions.length) {
-                const secs = (Date.now() - start) / 1000;
-                finish(c * 100 + Math.max(0, 99 - secs * 0.66));
-            } else {
-                setIndex(index + 1);
-                setQuestionStart(Date.now());
-            }
-        },
-        [correct, index, questions.length, start, finish, report]
-    );
-
-    const left = SECONDS_PER_QUESTION - (Date.now() - questionStart) / 1000;
     React.useEffect(() => {
         const t = setInterval(() => tick((n) => n + 1), 250);
         return () => clearInterval(t);
     }, []);
+
+    const labelOf = (q: Question, key: string) => {
+        const o = q.options.find((x) => x.key === key);
+        return o ? (o.hg ? o.hg.name : o.label || key) : key;
+    };
+
+    const answer = (key: string | null) => {
+        if (reveal) return;
+        const q = questions[index];
+        const right = key === q.answer;
+        const c = correct + (right ? 1 : 0);
+        const mine = key === null ? "no answer" : labelOf(q, key);
+        setCorrect(c);
+        report(c * 100);
+        if (recordAnswer) recordAnswer(index, right, mine);
+        clock.pause();
+        const labels = q.options.map((o) => labelOf(q, o.key));
+        const truth = labelOf(q, q.answer);
+        setReveal({
+            index,
+            verdict: right ? "✅ Right!" : key === null ? "⏰ Time's up!" : "❌ Wrong!",
+            correctText: truth,
+            rows: revealRows(props, index, { correct: right, answer: mine }, (ok, pick, id) =>
+                ok ? truth : typeof pick === "string" ? pick : wrongOption(labels, truth, `${id}:${index}`)
+            ),
+        });
+    };
+
+    const next = () => {
+        setReveal(null);
+        clock.resume();
+        if (index + 1 >= questions.length) {
+            finish(correct * 100 + Math.max(0, 99 - ((clock.now() - start) / 1000) * 0.66));
+        } else {
+            setIndex(index + 1);
+            setQuestionStart(clock.now());
+        }
+    };
+
+    const left = SECONDS_PER_QUESTION - (clock.now() - questionStart) / 1000;
     React.useEffect(() => {
-        if (left <= 0) advance(false);
-    }, [left, advance]);
+        if (!reveal && questions.length > 0 && left <= 0) answer(null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [left, reveal]);
 
     if (questions.length === 0) {
         return <Subtle>No questions available.</Subtle>;
@@ -133,31 +160,37 @@ function BeforeOrAfter(props: CompProps) {
                 human={props.human}
                 humanCorrect={correct}
                 opponents={props.opponents}
-                answered={index}
+                answered={reveal ? index + 1 : index}
                 total={questions.length}
             />
             <Title>
                 Question {index + 1} of {questions.length}
             </Title>
-            <Subtle>{Math.max(0, Math.ceil(left))}s</Subtle>
             <p style={{ fontSize: "1.2rem", margin: "8px 0" }}>{q.prompt}</p>
-            <Grid>
-                {q.options.map((o) =>
-                    o.hg ? (
-                        <Face key={o.key} hg={o.hg} onClick={() => advance(o.key === q.answer)} />
-                    ) : (
-                        <button
-                            type="button"
-                            key={o.key}
-                            className="button is-medium"
-                            style={{ minWidth: 120, touchAction: "manipulation" }}
-                            onClick={() => advance(o.key === q.answer)}
-                        >
-                            {o.label}
-                        </button>
-                    )
-                )}
-            </Grid>
+            {reveal ? (
+                <AnswerReveal reveal={reveal} last={index + 1 >= questions.length} onNext={next} />
+            ) : (
+                <>
+                    <Subtle>{Math.max(0, Math.ceil(left))}s</Subtle>
+                    <Grid>
+                        {q.options.map((o) =>
+                            o.hg ? (
+                                <Face key={o.key} hg={o.hg} onClick={() => answer(o.key)} />
+                            ) : (
+                                <button
+                                    type="button"
+                                    key={o.key}
+                                    className="button is-medium"
+                                    style={{ minWidth: 120, touchAction: "manipulation" }}
+                                    onClick={() => answer(o.key)}
+                                >
+                                    {o.label}
+                                </button>
+                            )
+                        )}
+                    </Grid>
+                </>
+            )}
         </div>
     );
 }

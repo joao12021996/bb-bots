@@ -1,7 +1,7 @@
 import React from "react";
 import { BigButton, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
-import { Keypad, sleep } from "./compUi";
+import { AnswerReveal, KnockoutPause, Keypad, Reveal, revealRows, sleep, useQuizClock } from "./compUi";
 import { chance, clamp, gaussian, pick, Rand, randInt, sample, seededRand, shuffled } from "./random";
 
 const EMOJIS = ["🍕", "🎸", "👑", "🔑", "🐍", "💎", "🎲", "🧸", "🍩", "🚀", "🌵", "🎩"];
@@ -16,6 +16,7 @@ function SimonSays(props: CompProps) {
     const [lit, setLit] = React.useState<number | null>(null);
     const [showing, setShowing] = React.useState(true);
     const [input, setInput] = React.useState(0);
+    const [cleared, setCleared] = React.useState<number | null>(null); // between rounds: who's out
     const alive = React.useRef(true);
 
     React.useEffect(() => () => void (alive.current = false), []);
@@ -51,12 +52,30 @@ function SimonSays(props: CompProps) {
         }
         if (input + 1 === level) {
             props.report(level);
-            setLevel(level + 1);
+            if (props.opponents.length > 0) {
+                if (props.pauseClock) props.pauseClock(true);
+                setCleared(level);
+            } else setLevel(level + 1);
         } else {
             setInput(input + 1);
         }
     };
 
+    if (cleared !== null) {
+        return (
+            <KnockoutPause
+                opponents={props.opponents}
+                cleared={cleared}
+                first={cleared === 3}
+                what={(n) => `sequence of ${n}`}
+                onNext={() => {
+                    if (props.pauseClock) props.pauseClock(false);
+                    setCleared(null);
+                    setLevel(cleared + 1);
+                }}
+            />
+        );
+    }
     return (
         <div>
             <Title>Sequence of {level}</Title>
@@ -236,6 +255,7 @@ function DigitSpan(props: CompProps) {
     const [digits, setDigits] = React.useState(() => Array.from({ length: 4 }, () => randInt(props.rand, 0, 9)).join(""));
     const [phase, setPhase] = React.useState<"show" | "enter">("show");
     const [value, setValue] = React.useState("");
+    const [cleared, setCleared] = React.useState<number | null>(null); // between rounds: who's out
 
     React.useEffect(() => {
         if (phase !== "show") return;
@@ -249,12 +269,34 @@ function DigitSpan(props: CompProps) {
             return;
         }
         props.report(length);
+        if (props.opponents.length > 0) {
+            if (props.pauseClock) props.pauseClock(true);
+            setCleared(length);
+        } else nextRound();
+    };
+    const nextRound = () => {
         const n = length + 1;
         setLength(n);
         setDigits(Array.from({ length: n }, () => randInt(props.rand, 0, 9)).join(""));
         setValue("");
         setPhase("show");
     };
+
+    if (cleared !== null) {
+        return (
+            <KnockoutPause
+                opponents={props.opponents}
+                cleared={cleared}
+                first={cleared === 4}
+                what={(n) => `${n} digits`}
+                onNext={() => {
+                    if (props.pauseClock) props.pauseClock(false);
+                    setCleared(null);
+                    nextRound();
+                }}
+            />
+        );
+    }
 
     return (
         <div>
@@ -403,48 +445,89 @@ function FindTheKey(props: CompProps) {
     const [phase, setPhase] = React.useState<"reveal" | "shuffle" | "pick" | "result">("reveal");
     const [picked, setPicked] = React.useState<number | null>(null);
     const [correct, setCorrect] = React.useState(0);
-    const { rand } = props;
+    const [reveal, setReveal] = React.useState<Reveal | null>(null);
+    // during a swap, one box lifts over the top (-1) and the other dips underneath (+1), so they never
+    // slide through each other and you can always follow the one with the key
+    const [lift, setLift] = React.useState([0, 0, 0]);
+    const [stepMs, setStepMs] = React.useState(180);
+    const { rand, report, finish, recordAnswer, pauseClock } = props;
+    const clock = useQuizClock(pauseClock);
 
+    // One round: show the key, shuffle, then let the player pick. This runs once per round. (It used to
+    // re-run on every phase change, which cancelled the shuffle after one swap and left the round stuck.)
     React.useEffect(() => {
-        if (phase !== "reveal") return;
         let cancelled = false;
         (async () => {
             const cup = randInt(rand, 0, SLOTS - 1);
+            setSlots([0, 1, 2]);
             setKeyCup(cup);
             setPicked(null);
+            setPhase("reveal");
             await sleep(1300);
             if (cancelled) return;
             setPhase("shuffle");
             const swaps = 4 + round * 2;
             const ms = Math.max(200, 520 - round * 75);
+            // each swap is three moves: lift apart, cross, settle back into the row
+            const step = Math.max(110, Math.round(ms / 3));
+            setStepMs(step);
+            setLift([0, 0, 0]);
             let current = [0, 1, 2];
-            for (let i = 0; i < swaps && !cancelled; i++) {
+            for (let i = 0; i < swaps; i++) {
+                if (cancelled) return;
                 const a = randInt(rand, 0, SLOTS - 1);
                 const b = (a + randInt(rand, 1, SLOTS - 1)) % SLOTS;
                 const next = [...current];
                 const cupA = next.indexOf(a);
                 const cupB = next.indexOf(b);
+                // the box heading right goes over the top; the one heading left goes underneath
+                const lifted = [0, 0, 0];
+                lifted[a < b ? cupA : cupB] = -1;
+                lifted[a < b ? cupB : cupA] = 1;
+                setLift(lifted);
+                await sleep(step);
+                if (cancelled) return;
                 next[cupA] = b;
                 next[cupB] = a;
                 current = next;
                 setSlots(next);
-                await sleep(ms);
+                await sleep(step);
+                if (cancelled) return;
+                setLift([0, 0, 0]);
+                await sleep(step);
             }
             if (!cancelled) setPhase("pick");
         })();
         return () => {
             cancelled = true;
         };
-    }, [phase, round, rand]);
+    }, [round, rand]);
 
     const choose = (cup: number) => {
         if (phase !== "pick") return;
         setPicked(cup);
-        const c = correct + (cup === keyCup ? 1 : 0);
+        const right = cup === keyCup;
+        const c = correct + (right ? 1 : 0);
         setCorrect(c);
-        props.report(c);
+        report(c);
+        if (recordAnswer) recordAnswer(round, right);
         setPhase("result");
-        if (round + 1 >= KEY_ROUNDS) setTimeout(() => props.finish(c), 900);
+        clock.pause();
+        setReveal({
+            index: round,
+            verdict: right ? "🔑 You found it!" : "📦 Wrong box!",
+            correctText: "the box with the key",
+            rows: revealRows(props, round, { correct: right, answer: right ? "found it" : "wrong box" }, (ok) =>
+                ok ? "found it" : "wrong box"
+            ),
+        });
+    };
+
+    const next = () => {
+        setReveal(null);
+        clock.resume();
+        if (round + 1 >= KEY_ROUNDS) finish(correct);
+        else setRound(round + 1);
     };
 
     const showKey = phase === "reveal" || phase === "result";
@@ -454,21 +537,37 @@ function FindTheKey(props: CompProps) {
                 Round {round + 1} of {KEY_ROUNDS}, found {correct}
             </Title>
             <Subtle>
-                {phase === "reveal" ? "Watch where the key is…" : phase === "shuffle" ? "Keep your eye on it!" : phase === "pick" ? "Which box has the key?" : picked === keyCup ? "You found it!" : "Wrong box!"}
+                {phase === "reveal"
+                    ? "Watch where the key is…"
+                    : phase === "shuffle"
+                    ? "Keep your eye on it!"
+                    : phase === "pick"
+                    ? "Which box has the key?"
+                    : picked === keyCup
+                    ? "You found it!"
+                    : "Wrong box!"}
             </Subtle>
-            <div style={{ position: "relative", height: 130, width: "min(90vw, 360px)", margin: "0 auto" }}>
+            <div style={{ position: "relative", height: 250, width: "min(90vw, 360px)", margin: "0 auto" }}>
                 {[0, 1, 2].map((cup) => (
-                    <div
+                    <button
+                        type="button"
                         key={cup}
+                        aria-label={`Box ${slots[cup] + 1}`}
                         onClick={() => choose(cup)}
+                        disabled={phase !== "pick"}
                         style={{
                             position: "absolute",
                             left: `${slots[cup] * 33.3 + 1.5}%`,
                             width: "30%",
-                            top: 10,
+                            top: 70,
+                            transform: `translateY(${lift[cup] * 62}px) scale(${lift[cup] === -1 ? 1.06 : lift[cup] === 1 ? 0.94 : 1})`,
+                            zIndex: lift[cup] === -1 ? 2 : lift[cup] === 1 ? 0 : 1,
                             height: 110,
-                            transition: "left 180ms ease-in-out",
+                            transition: `left ${stepMs}ms ease-in-out, transform ${stepMs}ms ease-in-out`,
                             borderRadius: 14,
+                            border: "none",
+                            color: "inherit",
+                            opacity: 1,
                             background: picked === cup ? "#7c3aed" : "linear-gradient(180deg, #f59e0b, #b45309)",
                             display: "flex",
                             alignItems: "center",
@@ -480,32 +579,22 @@ function FindTheKey(props: CompProps) {
                         }}
                     >
                         {showKey && cup === keyCup ? "🔑" : "📦"}
-                    </div>
+                    </button>
                 ))}
             </div>
-            {phase === "result" && round + 1 < KEY_ROUNDS && (
-                <BigButton
-                    onClick={() => {
-                        setRound(round + 1);
-                        setSlots([0, 1, 2]);
-                        setPhase("reveal");
-                    }}
-                >
-                    Next round
-                </BigButton>
-            )}
+            {reveal && <AnswerReveal reveal={reveal} last={round + 1 >= KEY_ROUNDS} onNext={next} />}
         </div>
     );
 }
 
 function simulateFindTheKey(_ctx: SimContext, skill: number, noise: Rand): SimResult {
     // each round has more and faster shuffles, the same as for players
-    let found = 0;
+    const answers: boolean[] = [];
     for (let round = 0; round < KEY_ROUNDS; round++) {
         const p = clamp(0.98 - (1 - skill) * 0.25 - round * 0.08 * (1 - skill), 1 / SLOTS, 0.98);
-        if (chance(noise, p)) found++;
+        answers.push(chance(noise, p));
     }
-    return { score: found };
+    return { score: answers.filter(Boolean).length, answers };
 }
 
 export const FindTheKeyComp: CompDefinition = {

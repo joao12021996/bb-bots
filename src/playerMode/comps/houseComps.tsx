@@ -1,8 +1,9 @@
 import React from "react";
-import { GameState, nonEvictedHouseguests } from "../../model";
+import { GameState } from "../../model";
+import { WeekRecord } from "../history";
 import { Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
-import { QuizScoreboard } from "./compUi";
+import { AnswerReveal, QuizScoreboard, Reveal, revealRows, useQuizClock, wrongOption } from "./compUi";
 import { answerQuestion, chance, clamp, gaussian, pick, Rand, sample, seededRand, shuffled } from "./random";
 
 // Comps about the houseguests themselves. Scored as correct * 100 + a speed bonus, with a live scoreboard.
@@ -27,43 +28,65 @@ function ZoomIn(props: CompProps) {
     const [round, setRound] = React.useState(0);
     const [correct, setCorrect] = React.useState(0);
     const [bonus, setBonus] = React.useState(0);
-    const [roundStart, setRoundStart] = React.useState(() => performance.now());
+    const [reveal, setReveal] = React.useState<Reveal | null>(null);
+    const clock = useQuizClock(props.pauseClock);
+    const [roundStart, setRoundStart] = React.useState(() => clock.now());
     const [, tick] = React.useState(0);
-    const { finish, report } = props;
+    const { finish, report, recordAnswer } = props;
 
     React.useEffect(() => {
         const t = setInterval(() => tick((n) => n + 1), 100);
         return () => clearInterval(t);
     }, []);
-    const secs = (performance.now() - roundStart) / 1000;
+    const secs = (clock.now() - roundStart) / 1000;
 
-    const answer = React.useCallback(
-        (id: number | null) => {
-            const right = id === rounds[round].target.id;
-            const c = correct + (right ? 1 : 0);
-            const b = bonus + (right ? Math.max(0, (ZOOM_SECONDS - secs) / ZOOM_SECONDS) * (99 / ZOOM_ROUNDS) : 0);
-            setCorrect(c);
-            setBonus(b);
-            report(c * 100);
-            if (round + 1 >= ZOOM_ROUNDS) {
-                finish(c * 100 + b);
-                return;
-            }
+    const answer = (id: number | null) => {
+        if (reveal) return;
+        const r = rounds[round];
+        const right = id === r.target.id;
+        const c = correct + (right ? 1 : 0);
+        setCorrect(c);
+        setBonus(bonus + (right ? Math.max(0, (ZOOM_SECONDS - secs) / ZOOM_SECONDS) * (99 / ZOOM_ROUNDS) : 0));
+        report(c * 100);
+        const mine = id === null ? "no answer" : r.options.find((o) => o.id === id)!.name;
+        if (recordAnswer) recordAnswer(round, right, mine);
+        clock.pause();
+        const labels = r.options.map((o) => o.name);
+        setReveal({
+            index: round,
+            verdict: right ? "✅ Right!" : id === null ? "⏰ Time's up!" : "❌ Wrong!",
+            correctText: r.target.name,
+            rows: revealRows(props, round, { correct: right, answer: mine }, (ok, pick, who) =>
+                ok ? r.target.name : typeof pick === "string" ? pick : wrongOption(labels, r.target.name, `${who}:${round}`)
+            ),
+        });
+    };
+    const next = () => {
+        setReveal(null);
+        clock.resume();
+        if (round + 1 >= ZOOM_ROUNDS) finish(correct * 100 + bonus);
+        else {
             setRound(round + 1);
-            setRoundStart(performance.now());
-        },
-        [rounds, round, correct, bonus, secs, finish, report]
-    );
+            setRoundStart(clock.now());
+        }
+    };
 
     React.useEffect(() => {
-        if (secs > ZOOM_SECONDS) answer(null);
-    }, [secs, answer]);
+        if (!reveal && secs > ZOOM_SECONDS) answer(null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [secs, reveal]);
 
     const r = rounds[round];
-    const scale = Math.max(1, 7 - (secs / ZOOM_SECONDS) * 6);
+    const scale = reveal ? 1 : Math.max(1, 7 - (secs / ZOOM_SECONDS) * 6);
     return (
         <div>
-            <QuizScoreboard human={props.human} humanCorrect={correct} opponents={props.opponents} answered={round} total={ZOOM_ROUNDS} />
+            <QuizScoreboard
+                human={props.human}
+                humanCorrect={correct}
+                opponents={props.opponents}
+                answered={reveal ? round + 1 : round}
+                total={ZOOM_ROUNDS}
+            />
             <Title>
                 Who is it? ({round + 1}/{ZOOM_ROUNDS})
             </Title>
@@ -80,14 +103,20 @@ function ZoomIn(props: CompProps) {
                     }}
                 />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, maxWidth: 360, margin: "0 auto" }}>
-                {r.options.map((o) => (
-                    <button type="button" key={o.id} className="button is-medium" style={{ touchAction: "manipulation" }} onClick={() => answer(o.id)}>
-                        {o.name}
-                    </button>
-                ))}
-            </div>
-            <Subtle>{Math.max(0, Math.ceil(ZOOM_SECONDS - secs))}s</Subtle>
+            {reveal ? (
+                <AnswerReveal reveal={reveal} last={round + 1 >= ZOOM_ROUNDS} onNext={next} />
+            ) : (
+                <>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, maxWidth: 360, margin: "0 auto" }}>
+                        {r.options.map((o) => (
+                            <button type="button" key={o.id} className="button is-medium" style={{ touchAction: "manipulation" }} onClick={() => answer(o.id)}>
+                                {o.name}
+                            </button>
+                        ))}
+                    </div>
+                    <Subtle>{Math.max(0, Math.ceil(ZOOM_SECONDS - secs))}s</Subtle>
+                </>
+            )}
         </div>
     );
 }
@@ -97,7 +126,8 @@ function simulateZoomIn(ctx: SimContext, skill: number, noise: Rand): SimResult 
     const rounds = generateZoomRounds(seededRand(ctx.seed), ctx.gameState);
     let bonus = 0;
     const answers = rounds.map((r) => {
-        const seconds = 1.5 + (1 - skill) * 6 + gaussian(noise);
+        // average bots get most of them, weak ones run out of time (and guess) more often than not
+        const seconds = 2 + (1 - skill) * 10 + 1.5 * gaussian(noise);
         if (seconds < ZOOM_SECONDS) {
             bonus += Math.max(0, (ZOOM_SECONDS - seconds) / ZOOM_SECONDS) * (99 / ZOOM_ROUNDS);
             return true;
@@ -133,33 +163,44 @@ interface Fact {
     truth: boolean;
 }
 
-export function makeFacts(gs: GameState, rand: Rand): Fact[] {
-    const everyone = gs.houseguests;
-    const inHouse = nonEvictedHouseguests(gs);
-    const gens: (() => Fact)[] = [
+// How many former houseguests Fact or Fiction needs: it's a late-game comp.
+export const FACT_MIN_EVICTED = 4;
+
+// Statements about former houseguests only: the people who've already left the house.
+export function makeFacts(gs: GameState, rand: Rand, history: WeekRecord[] = []): Fact[] {
+    const former = gs.houseguests.filter((hg) => hg.isEvicted);
+    if (former.length < 2) return [];
+    // eviction order, from the season's history
+    const order = (id: number) => history.findIndex((w) => w.evictedIds.includes(id));
+    const gens: (() => Fact | null)[] = [
         () => {
-            const a = pick(rand, everyone);
-            return { text: `${a.name} has won Head of Household at least once.`, truth: a.hohWins > 0 };
+            const a = pick(rand, former);
+            return { text: `${a.name} won Head of House at least once.`, truth: a.hohWins > 0 };
         },
         () => {
-            const a = pick(rand, everyone);
-            return { text: `${a.name} has never been nominated.`, truth: a.nominations === 0 };
+            const a = pick(rand, former);
+            return { text: `${a.name} was never nominated.`, truth: a.nominations === 0 };
         },
         () => {
-            const [a, b] = sample(rand, everyone, 2);
-            return { text: `${a.name} has been nominated more times than ${b.name}.`, truth: a.nominations > b.nominations };
+            const [a, b] = sample(rand, former, 2);
+            return { text: `${a.name} was nominated more times than ${b.name}.`, truth: a.nominations > b.nominations };
         },
         () => {
-            const [a, b] = sample(rand, everyone, 2);
-            return { text: `${a.name} has won more vetoes than ${b.name}.`, truth: a.povWins > b.povWins };
+            const [a, b] = sample(rand, former, 2);
+            return { text: `${a.name} won more vetoes than ${b.name}.`, truth: a.povWins > b.povWins };
         },
         () => {
-            const a = pick(rand, everyone);
-            return { text: `${a.name} is still in the house.`, truth: !a.isEvicted };
+            const a = pick(rand, former);
+            return { text: `${a.name} won the Veto at least once.`, truth: a.povWins > 0 };
         },
         () => {
-            const a = pick(rand, inHouse);
-            return { text: `${a.name} has won the Power of Veto.`, truth: a.povWins > 0 };
+            const a = pick(rand, former);
+            return { text: `${a.name} made the jury.`, truth: !!a.isJury };
+        },
+        () => {
+            const [a, b] = sample(rand, former, 2);
+            if (order(a.id) < 0 || order(b.id) < 0 || order(a.id) === order(b.id)) return null;
+            return { text: `${a.name} was evicted before ${b.name}.`, truth: order(a.id) < order(b.id) };
         },
     ];
     const facts: Fact[] = [];
@@ -167,6 +208,7 @@ export function makeFacts(gs: GameState, rand: Rand): Fact[] {
     let guard = 0;
     while (facts.length < FACTS && guard++ < 200) {
         const f = pick(rand, gens)();
+        if (!f) continue;
         // keep roughly half true and half false
         const trues = facts.filter((x) => x.truth).length;
         if (seen.has(f.text)) continue;
@@ -179,62 +221,98 @@ export function makeFacts(gs: GameState, rand: Rand): Fact[] {
 }
 
 function FactOrFiction(props: CompProps) {
-    const [facts] = React.useState(() => makeFacts(props.gameState, props.rand));
+    const [facts] = React.useState(() => makeFacts(props.gameState, props.rand, props.history));
     const [index, setIndex] = React.useState(0);
     const [correct, setCorrect] = React.useState(0);
-    const [start] = React.useState(() => performance.now());
-    const [qStart, setQStart] = React.useState(() => performance.now());
+    const [reveal, setReveal] = React.useState<Reveal | null>(null);
+    const clock = useQuizClock(props.pauseClock);
+    const [start] = React.useState(() => clock.now());
+    const [qStart, setQStart] = React.useState(() => clock.now());
     const [, tick] = React.useState(0);
-    const { finish, report } = props;
+    const { finish, report, recordAnswer } = props;
 
     React.useEffect(() => {
         const t = setInterval(() => tick((n) => n + 1), 200);
         return () => clearInterval(t);
     }, []);
-    const left = FACT_SECONDS - (performance.now() - qStart) / 1000;
+    const left = FACT_SECONDS - (clock.now() - qStart) / 1000;
+    const label = (b: boolean) => (b ? "FACT" : "FICTION");
 
-    const answer = React.useCallback(
-        (said: boolean | null) => {
-            const c = correct + (said !== null && said === facts[index].truth ? 1 : 0);
-            setCorrect(c);
-            report(c * 100);
-            if (index + 1 >= facts.length) {
-                finish(c * 100 + Math.max(0, 99 - ((performance.now() - start) / 1000) * 1.2));
-                return;
-            }
+    const answer = (said: boolean | null) => {
+        if (reveal) return;
+        const right = said !== null && said === facts[index].truth;
+        const c = correct + (right ? 1 : 0);
+        setCorrect(c);
+        report(c * 100);
+        const mine = said === null ? "no answer" : label(said);
+        if (recordAnswer) recordAnswer(index, right, mine);
+        clock.pause();
+        const truth = label(facts[index].truth);
+        setReveal({
+            index,
+            verdict: right ? "✅ Right!" : said === null ? "⏰ Time's up!" : "❌ Wrong!",
+            correctText: truth,
+            rows: revealRows(props, index, { correct: right, answer: mine }, (ok, pick) =>
+                ok ? truth : typeof pick === "string" ? pick : label(!facts[index].truth)
+            ),
+        });
+    };
+    const next = () => {
+        setReveal(null);
+        clock.resume();
+        if (index + 1 >= facts.length) finish(correct * 100 + Math.max(0, 99 - ((clock.now() - start) / 1000) * 1.2));
+        else {
             setIndex(index + 1);
-            setQStart(performance.now());
-        },
-        [correct, facts, index, start, finish, report]
-    );
+            setQStart(clock.now());
+        }
+    };
     React.useEffect(() => {
-        if (left <= 0) answer(null);
-    }, [left, answer]);
+        if (facts.length === 0) {
+            finish(0); // nobody has left the house yet: nothing to ask
+            return;
+        }
+        if (!reveal && left <= 0) answer(null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [left, reveal]);
 
+    if (facts.length === 0) return <Subtle>Nobody has left the house yet: there's nothing to ask about.</Subtle>;
     return (
         <div>
-            <QuizScoreboard human={props.human} humanCorrect={correct} opponents={props.opponents} answered={index} total={facts.length} />
+            <QuizScoreboard
+                human={props.human}
+                humanCorrect={correct}
+                opponents={props.opponents}
+                answered={reveal ? index + 1 : index}
+                total={facts.length}
+            />
             <Title>
                 Fact {index + 1} of {facts.length}
             </Title>
             <p style={{ fontSize: "1.3rem", margin: "12px auto", maxWidth: 480 }}>{facts[index].text}</p>
-            <div>
-                <button type="button" className="button is-success is-large" style={{ margin: 6, minWidth: 130 }} onClick={() => answer(true)}>
-                    FACT
-                </button>
-                <button type="button" className="button is-danger is-large" style={{ margin: 6, minWidth: 130 }} onClick={() => answer(false)}>
-                    FICTION
-                </button>
-            </div>
-            <Subtle>{Math.max(0, Math.ceil(left))}s</Subtle>
+            {reveal ? (
+                <AnswerReveal reveal={reveal} last={index + 1 >= facts.length} onNext={next} />
+            ) : (
+                <>
+                    <div>
+                        <button type="button" className="button is-success is-large" style={{ margin: 6, minWidth: 130 }} onClick={() => answer(true)}>
+                            FACT
+                        </button>
+                        <button type="button" className="button is-danger is-large" style={{ margin: 6, minWidth: 130 }} onClick={() => answer(false)}>
+                            FICTION
+                        </button>
+                    </div>
+                    <Subtle>{Math.max(0, Math.ceil(left))}s</Subtle>
+                </>
+            )}
         </div>
     );
 }
 
 function simulateFactOrFiction(ctx: SimContext, skill: number, noise: Rand): SimResult {
     // the same statements; a bot either knows the truth or guesses
-    const facts = makeFacts(ctx.gameState, seededRand(ctx.seed));
-    const knows = clamp(0.45 + 0.5 * skill + 0.05 * gaussian(noise), 0.05, 0.98);
+    const facts = makeFacts(ctx.gameState, seededRand(ctx.seed), ctx.history);
+    // nobody tracks every nomination and veto: an average bot knows about half, and guesses the rest
+    const knows = clamp(0.15 + 0.7 * skill + 0.05 * gaussian(noise), 0.05, 0.95);
     const answers = facts.map(() => answerQuestion(noise, knows, 2));
     const seconds = facts.length * (2.5 + (1 - skill) * 3);
     return { score: answers.filter(Boolean).length * 100 + Math.max(0, 99 - seconds * 1.2), answers };
@@ -245,12 +323,13 @@ export const FactOrFictionComp: CompDefinition = {
     name: "Fact or Fiction",
     emoji: "📜",
     kind: "quiz",
-    rules: `${FACTS} statements about your fellow houseguests' games: HoH wins, nominations, vetoes. Is each one FACT or FICTION? ${FACT_SECONDS} seconds each. Most right wins; ties go to the fastest.`,
+    rules: `${FACTS} statements about the houseguests who've already left: HoH wins, nominations, vetoes, who went home when. Is each one FACT or FICTION? ${FACT_SECONDS} seconds each. Most right wins; ties go to the fastest.`,
     maxSeconds: FACTS * FACT_SECONDS + 20,
     Component: FactOrFiction,
     simulate: simulateFactOrFiction,
     botScore: (p) => Math.min(FACTS, Math.round(FACTS * (0.45 + 0.5 * p))) * 100 + p * 60,
     format: (s) => `${Math.floor(s / 100)}/${FACTS} right`,
-    available: (_gs, history) => history.length >= 1,
+    // a late-game comp: there have to be enough former houseguests to ask about
+    available: (gs) => gs.houseguests.filter((hg) => hg.isEvicted).length >= FACT_MIN_EVICTED,
 };
 
