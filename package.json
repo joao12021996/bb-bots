@@ -1,6 +1,6 @@
 {
     "name": "bb-bots",
-    "homepage": "http://spaulmark.github.io/bb-bots",
+    "homepage": ".",
     "version": "0.1.0",
     "private": true,
     "dependencies": {
