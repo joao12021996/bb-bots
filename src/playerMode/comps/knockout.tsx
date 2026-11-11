@@ -19,13 +19,16 @@ export function KnockoutBoard(props: {
     out: Houseguest[];
     winner?: Houseguest;
     youWon?: boolean;
+    emoji?: string; // other last-one-standing comps (Tainted Wine) reuse this board
+    name?: string;
+    captions?: { [id: number]: string }; // a caption under each houseguest still in, instead of "still in"
     onDone: () => void;
 }) {
     return (
         <Panel>
             <div className="bbb-comp-header">
-                <div className="bbb-comp-emoji">⚔️</div>
-                <Title>Knockout</Title>
+                <div className="bbb-comp-emoji">{props.emoji || "⚔️"}</div>
+                <Title>{props.name || "Knockout"}</Title>
                 <Subtle>{props.title}</Subtle>
             </div>
             {props.winner && (
@@ -47,7 +50,7 @@ export function KnockoutBoard(props: {
             </div>
             <Grid>
                 {props.remaining.map((hg) => (
-                    <Face key={hg.id} hg={hg} small={true} caption="still in" />
+                    <Face key={hg.id} hg={hg} small={true} caption={(props.captions && props.captions[hg.id]) || "still in"} />
                 ))}
                 {props.out.map((hg) => (
                     <Face key={hg.id} hg={hg} small={true} dim={true} caption="out" />

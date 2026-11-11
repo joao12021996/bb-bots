@@ -279,7 +279,7 @@ describe("Fact or Fiction", () => {
 });
 
 describe("the Last Chance comp", () => {
-    it("is always a quick comp, never a long puzzle like Tainted Wine", () => {
+    it("is always a quick comp, never a long puzzle like Wine Cellar", () => {
         const { pickQuickComp, QUICK_COMPS } = require("./index");
         const gs = game();
         const seen = new Set<string>();
@@ -288,7 +288,7 @@ describe("the Last Chance comp", () => {
             const c = pickQuickComp(gs, history, used);
             used.push(c.id);
             seen.add(c.id);
-            expect(c.id).not.toBe("tainted-wine");
+            expect(c.id).not.toBe("wine-cellar");
             expect(c.maxSeconds).toBeLessThanOrEqual(120);
         }
         expect(seen.size).toBe(QUICK_COMPS.length);

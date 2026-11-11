@@ -15,7 +15,7 @@ import { RankEmComp } from "./rankEm";
 import { BullseyeComp, ColorClashComp, NumberGridComp, ReactionLightsComp, WhackComp } from "./reflexComps";
 import { SlidePuzzleComp } from "./slidePuzzle";
 import { StopTheClockComp } from "./stopTheClock";
-import { TaintedWineComp } from "./taintedWine";
+import { WINE_CELLAR_ID, WineCellarComp } from "./wineCellar";
 import { BBComicsComp, DaysQuizComp, FaceMorphComp, HideAndGoVetoComp, OtevComp, OverOrUnderComp } from "./iconicComps";
 
 export const ALL_COMPS: CompDefinition[] = [
@@ -45,7 +45,7 @@ export const ALL_COMPS: CompDefinition[] = [
     MazeRunnerComp,
     MathRushComp,
     GuessTheNumberComp,
-    TaintedWineComp,
+    WineCellarComp,
     // action
     SteadyHandComp,
     CatchTheKeysComp,
@@ -66,6 +66,8 @@ export const ALL_COMPS: CompDefinition[] = [
 ];
 
 export function compById(id: string): CompDefinition {
+    // older saves called the bottle-testing puzzle "tainted-wine" (now the name of the real two-glass game)
+    if (id === "tainted-wine") id = WINE_CELLAR_ID;
     const comp = ALL_COMPS.find((c) => c.id === id);
     if (!comp) throw new Error(`Unknown competition ${id}`);
     return comp;

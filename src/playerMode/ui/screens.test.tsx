@@ -568,6 +568,8 @@ describe("player mode screens", () => {
                         controller.hohVisit(p.actorId, null);
                         controller.continue();
                     } else if (p.kind === "hohRoom") controller.endHohRoom();
+                    else if (p.kind === "winePour") p.onPour({ offerTainted: true, claim: "clean" });
+                    else if (p.kind === "wineDrink") p.onDecide(false);
                     else if (p.kind === "ownMoves") p.onDone([]);
                     else if (p.kind === "juryQuestion") p.onAnswer("own");
                     else throw new Error(`unhandled ${(p as any).kind}`);

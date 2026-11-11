@@ -876,6 +876,13 @@ input[type="number"] {
     background: rgba(239, 68, 68, 0.4);
     border-color: #fca5a5;
 }
+.bbb-wine.bbb-wine-glass {
+    width: 132px;
+    padding: 10px 4px 8px;
+}
+.bbb-wine.bbb-wine-glass span {
+    font-size: 2.6rem;
+}
 .bbb-tiebreak-box {
     position: relative;
     width: 100%;

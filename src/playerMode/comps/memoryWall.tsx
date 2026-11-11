@@ -16,7 +16,8 @@ interface Card {
 
 interface Question {
     prompt: React.ReactNode;
-    options: { key: string; node: React.ReactNode }[];
+    // face options carry the houseguest: they're drawn as a tappable Face (a Face is itself a button)
+    options: { key: string; node?: React.ReactNode; hg?: Card["hg"] }[];
     answer: string;
     about: number; // id of the houseguest whose card the question is about
 }
@@ -57,7 +58,7 @@ function buildQuestions(cards: Card[], rand: Rand): Question[] {
                 ),
                 options: shuffled(rand, [card, ...wrong]).map((c) => ({
                     key: `${c.hg.id}`,
-                    node: <Face hg={c.hg} />,
+                    hg: c.hg,
                 })),
                 answer: `${card.hg.id}`,
                 about: card.hg.id,
@@ -176,7 +177,10 @@ function MemoryWall(props: CompProps) {
                 <AnswerReveal reveal={reveal} last={index + 1 >= questions.length} onNext={next} />
             ) : (
                 <Grid>
-                    {q.options.map((o) => (
+                    {q.options.map((o) =>
+                        o.hg ? (
+                            <Face key={o.key} hg={o.hg} onClick={() => answer(o.key)} />
+                        ) : (
                         <button
                             type="button"
                             key={o.key}
@@ -186,7 +190,8 @@ function MemoryWall(props: CompProps) {
                         >
                             {o.node}
                         </button>
-                    ))}
+                        )
+                    )}
                 </Grid>
             )}
         </div>

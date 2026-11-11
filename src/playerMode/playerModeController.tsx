@@ -34,6 +34,7 @@ import { WeekRecord } from "./history";
 import { CompDefinition, EnduranceDeals, Opponent } from "./comps/compTypes";
 import { CompRole, THROW_EFFORT, throwChance } from "./comps/throwing";
 import { KNOCKOUT_ID, KNOCKOUT_RULES } from "./comps/knockout";
+import { botPour, botSwaps, botTarget, Claim, claimLine, Pour, STRIKES_OUT, TAINTED_WINE_ID, TAINTED_WINE_RULES } from "./comps/taintedWine";
 import { compById, finaleComps, pickQuickComp, pickWeeklyComp } from "./comps";
 import { botPercentile } from "./comps/botScores";
 import { sample, seededRand } from "./comps/random";
@@ -266,6 +267,10 @@ interface WeekProgress {
     overthrowBy?: number; // used the Overthrow this week
     swapChecked?: boolean;
     overthrowChecked?: boolean;
+    // Comp progress, saved as it happens so reloading mid-comp can't get anyone a do-over: which comp was picked,
+    // each player's score (or their score so far, once they've started), tiebreak guesses, and every decision
+    // made in a Knockout or Tainted Wine (replayed on reload, so the comp picks up where it was).
+    locks?: { [key: string]: any };
     evictionIntro?: boolean;
     finaleIntro?: boolean;
 }
@@ -329,6 +334,8 @@ export type Prompt =
           moreToPlay: boolean;
           deals?: EnduranceDeals;
           onScore: (score: number, answers?: boolean[], picks?: (number | string)[]) => void;
+          onStart?: () => void;
+          onReport?: (score: number) => void;
       }
     | {
           kind: "knockout";
@@ -337,7 +344,28 @@ export type Prompt =
           remaining: Houseguest[];
           out: Houseguest[];
           winnerId?: number;
+          emoji?: string;
+          name?: string;
+          captions?: { [id: number]: string };
           onDone: () => void;
+      }
+    | {
+          kind: "winePour";
+          title: string;
+          pourerId: number;
+          targetId: number;
+          strikes: { [id: number]: number };
+          onPour: (pour: Pour) => void;
+      }
+    | {
+          kind: "wineDrink";
+          title: string;
+          pourerId: number;
+          drinkerId: number;
+          claim: Claim;
+          tell?: string;
+          strikes: { [id: number]: number };
+          onDecide: (swap: boolean) => void;
       }
     | {
           kind: "compResults";
@@ -576,6 +604,38 @@ export class PlayerModeController {
 
     private save() {
         writeSave(this.state);
+    }
+
+    // ---------- comp progress (see WeekProgress.locks) ----------
+
+    private locked<T>(key: string): T | undefined {
+        const locks = this.state.week.locks;
+        return locks && key in locks ? locks[key] : undefined;
+    }
+
+    private lock(key: string, value: any) {
+        this.state.week.locks = { ...(this.state.week.locks || {}), [key]: value };
+        this.save();
+    }
+
+    // A player's decision in a comp: asked once, then saved. After a reload, the saved answer is used without asking.
+    private decide<T>(key: string, ask: (answer: (value: T) => void) => void, then: (value: T) => void) {
+        const saved = this.locked<T>(key);
+        if (saved !== undefined) return then(saved);
+        ask((value) => {
+            this.lock(key, value);
+            then(value);
+        });
+    }
+
+    // Which comp is played at this point in the week: picked once and saved, so a reload can't reroll it.
+    private compChoice(pick: () => string): string {
+        const key = `pick:${this.gameState.phase}:${this.state.step}`;
+        const saved = this.locked<string>(key);
+        if (saved !== undefined) return saved;
+        const id = pick();
+        this.lock(key, id);
+        return id;
     }
 
     private reseed(extra: string = "") {
@@ -1154,7 +1214,7 @@ export class PlayerModeController {
         }
         const humanResults: CompResult[] = [];
         const byId = (id: number) => getById(this.gameState, id);
-        const turn = (i: number) => {
+        const turn = (i: number): void => {
             if (i >= humans.length) {
                 // any tie for first goes to a tiebreaker question
                 const results = [...bots, ...humanResults];
@@ -1173,6 +1233,26 @@ export class PlayerModeController {
                 return;
             }
             const player = humans[i];
+            const resultKey = `comp:${seed}:${player.id}`;
+            const startKey = `compStart:${seed}:${player.id}`;
+            const record = (result: CompResult) => {
+                this.lock(resultKey, result);
+                humanResults.push(result);
+                turn(i + 1);
+            };
+            const saved = this.locked<CompResult>(resultKey);
+            if (saved) {
+                humanResults.push(saved);
+                return turn(i + 1);
+            }
+            const started = this.locked<{ score: number | null }>(startKey);
+            if (started) {
+                // they left in the middle of their turn: no do-overs, they keep the score they had
+                const score = started.score ?? comp.botScore(0, { gameState: this.gameState, history: this.state.history });
+                this.tell([player.id], `⏱️ You left the ${comp.name} in the middle of your turn. Your score stands: ${comp.format(score)}.`);
+                return record({ id: player.id, score });
+            }
+            let lastSaved = 0;
             const opponents: Opponent[] = [...bots, ...humanResults].map((r) => ({
                 hg: byId(r.id),
                 score: r.score,
@@ -1190,9 +1270,18 @@ export class PlayerModeController {
                     opponents,
                     moreToPlay: i + 1 < humans.length,
                     deals: role === "hoh" && comp.kind === "endurance" ? this.wallDeals(player, bots, seed) : undefined,
-                    onScore: (score, answers, picks) => {
-                        humanResults.push({ id: player.id, score, answers, picks });
-                        turn(i + 1);
+                    onScore: (score, answers, picks) => record({ id: player.id, score, answers, picks }),
+                    onStart: () => this.lock(startKey, { score: null }),
+                    onReport: (score) => {
+                        // the score so far: saved every couple of seconds, and after every answer in question comps
+                        const now = Date.now();
+                        const quiz = comp.kind === "memory" || comp.kind === "quiz";
+                        if (!quiz && now - lastSaved < 2000) {
+                            this.state.week.locks = { ...(this.state.week.locks || {}), [startKey]: { score } };
+                            return;
+                        }
+                        lastSaved = now;
+                        this.lock(startKey, { score });
                     },
                 })
             );
@@ -1275,10 +1364,16 @@ export class PlayerModeController {
                 );
                 nextPick(winner);
             };
-            const turn = (i: number) => {
+            const turn = (i: number): void => {
                 if (i >= humans.length) return settle();
                 const player = humans[i];
                 const rival = pair.find((hg) => hg.id !== player.id)!;
+                const guessKey = `ko:${duelSeed}:${player.id}`;
+                const saved = this.locked<number>(guessKey);
+                if (saved !== undefined) {
+                    guesses.push({ id: player.id, guess: saved });
+                    return turn(i + 1);
+                }
                 board(() =>
                     this.privately(player.id, `${player.name}'s knockout duel`, () =>
                         this.show({
@@ -1294,6 +1389,7 @@ export class PlayerModeController {
                             playerId: player.id,
                             moreToPlay: i + 1 < humans.length,
                             onGuess: (guess) => {
+                                this.lock(guessKey, guess);
                                 guesses.push({ id: player.id, guess });
                                 turn(i + 1);
                             },
@@ -1313,6 +1409,9 @@ export class PlayerModeController {
                 duel(pickerId, ids[0], ids[1]);
             };
             const picker = this.player(pickerId);
+            const pickKey = `koPick:${seed}:${round}`;
+            const savedPick = this.locked<number[]>(pickKey);
+            if (savedPick) return go(savedPick);
             if (!this.isHuman(picker)) {
                 // bots send the houseguests they like least into the duel
                 const keyed = options.map((id) => ({ id, key: picker.relationships[id] + 0.2 * noise() }));
@@ -1329,7 +1428,10 @@ export class PlayerModeController {
                         options: options.map((id) => this.player(id)),
                         count: 2,
                         confirmLabel: "Send them to duel",
-                        resolve: go,
+                        resolve: (ids) => {
+                            this.lock(pickKey, ids);
+                            go(ids);
+                        },
                     })
                 )
             );
@@ -1337,6 +1439,176 @@ export class PlayerModeController {
 
         const [first, second] = sample(noise, remaining, 2);
         duel(null, first, second);
+    }
+
+    // Tainted Wine comes up once a season (HoH or Veto), with a player in it and enough houseguests to make it a game.
+    private useTaintedWine(competitors: Houseguest[]): boolean {
+        return (
+            !this.state.week.secretHoh &&
+            !this.state.usedComps.includes(TAINTED_WINE_ID) &&
+            competitors.length >= 3 &&
+            this.playingHumans(competitors).length > 0 &&
+            Math.abs(rng().randomFloat()) < 0.25
+        );
+    }
+
+    // HoH or Veto: the special comps (Knockout, Tainted Wine) or a regular one. Picked once and saved.
+    private pickComp(competitors: Houseguest[], hoh: boolean): string {
+        return this.compChoice(() => {
+            if (hoh && this.useKnockout(competitors)) return KNOCKOUT_ID;
+            if (this.useTaintedWine(competitors)) return TAINTED_WINE_ID;
+            return pickWeeklyComp(this.state.gameState, this.state.history, this.state.usedComps).id;
+        });
+    }
+
+    // Tainted Wine: two glasses, one tainted. The pourer offers one to a houseguest and keeps the other, truth or
+    // bluff; the houseguest drinks or trades. Two tainted sips and you're out; whoever drank the tainted glass pours
+    // next. Every player decision is saved as it's made, and the bots' choices come from the comp's seed, so a
+    // reload replays the comp exactly up to where it was.
+    private runTaintedWine(title: string, participants: Houseguest[], onWinner: (id: number) => void) {
+        const s = this.state;
+        const seed = hashcode(`${s.seed}:${this.gameState.phase}:${s.step}:${TAINTED_WINE_ID}`);
+        const noise = seededRand(seed);
+        const name = (id: number) => this.player(id).name;
+        let remaining = participants.map((p) => p.id);
+        const out: number[] = [];
+        const strikes: { [id: number]: number } = {};
+        participants.forEach((p) => (strikes[p.id] = 0));
+        const offered: { pourerId: number; targetId: number }[] = [];
+        let lines: string[] = [TAINTED_WINE_RULES];
+        let round = 0;
+        const skillOf = (id: number) => (this.isHuman({ id }) ? 0.5 : this.botSkill(this.player(id)));
+
+        const captions = () => {
+            const c: { [id: number]: string } = {};
+            remaining.forEach((id) => (c[id] = strikes[id] === 0 ? "🍷 no sips" : `☠️ ${strikes[id]}/${STRIKES_OUT}`));
+            return c;
+        };
+        const board = (next: () => void, winnerId?: number) => {
+            if (lines.length === 0 && winnerId === undefined) return next();
+            const shown = lines;
+            lines = [];
+            this.show({
+                kind: "knockout",
+                title,
+                emoji: "🍷",
+                name: "Tainted Wine",
+                lines: shown,
+                remaining: remaining.map((id) => this.player(id)),
+                out: out.map((id) => this.player(id)),
+                captions: captions(),
+                winnerId,
+                onDone: next,
+            });
+        };
+
+        const finish = () => {
+            const winnerId = remaining[0];
+            // handing someone the glass is a shot at them
+            this.mutate((gs) => offered.forEach((o) => shiftRelationship(gs, o.targetId, o.pourerId, -0.03)));
+            s.usedComps = [...s.usedComps, TAINTED_WINE_ID];
+            board(() => onWinner(winnerId), winnerId);
+        };
+
+        const drink = (pourerId: number, targetId: number, pour: Pour, swap: boolean) => {
+            // after the trade (if any), does the drinker hold the tainted glass?
+            const drinkerTainted = pour.offerTainted !== swap;
+            const victim = drinkerTainted ? targetId : pourerId;
+            const other = victim === targetId ? pourerId : targetId;
+            strikes[victim]++;
+            const said = pour.claim === "none" ? "said nothing" : `said “${claimLine(pour.claim)}”`;
+            const bluff =
+                pour.claim === "none" ? "" : (pour.claim === "clean") === pour.offerTainted ? " It was a bluff." : " It was the truth.";
+            let line =
+                `🍷 ${name(pourerId)} poured for ${name(targetId)} and ${said}.${bluff} ` +
+                `${name(targetId)} ${swap ? "traded glasses" : "kept the glass"}. ☠️ ${name(victim)} drank the tainted wine (${strikes[victim]}/${STRIKES_OUT}).`;
+            if (strikes[victim] >= STRIKES_OUT) {
+                remaining = remaining.filter((id) => id !== victim);
+                out.push(victim);
+                line += ` ${name(victim)} is out!`;
+            }
+            lines.push(line);
+            if (remaining.length === 1) return finish();
+            pourTurn(remaining.includes(victim) ? victim : other);
+        };
+
+        const offer = (pourerId: number, targetId: number) => {
+            round++;
+            const key = `wine:${seed}:${round}`;
+            offered.push({ pourerId, targetId });
+            const pourer = this.player(pourerId);
+            const target = this.player(targetId);
+            const botPourNoise = botPour(skillOf(pourerId), noise);
+            const swapNoise = noise();
+            const decideSwap = (pour: Pour) => {
+                if (!this.isHuman(target)) {
+                    return drink(pourerId, targetId, pour, botSwaps(pour, skillOf(targetId), skillOf(pourerId), seededRand(hashcode(`${seed}:${round}:${swapNoise}`))));
+                }
+                this.decide<boolean>(
+                    `${key}:swap`,
+                    (answer) =>
+                        board(() =>
+                            this.privately(targetId, `${target.name}: ${pourer.name} hands you a glass`, () =>
+                                this.show({
+                                    kind: "wineDrink",
+                                    title,
+                                    pourerId,
+                                    drinkerId: targetId,
+                                    claim: pour.claim,
+                                    tell: pour.tell,
+                                    strikes: { ...strikes },
+                                    onDecide: answer,
+                                })
+                            )
+                        ),
+                    (swap) => drink(pourerId, targetId, pour, swap)
+                );
+            };
+            if (!this.isHuman(pourer)) return decideSwap(botPourNoise);
+            this.decide<Pour>(
+                `${key}:pour`,
+                (answer) =>
+                    board(() =>
+                        this.privately(pourerId, `${pourer.name}, pour the wine`, () =>
+                            this.show({ kind: "winePour", title, pourerId, targetId, strikes: { ...strikes }, onPour: answer })
+                        )
+                    ),
+                decideSwap
+            );
+        };
+
+        const pourTurn = (pourerId: number) => {
+            const options = remaining.filter((id) => id !== pourerId).map((id) => this.player(id));
+            const pourer = this.player(pourerId);
+            const botPick = botTarget(pourer, options, strikes, noise).id;
+            if (options.length === 1) return offer(pourerId, options[0].id);
+            if (!this.isHuman(pourer)) return offer(pourerId, botPick);
+            this.decide<number>(
+                `wine:${seed}:${round + 1}:target`,
+                (answer) =>
+                    board(() =>
+                        this.privately(pourerId, `${pourer.name}, you're pouring`, () =>
+                            this.show({
+                                kind: "choose",
+                                actorId: pourerId,
+                                title: "Tainted Wine: who do you pour for?",
+                                text: `You hold both glasses and you know which one is tainted. Pick who you'll offer a glass to: you drink the other one. Everyone sees who you pick. Strikes: ${remaining
+                                    .map((id) => `${name(id)} ${strikes[id]}/${STRIKES_OUT}`)
+                                    .join(", ")}.`,
+                                options,
+                                count: 1,
+                                confirmLabel: "Pour for them",
+                                resolve: (ids) => answer(ids[0]),
+                            })
+                        )
+                    ),
+                (targetId) => offer(pourerId, targetId)
+            );
+        };
+
+        const first = sample(noise, remaining, 1)[0];
+        lines.push(`🎲 ${name(first)} was drawn to pour first.`);
+        pourTurn(first);
     }
 
     // The tiebreaker: everyone tied for first answers one closest-number question.
@@ -1350,7 +1622,7 @@ export class PlayerModeController {
                 guess: botGuess(question, this.botSkill(hg), seededRand(hashcode(`${seed}:tiebreak:${round}:${hg.id}`))),
             }));
         const humans = this.playingHumans(tied);
-        const turn = (i: number) => {
+        const turn = (i: number): void => {
             if (i >= humans.length) {
                 const closest = closestGuesses(question.answer, guesses);
                 const again = closest.length > 1;
@@ -1367,6 +1639,12 @@ export class PlayerModeController {
                 return;
             }
             const player = humans[i];
+            const guessKey = `tb:${seed}:${round}:${player.id}`;
+            const saved = this.locked<number>(guessKey);
+            if (saved !== undefined) {
+                guesses.push({ id: player.id, guess: saved });
+                return turn(i + 1);
+            }
             this.privately(player.id, `${player.name}'s turn at the tiebreaker`, () =>
                 this.show({
                     kind: "tiebreak",
@@ -1376,6 +1654,7 @@ export class PlayerModeController {
                     playerId: player.id,
                     moreToPlay: i + 1 < humans.length,
                     onGuess: (guess) => {
+                        this.lock(guessKey, guess);
                         guesses.push({ id: player.id, guess });
                         turn(i + 1);
                     },
@@ -2601,9 +2880,10 @@ export class PlayerModeController {
                 Step.AllianceHoh
             );
         };
-        if (this.useKnockout(competitors)) return this.runKnockout(title, competitors, onWinner);
-        const comp = pickWeeklyComp(s.gameState, s.history, s.usedComps);
-        this.runComp(title, comp, competitors, onWinner, "hoh");
+        const choice = this.pickComp(competitors, true);
+        if (choice === KNOCKOUT_ID) return this.runKnockout(title, competitors, onWinner);
+        if (choice === TAINTED_WINE_ID) return this.runTaintedWine(title, competitors, onWinner);
+        this.runComp(title, compById(choice), competitors, onWinner, "hoh");
     }
 
     // ---------- alliances convene before nominations ----------
@@ -3130,9 +3410,16 @@ export class PlayerModeController {
         }
         const hoh = getById(s.gameState, s.week.hohId!);
         const noms = s.week.nomineeIds!.map((id) => getById(s.gameState, id));
-        const players = pickVetoPlayers(s.gameState, [hoh], noms).povPlayers.map((p) => getById(s.gameState, p.id));
-        const comp = pickWeeklyComp(s.gameState, s.history, s.usedComps);
-        this.runComp("Veto Competition", comp, players, (winnerId) => {
+        // the draw for veto players is saved too, so a reload can't redraw it
+        const drawKey = `vetoPlayers:${s.gameState.phase}`;
+        let drawn = this.locked<number[]>(drawKey);
+        if (!drawn) {
+            drawn = pickVetoPlayers(s.gameState, [hoh], noms).povPlayers.map((p) => p.id);
+            this.lock(drawKey, drawn);
+        }
+        const players = drawn.map((id) => getById(s.gameState, id));
+        const choice = this.pickComp(players, false);
+        const onWinner = (winnerId: number) => {
             const [gs, scene, pov] = generateVetoCompScene(s.gameState, [hoh], noms, {
                 veto: GoldenVeto,
                 forcedPlayers: players,
@@ -3143,7 +3430,9 @@ export class PlayerModeController {
             this.feedPush(`🏅 ${pov.name} won the Veto.`);
             void scene; // the classic scene is replaced by the Veto winner's own moment
             this.showScene(this.vetoWinnerScene(players, pov, noms, hoh), Step.VetoCeremony);
-        }, "veto");
+        };
+        if (choice === TAINTED_WINE_ID) return this.runTaintedWine("Veto Competition", players, onWinner);
+        this.runComp("Veto Competition", compById(choice), players, onWinner, "veto");
     }
 
     // The Veto winner gets their own moment: the necklace goes on, and what it means for the block.
@@ -3293,7 +3582,7 @@ export class PlayerModeController {
     private blockbuster() {
         const s = this.state;
         const noms = s.week.nomineeIds!.map((id) => getById(s.gameState, id));
-        const comp = pickQuickComp(s.gameState, s.history, s.usedComps);
+        const comp = compById(this.compChoice(() => pickQuickComp(s.gameState, s.history, s.usedComps).id));
         this.runComp("Last Chance Competition", comp, noms, (winnerId) => {
             const [gs, scene, remaining] = generateBlockbusterScene(s.gameState, noms, winnerId);
             s.gameState = gs;

@@ -89,6 +89,10 @@ export const continueOverride$ = new BehaviorSubject<(() => void) | null>(null);
 // sidebar returns to the player mode screen instead of auto-generating the next episode.
 export const playerModeScreen$ = new BehaviorSubject<(() => JSX.Element) | null>(null);
 
+// How many player mode comps are being played right now. While one is, the arrow keys belong to the comp
+// (steering, leaning, the maze), not to the sidebar's scene navigation.
+export const compsInPlay$ = new BehaviorSubject<number>(0);
+
 // While a player mode season is running, relationships are secret: players have to find out how people
 // feel by talking to them. The classic views (portrait colors, popularity, friend/enemy counts, clicking a
 // houseguest to see their relationships, bots' reasoning in tooltips) stay hidden until the season is over.

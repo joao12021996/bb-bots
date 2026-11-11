@@ -14,6 +14,7 @@ import { HouseWall } from "./houseWall";
 import { LiveFeed } from "./liveFeed";
 import { TiebreakPlay, TiebreakResults } from "../comps/tiebreaker";
 import { KnockoutBoard } from "../comps/knockout";
+import { WineDrink, WinePour } from "../comps/taintedWine";
 
 interface Props {
     controller: PlayerModeController;
@@ -123,6 +124,8 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                         moreToPlay={prompt.moreToPlay}
                         deals={prompt.deals}
                         onScore={prompt.onScore}
+                        onStart={prompt.onStart}
+                        onReport={prompt.onReport}
                     />
                 );
                 break;
@@ -182,7 +185,36 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                         out={prompt.out}
                         winner={prompt.winnerId !== undefined ? controller.player(prompt.winnerId) : undefined}
                         youWon={prompt.winnerId !== undefined && !controller.multiplayer && controller.isHuman({ id: prompt.winnerId })}
+                        emoji={prompt.emoji}
+                        name={prompt.name}
+                        captions={prompt.captions}
                         onDone={prompt.onDone}
+                    />
+                );
+                break;
+            case "winePour":
+                body = (
+                    <WinePour
+                        key={this.state.key}
+                        title={prompt.title}
+                        pourer={controller.player(prompt.pourerId)}
+                        target={controller.player(prompt.targetId)}
+                        strikes={prompt.strikes}
+                        onPour={prompt.onPour}
+                    />
+                );
+                break;
+            case "wineDrink":
+                body = (
+                    <WineDrink
+                        key={this.state.key}
+                        title={prompt.title}
+                        pourer={controller.player(prompt.pourerId)}
+                        drinker={controller.player(prompt.drinkerId)}
+                        claim={prompt.claim}
+                        tell={prompt.tell}
+                        strikes={prompt.strikes}
+                        onDecide={prompt.onDecide}
                     />
                 );
                 break;
@@ -266,8 +298,8 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                     !(prompt.kind === "scene" && /Eviction/.test(prompt.scene.title)) && (
                         <div className="bbb-banner">{banner}</div>
                     )}
-                {!["handoff", "compPlay", "tiebreak", "gameOver", "juryReveal"].includes(prompt.kind) && <LiveFeed controller={controller} />}
-                {!["handoff", "compPlay", "tiebreak", "gameOver", "juryReveal"].includes(prompt.kind) && (
+                {!["handoff", "compPlay", "tiebreak", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(prompt.kind) && <LiveFeed controller={controller} />}
+                {!["handoff", "compPlay", "tiebreak", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(prompt.kind) && (
                     <div className="bbb-mwall-box">
                         <button
                             type="button"

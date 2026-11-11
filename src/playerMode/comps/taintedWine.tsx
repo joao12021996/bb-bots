@@ -1,132 +1,205 @@
 import React from "react";
-import { BigButton, Subtle, Title } from "../ui/common";
-import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
-import { clamp, gaussian, Rand, randInt, seededRand, shuffled } from "./random";
+import { Houseguest } from "../../model";
+import { BigButton, Face, Panel, Subtle, Title } from "../ui/common";
+import { chance, clamp, pick, Rand } from "./random";
 
-// Tainted Wine: one bottle in the cellar is tainted. Pour any bottles into the test glass and the test says
-// whether the tainted one is in the mix. Find it in as few tests as possible: splitting the suspects in half
-// every time is the best you can do. Fewest tests wins; time breaks ties.
+// Tainted Wine: two glasses, one of them tainted. Whoever holds the glasses knows which is which. They hand one
+// to a houseguest of their choice and keep the other, and they can say whatever they like about it: the truth, or
+// a bluff. The houseguest can drink what they were given or trade glasses. Then both drink. Drink the tainted wine
+// twice and you're out. Whoever drank the tainted glass pours next. Last one standing wins.
 
-const CELLARS = [10, 14, 20]; // bottles in each cellar
+export const TAINTED_WINE_ID = "tainted-wine";
+export const STRIKES_OUT = 2;
 
-// score = -(tests * 1000 + seconds): fewer tests always beats a faster time
-function toScore(tests: number, seconds: number): number {
-    return -(tests * 1000 + Math.min(999, Math.round(seconds)));
+export const TAINTED_WINE_RULES =
+    "Tainted Wine! Two glasses, one of them tainted. Whoever pours knows which is which: they offer one glass to a houseguest " +
+    "and keep the other, and they can tell the truth about it or bluff. The houseguest drinks what they're given or trades glasses. " +
+    `Then both drink. Drink the tainted wine ${STRIKES_OUT} times and you're out. Whoever drank the tainted glass pours next. Last one standing wins.`;
+
+// what the pourer says about the glass they're offering
+export type Claim = "clean" | "tainted" | "none";
+
+export const CLAIMS: { id: Claim; line: string }[] = [
+    { id: "clean", line: "This one's clean. Drink up." },
+    { id: "tainted", line: "I'll be honest: that one's tainted. Trade me." },
+    { id: "none", line: "(Say nothing. Just smile.)" },
+];
+
+export function claimLine(claim: Claim): string {
+    return CLAIMS.find((c) => c.id === claim)!.line;
 }
 
-function taintedBottles(rand: Rand): number[] {
-    return CELLARS.map((n) => randInt(rand, 0, n - 1));
+// Nervous tells a bot can give away when it hands over the tainted glass (and, sometimes, when it doesn't).
+const TELLS = [
+    "can't stop smirking",
+    "won't look you in the eye",
+    "slides the glass over a little too fast",
+    "is drumming their fingers on the table",
+    "laughs a bit too loudly",
+];
+
+export interface Pour {
+    offerTainted: boolean; // the glass handed over is the tainted one
+    claim: Claim;
+    tell?: string; // a bot pourer's tell, if it gave one away
 }
 
-function TaintedWine(props: CompProps) {
-    const [tainted] = React.useState(() => taintedBottles(props.rand));
-    const [cellar, setCellar] = React.useState(0);
-    const [suspects, setSuspects] = React.useState<number[]>(() => Array.from({ length: CELLARS[0] }, (_, i) => i));
-    const [glass, setGlass] = React.useState<number[]>([]);
-    const [tests, setTests] = React.useState(0);
-    const [message, setMessage] = React.useState("Tap bottles to pour them into the test glass.");
-    const [found, setFound] = React.useState<number | null>(null);
-    const [start] = React.useState(() => Date.now());
-    const seconds = () => (Date.now() - start) / 1000;
-    const { report, finish } = props;
+// A bot pours: it usually hands over the tainted glass, and what it says gives nothing away on its own.
+// Shakier bots sometimes give the game away with a tell.
+export function botPour(skill: number, rand: Rand): Pour {
+    const offerTainted = chance(rand, 0.6);
+    const r = rand();
+    const claim: Claim = r < 0.6 ? "clean" : r < 0.8 ? "tainted" : "none";
+    const tellChance = offerTainted ? 0.45 * (1 - skill) : 0.12 * (1 - skill);
+    return { offerTainted, claim, tell: chance(rand, tellChance) ? pick(rand, TELLS) : undefined };
+}
 
-    React.useEffect(() => {
-        // if time runs out now, the cellars left count as badly played
-        const left = CELLARS.slice(cellar).reduce((sum, n) => sum + Math.ceil(Math.log2(n)) + 2, 0);
-        report(toScore(tests + left, 999));
-    }, [tests, cellar, report]);
+// A bot decides whether to trade glasses. Reading people is a skill: sharper bots read the pourer better, and a
+// sharp pourer is harder to read. A tell, when there is one, is hard to miss.
+export function botSwaps(pour: Pour, drinkerSkill: number, pourerSkill: number, rand: Rand): boolean {
+    let right = clamp(0.5 + 0.25 * (drinkerSkill - pourerSkill), 0.3, 0.7);
+    if (pour.tell) right = Math.max(right, 0.75);
+    const readsIt = chance(rand, right);
+    // reading it right means ending up with the clean glass
+    return readsIt === pour.offerTainted;
+}
 
-    const toggle = (i: number) => {
-        if (found !== null || !suspects.includes(i)) return;
-        setGlass(glass.includes(i) ? glass.filter((g) => g !== i) : [...glass, i]);
-    };
+// Who a bot offers the glass to: whoever it likes least, leaning towards anyone one sip from going out.
+export function botTarget(pourer: Houseguest, options: Houseguest[], strikes: { [id: number]: number }, rand: Rand): Houseguest {
+    const keyed = options.map((hg) => ({ hg, key: pourer.relationships[hg.id] - 0.25 * (strikes[hg.id] || 0) + 0.3 * rand() }));
+    keyed.sort((a, b) => a.key - b.key);
+    return keyed[0].hg;
+}
 
-    const nextCellar = (total: number) => {
-        if (cellar + 1 >= CELLARS.length) return finish(toScore(total, seconds()));
-        setCellar(cellar + 1);
-        setSuspects(Array.from({ length: CELLARS[cellar + 1] }, (_, i) => i));
-        setGlass([]);
-        setFound(null);
-        setMessage("New cellar, more bottles. Tap bottles to pour them into the test glass.");
-    };
-
-    const test = () => {
-        if (glass.length === 0 || glass.length >= suspects.length) return;
-        const total = tests + 1;
-        setTests(total);
-        const inGlass = glass.includes(tainted[cellar]);
-        const left = suspects.filter((s) => glass.includes(s) === inGlass);
-        setSuspects(left);
-        setGlass([]);
-        if (left.length === 1) {
-            setFound(left[0]);
-            setMessage(`☠️ Bottle ${left[0] + 1} is the tainted one!`);
-            setTimeout(() => nextCellar(total), 900);
-        } else {
-            setMessage(
-                inGlass
-                    ? `☠️ Tainted! It's one of the ${left.length} bottles you poured.`
-                    : `✅ Clean. It's one of the ${left.length} bottles you didn't pour.`
-            );
-        }
-    };
-
+function Glass(props: { tainted?: boolean; known?: boolean; label: string; selected?: boolean; onClick?: () => void }) {
+    const cls = props.known && props.tainted ? "is-tainted" : props.selected ? "is-poured" : "";
     return (
-        <div>
-            <Title>
-                Cellar {cellar + 1} of {CELLARS.length} · {tests} test{tests === 1 ? "" : "s"}
-            </Title>
-            <Subtle>{message}</Subtle>
-            <div className="bbb-wine-rack">
-                {Array.from({ length: CELLARS[cellar] }, (_, i) => {
-                    const out = !suspects.includes(i);
-                    const cls = found === i ? "is-tainted" : out ? "is-out" : glass.includes(i) ? "is-poured" : "";
-                    return (
-                        <button type="button" key={i} className={`bbb-wine ${cls}`} disabled={out || found !== null} onClick={() => toggle(i)}>
-                            <span>{found === i ? "☠️" : "🍷"}</span>
-                            {i + 1}
-                        </button>
-                    );
-                })}
-            </div>
-            <BigButton kind="danger" disabled={found !== null || glass.length === 0 || glass.length >= suspects.length} onClick={test}>
-                🧪 Test the glass ({glass.length} poured)
-            </BigButton>
-            <Subtle>{suspects.length} suspects left. You can't pour all of them: that would tell you nothing.</Subtle>
-        </div>
+        <button type="button" className={`bbb-wine bbb-wine-glass ${cls}`} disabled={!props.onClick} onClick={props.onClick}>
+            <span>{props.known && props.tainted ? "☠️" : "🍷"}</span>
+            {props.label}
+        </button>
     );
 }
 
-function simulateTaintedWine(ctx: SimContext, skill: number, noise: Rand): SimResult {
-    // the same tainted bottles; sharp bots split the suspects in half, sloppy ones pour too many or too few
-    const tainted = taintedBottles(seededRand(ctx.seed));
-    let tests = 0;
-    CELLARS.forEach((n, c) => {
-        let suspects = Array.from({ length: n }, (_, i) => i);
-        while (suspects.length > 1) {
-            tests++;
-            const half = suspects.length / 2;
-            const size = clamp(Math.round(half + gaussian(noise) * (1 - skill) * half * 0.8), 1, suspects.length - 1);
-            const glass = shuffled(noise, suspects).slice(0, size);
-            const inGlass = glass.includes(tainted[c]);
-            suspects = suspects.filter((s) => glass.includes(s) === inGlass);
-        }
-    });
-    const seconds = tests * (4 + (1 - skill) * 7) + 10 * noise();
-    return { score: toScore(tests, seconds) };
+function strikesText(n: number): string {
+    return n === 0 ? "no sips of the tainted wine yet" : `${n} of ${STRIKES_OUT} tainted sips`;
 }
 
-export const TaintedWineComp: CompDefinition = {
-    id: "tainted-wine",
-    name: "Tainted Wine",
-    emoji: "🍷",
-    kind: "skill",
-    rules:
-        "One bottle in each cellar is tainted. Pour as many bottles as you like into the test glass: the test tells you whether " +
-        "the tainted bottle is in the mix. Find the tainted bottle in all 3 cellars. Fewest tests wins; time breaks ties.",
-    maxSeconds: 240,
-    Component: TaintedWine,
-    simulate: simulateTaintedWine,
-    botScore: (p) => toScore(Math.round(12 + (1 - p) * 9), 60 + (1 - p) * 120),
-    format: (s) => `${Math.floor(-s / 1000)} tests, ${Math.round(-s % 1000)}s`,
-};
+// The pourer's private screen: pick which glass to hand over, and what to say about it.
+export function WinePour(props: {
+    title: string;
+    pourer: Houseguest;
+    target: Houseguest;
+    strikes: { [id: number]: number };
+    onPour: (pour: Pour) => void;
+}) {
+    const [offerTainted, setOfferTainted] = React.useState<boolean | null>(null);
+    const [claim, setClaim] = React.useState<Claim | null>(null);
+    const [done, setDone] = React.useState(false);
+    return (
+        <Panel>
+            <div className="bbb-comp-header">
+                <div className="bbb-comp-emoji">🍷</div>
+                <Title>Tainted Wine</Title>
+                <Subtle>{props.title}</Subtle>
+            </div>
+            <Face hg={props.target} caption={strikesText(props.strikes[props.target.id] || 0)} />
+            <p>
+                You're pouring for <b>{props.target.name}</b>. Only you know which glass is tainted. Tap the glass you'll hand them: you drink the
+                other one.
+            </p>
+            <div className="bbb-wine-rack">
+                <Glass label="Clean" known={true} selected={offerTainted === false} onClick={() => setOfferTainted(false)} />
+                <Glass label="Tainted" known={true} tainted={true} selected={offerTainted === true} onClick={() => setOfferTainted(true)} />
+            </div>
+            {offerTainted !== null && (
+                <Subtle>
+                    {offerTainted ? "You're handing over the tainted glass." : "You're handing over the clean glass."} What do you tell them?
+                </Subtle>
+            )}
+            {offerTainted !== null && (
+                <div className="bbb-choices">
+                    {CLAIMS.map((c) => (
+                        <button
+                            type="button"
+                            key={c.id}
+                            className={`button ${claim === c.id ? "is-link" : ""}`}
+                            style={{ margin: 4, height: "auto", whiteSpace: "normal" }}
+                            onClick={() => setClaim(c.id)}
+                        >
+                            “{c.line}”
+                        </button>
+                    ))}
+                </div>
+            )}
+            <BigButton
+                kind="danger"
+                disabled={offerTainted === null || claim === null || done}
+                onClick={() => {
+                    setDone(true);
+                    props.onPour({ offerTainted: offerTainted!, claim: claim! });
+                }}
+            >
+                Hand over the glass
+            </BigButton>
+        </Panel>
+    );
+}
+
+// The drinker's private screen: hear the pourer out, then drink or trade glasses.
+export function WineDrink(props: {
+    title: string;
+    pourer: Houseguest;
+    drinker: Houseguest;
+    claim: Claim;
+    tell?: string;
+    strikes: { [id: number]: number };
+    onDecide: (swap: boolean) => void;
+}) {
+    const [swapped, setSwapped] = React.useState(false);
+    const [done, setDone] = React.useState(false);
+    const mine = props.strikes[props.drinker.id] || 0;
+    return (
+        <Panel>
+            <div className="bbb-comp-header">
+                <div className="bbb-comp-emoji">🍷</div>
+                <Title>Tainted Wine</Title>
+                <Subtle>{props.title}</Subtle>
+            </div>
+            <Face hg={props.pourer} caption={strikesText(props.strikes[props.pourer.id] || 0)} />
+            <p>
+                <b>{props.pourer.name}</b> hands you a glass and keeps the other.
+            </p>
+            <div className="bbb-quote">“{claimLine(props.claim)}”</div>
+            {props.tell && (
+                <Subtle>
+                    👀 {props.pourer.name} {props.tell}.
+                </Subtle>
+            )}
+            <div className="bbb-wine-rack">
+                <Glass label={swapped ? `${props.pourer.name}'s pour` : "Offered"} selected={true} />
+                <Glass label={swapped ? "Offered" : `${props.pourer.name}'s`} />
+            </div>
+            <Subtle>
+                You're holding {swapped ? `the glass ${props.pourer.name} kept for themself` : "the glass you were offered"}. Trade back and forth as much
+                as you like until you drink. You have {strikesText(mine)}
+                {mine === STRIKES_OUT - 1 ? ": one more and you're out!" : "."}
+            </Subtle>
+            <div>
+                <BigButton kind="light" disabled={done} onClick={() => setSwapped(!swapped)}>
+                    🔄 Trade glasses
+                </BigButton>
+                <BigButton
+                    kind="danger"
+                    disabled={done}
+                    onClick={() => {
+                        setDone(true);
+                        props.onDecide(swapped);
+                    }}
+                >
+                    🍷 Drink
+                </BigButton>
+            </div>
+        </Panel>
+    );
+}

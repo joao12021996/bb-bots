@@ -14,6 +14,7 @@ import {
     season$,
     pushToMainContentStream,
     playerModeScreen$,
+    compsInPlay$,
 } from "../../subjects/subjects";
 import { popularityMode } from "../../model/portraitDisplayMode";
 import { activeScreen$, Screens } from "../topbar/topBar";
@@ -112,7 +113,8 @@ export class SidebarController {
         if (
             state.episodes[this.selectedEpisode] === undefined ||
             state.episodes[this.selectedEpisode].type.arrowsDisabled ||
-            activeScreen$.value !== Screens.Ingame
+            activeScreen$.value !== Screens.Ingame ||
+            compsInPlay$.value > 0
         ) {
             return;
         }

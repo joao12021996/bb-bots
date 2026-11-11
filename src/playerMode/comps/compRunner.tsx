@@ -4,6 +4,7 @@ import { WeekRecord } from "../history";
 import { BigButton, Face, formatSeconds, Grid, Panel, Subtle, Title } from "../ui/common";
 import { CompDefinition, EnduranceDeals, Opponent } from "./compTypes";
 import { seededRand } from "./random";
+import { compsInPlay$ } from "../../subjects/subjects";
 
 export interface CompResult {
     id: number;
@@ -43,6 +44,10 @@ interface CompPlayProps {
     moreToPlay: boolean; // another player still has to take their turn
     deals?: EnduranceDeals; // endurance HoH comps: deals on the wall
     onScore: (score: number, answers?: boolean[], picks?: (number | string)[]) => void;
+    // the player started playing (saved, so reloading mid-comp can't get them a do-over)
+    onStart?: () => void;
+    // the player's score so far, saved now and then: reloading mid-comp leaves them with it
+    onReport?: (score: number) => void;
 }
 
 type Phase = "rules" | "countdown" | "play" | "done";
@@ -80,9 +85,14 @@ export function CompPlay(props: CompPlayProps) {
         setScore(s);
         setPhase("done");
     }, []);
-    const report = React.useCallback((s: number) => {
-        lastReported.current = s;
-    }, []);
+    const { onReport, onStart } = props;
+    const report = React.useCallback(
+        (s: number) => {
+            lastReported.current = s;
+            if (onReport) onReport(s);
+        },
+        [onReport]
+    );
 
     React.useEffect(() => {
         if (phase !== "countdown") return;
@@ -94,6 +104,14 @@ export function CompPlay(props: CompPlayProps) {
         const t = setTimeout(() => setCount(count - 1), 800);
         return () => clearTimeout(t);
     }, [phase, count]);
+
+    // while the comp is on, the arrow keys are the comp's, not the sidebar's
+    const playing = phase === "countdown" || phase === "play";
+    React.useEffect(() => {
+        if (!playing) return;
+        compsInPlay$.next(compsInPlay$.value + 1);
+        return () => compsInPlay$.next(Math.max(0, compsInPlay$.value - 1));
+    }, [playing]);
 
     React.useEffect(() => {
         if (phase !== "play") return;
@@ -129,7 +147,13 @@ export function CompPlay(props: CompPlayProps) {
                 </Grid>
                 <p className="bbb-rules">{props.comp.rules}</p>
                 <Subtle>{props.comp.hideTimer ? "There's a time limit, but no clock. That's the point!" : `Time limit: ${formatSeconds(props.comp.maxSeconds)}`}</Subtle>
-                <BigButton kind="success" onClick={() => setPhase("countdown")}>
+                <BigButton
+                    kind="success"
+                    onClick={() => {
+                        if (onStart) onStart();
+                        setPhase("countdown");
+                    }}
+                >
                     {props.player.name}, I'm ready!
                 </BigButton>
             </Panel>

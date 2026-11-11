@@ -11,7 +11,8 @@ import { bestReason, reasonFit } from "./social/pitch";
 import { botPawnTalk, NOMINATION_HIT, nominationHit, settlePawnTalk, tellPawn } from "./social/pawnTalk";
 import { evictionSpeech, makePromise, nominationSpeech, vetoSpeech } from "./social/speeches";
 import { botGuess, closestGuesses, makeTiebreaker } from "./comps/tiebreaker";
-import { TaintedWineComp } from "./comps/taintedWine";
+import { WineCellarComp } from "./comps/wineCellar";
+import { botSwaps, STRIKES_OUT, TAINTED_WINE_ID } from "./comps/taintedWine";
 import { seededRand } from "./comps/random";
 import { dayOf, weekStartDay } from "./days";
 import { throwChance } from "./comps/throwing";
@@ -142,6 +143,10 @@ function answer(controller: PlayerModeController, p: Prompt, strategy: Strategy,
         p.onDone();
     } else if (p.kind === "knockout") {
         p.onDone();
+    } else if (p.kind === "winePour") {
+        p.onPour({ offerTainted: Math.random() < 0.5, claim: pick<"clean" | "tainted" | "none">(["clean", "tainted", "none"]) });
+    } else if (p.kind === "wineDrink") {
+        p.onDecide(Math.random() < 0.5);
     } else if (p.kind === "tiebreak") {
         p.onGuess(Math.floor(Math.random() * 200));
     } else if (p.kind === "tiebreakResults") {
@@ -1162,14 +1167,14 @@ describe("day counter", () => {
     });
 });
 
-describe("tainted wine", () => {
+describe("wine cellar", () => {
     it("sharp bots need fewer tests than sloppy ones, and never fewer than is possible", () => {
         const gs = newGame(8);
         const tests = (skill: number) => {
             let total = 0;
             for (let seed = 1; seed <= 200; seed++) {
                 const ctx = { seed, gameState: gs, history: [], participants: [] };
-                const n = Math.floor(-TaintedWineComp.simulate(ctx, skill, seededRand(seed * 31)).score / 1000);
+                const n = Math.floor(-WineCellarComp.simulate(ctx, skill, seededRand(seed * 31)).score / 1000);
                 expect(n).toBeGreaterThanOrEqual(3); // one test per cellar at the very least
                 total += n;
             }
@@ -1177,7 +1182,7 @@ describe("tainted wine", () => {
         };
         expect(tests(0.95)).toBeLessThan(tests(0.05));
         expect(tests(0.95)).toBeLessThan(14);
-        expect(TaintedWineComp.format(-13042)).toBe("13 tests, 42s");
+        expect(WineCellarComp.format(-13042)).toBe("13 tests, 42s");
     });
 });
 
@@ -1237,6 +1242,123 @@ describe("knockout comps", () => {
         const after = getById(controller.gameState, id).relationships[picked![0]];
         if (before > -1) expect(after).toBeLessThan(before);
         else expect(after).toBe(-1); // already at the floor
+    });
+});
+
+describe("tainted wine", () => {
+    // Plays seasons until Tainted Wine comes up, recording its boards and what the player was asked.
+    function findWine() {
+        for (let id = 0; id < 30; id++) {
+            const controller = new PlayerModeController(newPlayerSave(newGame(10), [id % 10]));
+            controller.state.seed = 4200 + id;
+            let prompt: Prompt | null = null;
+            controller.prompt$.subscribe((p) => (prompt = p));
+            controller.start();
+            const boards: Extract<Prompt, { kind: "knockout" }>[] = [];
+            const asked: string[] = [];
+            for (let guard = 0; guard < 3000; guard++) {
+                const p = prompt as Prompt | null;
+                if (!p || p.kind === "gameOver") break;
+                if (p.kind === "knockout" && p.name === "Tainted Wine") boards.push(p);
+                if (p.kind === "winePour" || p.kind === "wineDrink") asked.push(p.kind);
+                if (boards.length > 0 && boards[boards.length - 1].winnerId !== undefined) return { controller, boards, asked };
+                answer(controller, p, "random", "random");
+            }
+        }
+        throw new Error("No Tainted Wine comp came up");
+    }
+
+    it("is played with two glasses until one houseguest is left; two tainted sips and you're out", () => {
+        const { controller, boards, asked } = findWine();
+        const last = boards[boards.length - 1];
+        expect(last.remaining.map((hg) => hg.id)).toEqual([last.winnerId]);
+        const lines = boards.flatMap((b) => b.lines);
+        const outLines = lines.filter((l) => l.includes("is out!"));
+        expect(outLines.length).toBe(last.out.length);
+        outLines.forEach((l) => expect(l).toContain(`(${STRIKES_OUT}/${STRIKES_OUT})`));
+        expect(asked.length).toBeGreaterThan(0);
+        expect(controller.state.usedComps.filter((c) => c === TAINTED_WINE_ID).length).toBe(1);
+    });
+
+    it("bots read tells, and sharper bots read the pourer better", () => {
+        const rand = seededRand(5);
+        const rate = (pour: { offerTainted: boolean; claim: "clean"; tell?: string }, skill: number) => {
+            let right = 0;
+            for (let i = 0; i < 4000; i++) if (botSwaps(pour, skill, 0.5, rand) === pour.offerTainted) right++;
+            return right / 4000;
+        };
+        const plain = { offerTainted: true, claim: "clean" as const };
+        expect(rate(plain, 1)).toBeGreaterThan(rate(plain, 0) + 0.05);
+        expect(rate({ ...plain, tell: "can't stop smirking" }, 0)).toBeGreaterThan(0.7);
+    });
+});
+
+describe("no do-overs: reloading in the middle of a comp", () => {
+    // Plays until a player is about to start a regular comp, then starts it (and scores a little).
+    function startComp(controller: PlayerModeController, getPrompt: () => Prompt | null) {
+        for (let guard = 0; guard < 3000; guard++) {
+            const p = getPrompt();
+            if (!p) break;
+            if (p.kind === "compPlay") {
+                p.onStart!();
+                p.onReport!(1);
+                return p;
+            }
+            answer(controller, p, "random", "random");
+        }
+        throw new Error("No comp came up");
+    }
+
+    it("keeps the comp, and the player's score so far, instead of letting them replay it", () => {
+        const controller = new PlayerModeController(newPlayerSave(newGame(8), [2]));
+        let prompt: Prompt | null = null;
+        controller.prompt$.subscribe((p) => (prompt = p));
+        controller.start();
+        const play = startComp(controller, () => prompt);
+        // the tab is closed mid-comp, and the save is loaded again
+        const restored = migrateSave(deserialize<any>(serialize(controller.state)))!;
+        const resumed = new PlayerModeController(restored);
+        let rp: Prompt | null = null;
+        resumed.prompt$.subscribe((p) => (rp = p));
+        resumed.start();
+        for (let guard = 0; guard < 50; guard++) {
+            const p = rp as Prompt | null;
+            if (!p) break;
+            expect(p.kind).not.toBe("compPlay");
+            if (p.kind === "compResults") {
+                expect(p.comp.id).toBe(play.comp.id);
+                expect(p.results.find((r) => r.id === 2)!.score).toBe(1);
+                return;
+            }
+            answer(resumed, p, "random", "random");
+        }
+        throw new Error("The comp's results never came up");
+    });
+
+    it("keeps a finished score, and the comp that was picked", () => {
+        const controller = new PlayerModeController(newPlayerSave(newGame(8), [2]));
+        let prompt: Prompt | null = null;
+        controller.prompt$.subscribe((p) => (prompt = p));
+        controller.start();
+        const play = startComp(controller, () => prompt);
+        play.onScore(7);
+        const restored = migrateSave(deserialize<any>(serialize(controller.state)))!;
+        const resumed = new PlayerModeController(restored);
+        let rp: Prompt | null = null;
+        resumed.prompt$.subscribe((p) => (rp = p));
+        resumed.start();
+        for (let guard = 0; guard < 50; guard++) {
+            const p = rp as Prompt | null;
+            if (!p) break;
+            expect(p.kind).not.toBe("compPlay");
+            if (p.kind === "compResults") {
+                expect(p.comp.id).toBe(play.comp.id);
+                expect(p.results.find((r) => r.id === 2)!.score).toBe(7);
+                return;
+            }
+            answer(resumed, p, "random", "random");
+        }
+        throw new Error("The comp's results never came up");
     });
 });
 
