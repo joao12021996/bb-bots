@@ -2,7 +2,9 @@ import React from "react";
 import { Subscription } from "rxjs";
 import { continueOverride$ } from "../../subjects/subjects";
 import { CompPlay, CompResults } from "../comps/compRunner";
-import { PlayerModeController, Prompt } from "../playerModeController";
+import { actorOf, PlayerModeController, Prompt } from "../playerModeController";
+import { sessionFor } from "../net/netSession";
+import { OnlineBar, WaitingFor } from "./onlineLobby";
 import { ChoosePrompt } from "./choosePrompt";
 import { BigButton, Panel, Subtle, Title } from "./common";
 import { SocialScreen } from "./socialScreen";
@@ -63,17 +65,28 @@ function Handoff(props: { name: string; imageURL: string; reason: string; onRead
 // The main player mode screen. Renders whatever the controller is currently asking for.
 export class PlayerModeScreen extends React.Component<Props, State> {
     private sub: Subscription | null = null;
+    private statusSub: Subscription | null = null;
     state: State = { prompt: null, key: 0 };
 
     componentDidMount() {
-        continueOverride$.next(this.props.controller.continue);
-        this.sub = this.props.controller.prompt$.subscribe((prompt) => this.setState((s) => ({ prompt, key: s.key + 1 })));
+        const { controller } = this.props;
+        continueOverride$.next(controller.continue);
+        const session = sessionFor(controller);
+        this.sub = controller.prompt$.subscribe((prompt) => {
+            const update = () => this.setState((s) => ({ prompt, key: s.key + 1 }));
+            // online, another player's move can arrive while the season is mid-update: render after it's done
+            if (session) Promise.resolve().then(update);
+            else update();
+        });
+        // online: re-render when players come and go (who's waiting on whom)
+        if (session) this.statusSub = session.status$.subscribe(() => this.forceUpdate());
     }
 
     componentWillUnmount() {
         // leaving the screen (e.g. browsing past weeks in the sidebar): restore normal Continue buttons
         continueOverride$.next(null);
         this.sub && this.sub.unsubscribe();
+        this.statusSub && this.statusSub.unsubscribe();
     }
 
     render() {
@@ -87,8 +100,14 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                 </Panel>
             );
         }
+        // online: another player's decision shows a waiting screen here
+        const session = sessionFor(controller);
+        const actor = actorOf(prompt);
+        const waiting = !!session && actor !== null && !session.mayActFor(actor);
+        const chrome = waiting ? "waiting" : prompt.kind;
         let body: JSX.Element;
-        switch (prompt.kind) {
+        if (waiting) body = <WaitingFor session={session!} controller={controller} prompt={prompt} />;
+        else switch (prompt.kind) {
             case "scene":
                 body = <div className="bbb-scene">{prompt.scene.render}</div>;
                 break;
@@ -291,6 +310,7 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         const day = prompt.kind !== "gameOver" && prompt.kind !== "handoff" ? controller.dayText() : null;
         return (
             <div className="bbb-player-mode">
+                {session && <OnlineBar session={session} controller={controller} />}
                 {day && <div className="bbb-day">📅 {day}</div>}
                 {banner &&
                     prompt.kind !== "handoff" &&
@@ -298,8 +318,8 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                     !(prompt.kind === "scene" && /Eviction/.test(prompt.scene.title)) && (
                         <div className="bbb-banner">{banner}</div>
                     )}
-                {!["handoff", "compPlay", "tiebreak", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(prompt.kind) && <LiveFeed controller={controller} />}
-                {!["handoff", "compPlay", "tiebreak", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(prompt.kind) && (
+                {!["handoff", "compPlay", "tiebreak", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(chrome) && <LiveFeed controller={controller} />}
+                {!["handoff", "compPlay", "tiebreak", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(chrome) && (
                     <div className="bbb-mwall-box">
                         <button
                             type="button"
@@ -314,6 +334,9 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                         </button>
                         {(this.state.wallOpen ?? loadWallOpen()) && <HouseWall controller={controller} />}
                     </div>
+                )}
+                {session && actor === null && !session.amHost && prompt.kind !== "gameOver" && (
+                    <div className="bbb-online-note">⏩ The host moves the show along from here.</div>
                 )}
                 {body}
             </div>

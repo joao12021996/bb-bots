@@ -472,9 +472,43 @@ export function migrateSave(save: any): PlayerSave | null {
     return null;
 }
 
+// Who a prompt belongs to: the player making the decision, or null for screens everyone watches.
+export function actorOf(prompt: Prompt): number | null {
+    switch (prompt.kind) {
+        case "handoff":
+        case "compPlay":
+        case "tiebreak":
+            return prompt.playerId;
+        case "social":
+        case "alliance":
+        case "hohRoom":
+        case "hohVisit":
+        case "speech":
+        case "choose":
+        case "ownMoves":
+        case "juryQuestion":
+            return prompt.actorId;
+        case "winePour":
+            return prompt.pourerId;
+        case "wineDrink":
+            return prompt.drinkerId;
+        default:
+            return null;
+    }
+}
+
+// Online play (see net/netSession.ts): every device runs its own controller, and these hooks let the session
+// send each player's inputs to the other devices and keep its own copy of the save.
+export interface NetHooks {
+    wrapPrompt(prompt: Prompt): Prompt;
+    saved(state: PlayerSave): void;
+    ended(): void;
+}
+
 export class PlayerModeController {
     public state: PlayerSave;
     public readonly prompt$ = new BehaviorSubject<Prompt | null>(null);
+    public net: NetHooks | null = null;
     private weekScenes: Scene[] = [];
 
     constructor(save: PlayerSave) {
@@ -603,7 +637,8 @@ export class PlayerModeController {
     }
 
     private save() {
-        writeSave(this.state);
+        if (this.net) this.net.saved(this.state);
+        else writeSave(this.state);
     }
 
     // ---------- comp progress (see WeekProgress.locks) ----------
@@ -644,12 +679,13 @@ export class PlayerModeController {
     }
 
     private show(prompt: Prompt) {
-        this.prompt$.next(prompt);
+        this.prompt$.next(this.net ? this.net.wrapPrompt(prompt) : prompt);
     }
 
     // In pass-and-play, private screens are preceded by a "pass the device to X" screen.
+    // Online, each player has their own device, so there's nothing to pass.
     private privately(playerId: number, reason: string, prompt: () => void) {
-        if (!this.multiplayer) return prompt();
+        if (!this.multiplayer || this.net) return prompt();
         this.show({ kind: "handoff", playerId, reason, next: prompt });
     }
 
@@ -4175,7 +4211,8 @@ export class PlayerModeController {
             table
         );
         newEpisode(generateGameOver(new GameState(new MutableGameState(gs)), weekLabel));
-        clearSave();
+        if (this.net) this.net.ended();
+        else clearSave();
         playerModeScreen$.next(null);
         this.show({
             kind: "gameOver",

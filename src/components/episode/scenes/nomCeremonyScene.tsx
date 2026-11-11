@@ -7,7 +7,6 @@ import {
     getMembersFromSplitIndex,
 } from "../../../model";
 import { Scene } from "./scene";
-import { shuffle } from "lodash";
 import { Portrait, Portraits } from "../../playerPortrait/portraits";
 import { NextEpisodeButton } from "../../nextEpisodeButton/nextEpisodeButton";
 import React from "react";
@@ -15,7 +14,7 @@ import { Centered, CenteredBold } from "../../layout/centered";
 import { DividerBox } from "../../layout/box";
 import { backdoorNPlayers } from "../../../utils/ai/aiApi";
 import { listNames } from "../../../utils/listStrings";
-import { isNotWellDefined, sortAlphaNum } from "../../../utils";
+import { isNotWellDefined, rng, sortAlphaNum } from "../../../utils";
 
 interface NomCeremonyOptions {
     doubleEviction?: boolean;
@@ -74,7 +73,7 @@ export function generateNomCeremonyScene(
         newGameState.currentLog.nominationsPreVeto.push(nom3.name);
     }
     newGameState.currentLog.nominationsPreVeto = sortAlphaNum(newGameState.currentLog.nominationsPreVeto);
-    const shuffleOrDont = coHoH ? (a: Houseguest[]): Houseguest[] => a : shuffle;
+    const shuffleOrDont = coHoH ? (a: Houseguest[]): Houseguest[] => a : (a: Houseguest[]) => rng().shuffle(a);
     const noms = nom3 ? shuffleOrDont([nom1, nom2, nom3]) : shuffleOrDont([nom1, nom2]);
     const weI = coHoH ? "We" : "I";
     const finalStatement = `${weI} have nominated you, ${listNames(noms.map((n) => n.name))} for eviction. `;

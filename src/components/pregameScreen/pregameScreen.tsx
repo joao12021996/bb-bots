@@ -12,7 +12,11 @@ import { EditRelationshipsScreen, getProfiles } from "../editRelationshipsScreen
 import { Tribe } from "../../model/tribe";
 import { selectPlayer } from "../playerPortrait/selectedPortrait";
 import { PlayerSetup, resumeSavedSeason } from "../../playerMode/ui/playerSetup";
-import { hasSave } from "../../playerMode/save/serialize";
+import { hasSave, readOnlineSave } from "../../playerMode/save/serialize";
+import { joinCodeFromUrl, showJoinScreen } from "../../playerMode/ui/onlineLobby";
+
+// An invite link (?join=CODE) opens the join screen, once.
+let inviteHandled = false;
 
 interface PregameScreenOptions {
     initialTribes?: Tribe[];
@@ -35,6 +39,16 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
         displayMode$.next(popularityMode);
         selectPlayer(null);
         this.setState({ ...cast$.value.options });
+        const code = !inviteHandled && joinCodeFromUrl();
+        inviteHandled = true;
+        if (code) {
+            try {
+                window.history.replaceState(null, "", window.location.pathname);
+            } catch (e) {
+                // fine: the link just stays in the address bar
+            }
+            setTimeout(() => showJoinScreen(code), 0);
+        }
     }
 
     public render() {
@@ -75,8 +89,8 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                     <div className="bbb-mode-card is-featured">
                         <h3>🎮 Play as a houseguest</h3>
                         <p>
-                            Socialize, form alliances, win comps on your phone or computer. Solo, or pass-and-play with
-                            friends on one device.
+                            Socialize, form alliances, win comps on your phone or computer. Solo, pass-and-play with
+                            friends on one device, or online with everyone on their own.
                         </p>
                         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                             {props.cast.length > 2 ? (
@@ -99,6 +113,9 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                                     ▶ Resume saved season
                                 </button>
                             )}
+                            <button className="button is-light" onClick={() => showJoinScreen()}>
+                                🌐 {readOnlineSave() ? "Join or rejoin online" : "Join online game"}
+                            </button>
                         </div>
                     </div>
                 </div>

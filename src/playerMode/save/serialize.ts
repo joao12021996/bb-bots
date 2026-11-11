@@ -145,3 +145,38 @@ export function clearSave() {
         // ignore
     }
 }
+
+// Online seasons are saved separately (with the room code and which player this device is), so joining
+// someone else's game never overwrites your own saved season.
+const ONLINE_KEY = "bb-bots-online-save";
+
+export interface OnlineSaveData {
+    code: string;
+    playerId: number | null;
+    json: string; // serialize(PlayerSave)
+}
+
+export function writeOnlineSave(data: OnlineSaveData) {
+    try {
+        localStorage.setItem(ONLINE_KEY, JSON.stringify(data));
+    } catch (e) {
+        // fine: the host still has the season, and rejoining fetches it from them
+    }
+}
+
+export function readOnlineSave(): OnlineSaveData | null {
+    try {
+        const json = localStorage.getItem(ONLINE_KEY);
+        return json ? (JSON.parse(json) as OnlineSaveData) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+export function clearOnlineSave() {
+    try {
+        localStorage.removeItem(ONLINE_KEY);
+    } catch (e) {
+        // ignore
+    }
+}

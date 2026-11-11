@@ -1,6 +1,6 @@
 import { GameState, Houseguest, MutableGameState, getById, nonEvictedHousguestsSplit } from "../../../model";
 import { Scene } from "./scene";
-import { shuffle } from "lodash";
+import { rng } from "../../../utils";
 import { ProfileHouseguest } from "../../memoryWall";
 import { castEvictionVote, castVoteToSave, NumberWithLogic } from "../../../utils/ai/aiApi";
 import { Portraits } from "../../playerPortrait/portraits";
@@ -60,7 +60,7 @@ export function generateEvictionScene(
         options.votingTo === "Save" ? castVoteToSave : castEvictionVote;
     let newGameState = new MutableGameState(initialGameState);
     newGameState.currentLog.votingTo = options.votingTo;
-    nominees = shuffle(nominees);
+    nominees = rng().shuffle(nominees);
     const votes: Array<ProfileHouseguest[]> = nominees.map((_) => []);
     let lastVoter: Houseguest;
     let outOf = 0;

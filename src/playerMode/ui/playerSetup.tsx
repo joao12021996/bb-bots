@@ -4,7 +4,7 @@ import { shuffle } from "lodash";
 import { defaultJurySize, Episode, EpisodeType, getById, getComp, getSocial, PlayerProfile } from "../../model";
 import { cast$, episodes$, getCast, newEpisode } from "../../subjects/subjects";
 import { PregameEpisode } from "../../components/episode/pregameEpisode";
-import { activatePlayerMode, Difficulty, migrateSave, newPlayerSave, PlayerModeController } from "../playerModeController";
+import { activatePlayerMode, Difficulty, migrateSave, newPlayerSave, PlayerModeController, PlayerSave } from "../playerModeController";
 import { ALL_POWERS, PowerId, POWERS } from "../social/powers";
 import { clearSave, inlineBlobImages, readSave } from "../save/serialize";
 import { buildSeason } from "../setupGame";
@@ -12,8 +12,9 @@ import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
 import { initialsAvatar } from "./avatar";
 import { FaceEditor, Look } from "./faceEditor";
 import { PlayerModeScreen } from "./playerModeScreen";
+import { startHosting } from "./onlineLobby";
 
-function launch(controller: PlayerModeController) {
+export function launch(controller: PlayerModeController) {
     activatePlayerMode(controller, () => <PlayerModeScreen controller={controller} />);
 }
 
@@ -73,6 +74,9 @@ export function PlayerSetup() {
     // secret powers: none, a surprise (picked at random, never shown), or hand-picked
     const [powerMode, setPowerMode] = React.useState<"off" | "surprise" | "choose">("off");
     const [chosenPowers, setChosenPowers] = React.useState<PowerId[]>([]);
+    // with 2+ players: pass one device around, or everyone on their own device
+    const [online, setOnline] = React.useState(false);
+    const [error, setError] = React.useState<string | null>(null);
 
     const basePool = [...cast, ...customs];
     const pool: PlayerProfile[] = basePool.map((hg, i) => (looks[i] && selected.includes(i) ? { ...hg, ...looks[i] } : hg));
@@ -121,17 +125,30 @@ export function PlayerSetup() {
     const start = async () => {
         if (!ready) return;
         setStarting(true);
-        clearSave();
+        setError(null);
+        const isOnline = online && playerCount > 1;
+        if (!isOnline) clearSave(); // an online season is saved separately: keep the solo one
         // skill randomizer: everyone gets secret, random Social and Comp scores
         const roll = () => Math.round(1 + 9 * ((Math.random() + Math.random()) / 2));
         const players = hideSkills ? pool.map((hg) => ({ ...hg, social: roll(), comp: roll() })) : pool;
         const setup = buildSeason(players, selected, bots, cast$.value.options || {}, hohPlaysVeto);
         // make uploaded portraits survive a reload
         await inlineBlobImages(setup.gameState.houseguests);
+        const powers = powerMode === "surprise" ? "surprise" : powerMode === "choose" ? chosenPowers : [];
+        const save = newPlayerSave(setup.gameState, setup.humanIds, setup.castOptions, hideSkills, { difficulty, powers });
+        if (isOnline) {
+            try {
+                await startHosting(save);
+            } catch (e) {
+                console.error(e);
+                setError("Couldn't open an online room. Check your internet connection and try again.");
+                setStarting(false);
+            }
+            return;
+        }
         await newEpisode(null);
         await newEpisode(new PregameEpisode(setup.gameState));
-        const powers = powerMode === "surprise" ? "surprise" : powerMode === "choose" ? chosenPowers : [];
-        launch(new PlayerModeController(newPlayerSave(setup.gameState, setup.humanIds, setup.castOptions, hideSkills, { difficulty, powers })));
+        launch(new PlayerModeController(save));
     };
 
     const role = (i: number) => (selected.includes(i) ? "player" : bots.includes(i) ? "bot" : "out");
@@ -148,14 +165,32 @@ export function PlayerSetup() {
                 <div className="bbb-hero-kicker">Player mode</div>
                 <Title>Set up your season</Title>
                 <Subtle>
-                    Choose how many people are playing and how many bots join them. With 2 or more players, you pass
-                    this device around for secret moves.
+                    Choose how many people are playing and how many bots join them. With 2 or more players, pass
+                    one device around, or play online with everyone on their own device.
                 </Subtle>
             </div>
             <div className="bbb-steppers">
                 <Stepper label="🎮 Players" value={playerCount} min={1} max={maxPlayers} onChange={changePlayers} />
                 <Stepper label="🤖 Bots" value={effectiveBots} min={minBots} max={maxBots} onChange={setBotCount} />
             </div>
+            {playerCount > 1 && (
+                <div className="bbb-setting">
+                    <b>📱 How you're playing</b>
+                    <div className="bbb-segmented">
+                        <button type="button" className={!online ? "is-active" : ""} onClick={() => setOnline(false)}>
+                            One device
+                        </button>
+                        <button type="button" className={online ? "is-active" : ""} onClick={() => setOnline(true)}>
+                            Online
+                        </button>
+                    </div>
+                    <Subtle>
+                        {online
+                            ? "Everyone plays on their own phone or computer, from anywhere. You'll get a room code to share; your device runs the show, so keep this tab open."
+                            : "Pass this device around for secret moves."}
+                    </Subtle>
+                </div>
+            )}
             <form
                 className="bbb-add-yourself"
                 onSubmit={(e) => {
@@ -312,8 +347,9 @@ export function PlayerSetup() {
                 Bots use both. For players, Social boosts your social moves and your sway in alliances; your comp results
                 are all you.
             </Subtle>
+            {error && <Subtle style={{ color: "#f87171" }}>{error}</Subtle>}
             <BigButton kind="success" disabled={!ready || starting} onClick={start}>
-                {starting ? "Starting…" : "Enter the house"}
+                {starting ? "Starting…" : online && playerCount > 1 ? "Open the online room" : "Enter the house"}
             </BigButton>
         </Panel>
     );
@@ -334,7 +370,19 @@ const ResumedEpisodeType: EpisodeType = {
 export function resumeSavedSeason(): boolean {
     const save = migrateSave(readSave<any>());
     if (!save) return false;
+    showSeasonSoFar(save, false);
+    launch(new PlayerModeController(save));
+    return true;
+}
+
+// Resets the sidebar for a season that's starting (fresh) or picking up where it was.
+export function showSeasonSoFar(save: PlayerSave, fresh: boolean) {
     const gs = save.gameState;
+    if (fresh) {
+        newEpisode(null);
+        newEpisode(new PregameEpisode(gs));
+        return;
+    }
     const name = (id?: number) => (id === undefined ? "?" : getById(gs, id).name);
     newEpisode(null);
     newEpisode(
@@ -357,6 +405,4 @@ export function resumeSavedSeason(): boolean {
             type: ResumedEpisodeType,
         })
     );
-    launch(new PlayerModeController(save));
-    return true;
 }

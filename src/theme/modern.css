@@ -1575,3 +1575,101 @@ input[type="number"] {
     background: rgba(251, 191, 36, 0.06);
     text-align: left;
 }
+
+/* ---------- online play ---------- */
+.bbb-room-code {
+    margin: 14px auto;
+    padding: 14px;
+    max-width: 360px;
+    border-radius: var(--bbb-radius);
+    background: rgba(139, 92, 246, 0.14);
+    border: 1px solid rgba(167, 139, 250, 0.4);
+    text-align: center;
+}
+.bbb-room-code span {
+    display: block;
+    color: var(--bbb-muted);
+    font-size: 0.85rem;
+}
+.bbb-room-code b {
+    display: block;
+    font-family: var(--bbb-display);
+    font-size: 2.4rem;
+    letter-spacing: 0.25em;
+    margin: 2px 0 8px;
+    color: var(--bbb-gold);
+}
+.bbb-room-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.bbb-code-input {
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-weight: 700;
+    text-align: center;
+}
+.bbb-online-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px 12px;
+    margin: 0 auto 8px;
+    padding: 6px 12px;
+    max-width: 720px;
+    border-radius: 12px;
+    background: var(--bbb-card);
+    border: 1px solid var(--bbb-border);
+    font-size: 0.85rem;
+}
+.bbb-online-players {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.bbb-online-players > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px 2px 2px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.05);
+    opacity: 0.5;
+}
+.bbb-online-players > span.is-on {
+    opacity: 1;
+    box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.6);
+}
+.bbb-online-players img {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.bbb-online-notice {
+    flex-basis: 100%;
+    text-align: center;
+    color: var(--bbb-gold);
+}
+.bbb-online-note {
+    margin: 0 auto 8px;
+    text-align: center;
+    color: var(--bbb-muted);
+    font-size: 0.85rem;
+}
+.bbb-waiting-pulse {
+    animation: bbb-waiting 1.6s ease-in-out infinite;
+}
+@keyframes bbb-waiting {
+    50% {
+        opacity: 0.4;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .bbb-waiting-pulse {
+        animation: none;
+    }
+}

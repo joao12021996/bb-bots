@@ -19,6 +19,16 @@ export class BbRandomGenerator {
         return result;
     }
 
+    // a shuffled copy (Fisher-Yates), from this generator: the same seed always gives the same order
+    public shuffle<T>(items: T[]): T[] {
+        const out = [...items];
+        for (let i = out.length - 1; i > 0; i--) {
+            const j = this.randomInt(0, i);
+            [out[i], out[j]] = [out[j], out[i]];
+        }
+        return out;
+    }
+
     public flipCoin(): boolean {
         let result: number;
         [result, this.rng] = this.rng.next();
