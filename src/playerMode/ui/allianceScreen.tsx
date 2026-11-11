@@ -85,7 +85,13 @@ function AllianceCard(props: { controller: PlayerModeController; alliance: Allia
         .filter((m) => m.id !== me.id)
         .map((m) => {
             const pick = controller.isHuman(m) ? a.suggestions[m.id] : botSuggestion(gs, a, m.id, block, exclude);
-            const plan = controller.isHuman(m) ? (a.backupSuggestions || {})[m.id] : pick === null ? null : botBackup(gs, a, m.id, pick, block, exclude);
+            const plan = !controller.planBWeek
+                ? null
+                : controller.isHuman(m)
+                ? (a.backupSuggestions || {})[m.id]
+                : pick === null
+                ? null
+                : botBackup(gs, a, m.id, pick, block, exclude);
             return { m, pick: pick === undefined ? undefined : pick, plan };
         });
 
@@ -216,7 +222,7 @@ function AllianceCard(props: { controller: PlayerModeController; alliance: Allia
                                 />
                             ))}
                         </Grid>
-                        {picked !== null && targetOptions.length > 1 && (
+                        {picked !== null && controller.planBWeek && targetOptions.length > 1 && (
                             <>
                                 <Subtle>
                                     🔁 Plan B (optional): who {a.name} goes after if {controller.player(picked).name}{" "}

@@ -323,7 +323,7 @@ export const FactOrFictionComp: CompDefinition = {
     name: "Fact or Fiction",
     emoji: "📜",
     kind: "quiz",
-    rules: `${FACTS} statements about the houseguests who've already left: HoH wins, nominations, vetoes, who went home when. Is each one FACT or FICTION? ${FACT_SECONDS} seconds each. Most right wins; ties go to the fastest.`,
+    rules: `${FACTS} statements about the houseguests who've already left: HoH wins, nominations, vetoes, who went home when. Is each one FACT or FICTION? ${FACT_SECONDS} seconds each. Most right wins; ties go to a tiebreaker.`,
     maxSeconds: FACTS * FACT_SECONDS + 20,
     Component: FactOrFiction,
     simulate: simulateFactOrFiction,

@@ -145,7 +145,7 @@ export const RankEmComp: CompDefinition = {
     name: "Rank 'Em",
     emoji: "📊",
     kind: "skill",
-    rules: `Three rounds. Each round, put ${PER_ROUND} houseguests in order: by HoH wins, veto wins, nominations, or alphabetically. Tap two to swap them. The most accurate rankings win; ties go to the fastest.`,
+    rules: `Three rounds. Each round, put ${PER_ROUND} houseguests in order: by HoH wins, veto wins, nominations, or alphabetically. Tap two to swap them. The most accurate rankings win; ties go to a tiebreaker.`,
     maxSeconds: 180,
     Component: RankEm,
     simulate: simulateRankEm,

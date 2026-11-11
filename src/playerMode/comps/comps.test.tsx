@@ -294,3 +294,23 @@ describe("the Last Chance comp", () => {
         expect(seen.size).toBe(QUICK_COMPS.length);
     });
 });
+
+describe("ties", () => {
+    it("scores that read the same are tied, even with a hidden time bonus", () => {
+        const { tiedForFirst } = require("./compRunner");
+        const comp = { format: (s: number) => `${Math.floor(s / 100)} correct` };
+        // 3 correct (fast), 3 correct (slow), 2 correct
+        expect(tiedForFirst(comp, [{ id: 1, score: 312 }, { id: 2, score: 345 }, { id: 3, score: 290 }])).toEqual([2, 1]);
+        // a clear winner stays a clear winner
+        expect(tiedForFirst(comp, [{ id: 1, score: 412 }, { id: 2, score: 345 }])).toEqual([1]);
+    });
+
+    it("endurance comps are last one standing: outlasting by a hair still wins", () => {
+        const { tiedForFirst } = require("./compRunner");
+        const wall = { kind: "endurance", format: (s: number) => `lasted ${s.toFixed(1)}s` };
+        // the last bot fell at 42.50s, the player let go a frame later
+        expect(tiedForFirst(wall, [{ id: 1, score: 42.5 }, { id: 2, score: 42.52 }, { id: 3, score: 30 }])).toEqual([2]);
+        // both lasted the full time: that's a real tie
+        expect(tiedForFirst(wall, [{ id: 1, score: 300 }, { id: 2, score: 300 }])).toEqual([1, 2]);
+    });
+});

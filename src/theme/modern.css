@@ -932,48 +932,157 @@ input[type="number"] {
     margin: 12px 0;
 }
 .bbb-comic {
-    width: 140px;
-    padding: 8px;
-    border-radius: 8px;
+    --comic-bg: #b91c1c;
+    width: 156px;
+    padding: 6px;
+    border-radius: 6px;
     border: 3px solid #111;
     box-shadow: 4px 4px 0 #111;
+    background: var(--comic-bg);
     color: white;
     font: inherit;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 3px;
+    gap: 4px;
     cursor: pointer;
     touch-action: manipulation;
+    text-align: left;
 }
 .bbb-comic:disabled {
     cursor: default;
     opacity: 1;
 }
-.bbb-comic small {
-    align-self: stretch;
+.bbb-comic-mast {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     font-weight: 800;
-    font-size: 1rem;
+    font-size: 0.8rem;
 }
-.bbb-comic img {
-    width: 96px;
-    height: 96px;
-    object-fit: cover;
-    border-radius: 6px;
+.bbb-comic-brand {
+    background: #fde047;
+    color: #111;
+    padding: 0 4px;
     border: 2px solid #111;
-    background: rgba(0, 0, 0, 0.25);
+    transform: rotate(-3deg);
+    font-size: 0.7rem;
+    letter-spacing: 0.5px;
 }
-.bbb-comic b {
-    font-size: 1rem;
+.bbb-comic-title {
+    font-size: 0.7rem;
+    font-weight: 800;
     text-transform: uppercase;
+    line-height: 1.05;
+    text-shadow: 1px 1px 0 #111;
+}
+.bbb-comic-title b {
+    display: block;
+    font-size: 1.05rem;
     letter-spacing: 0.5px;
     text-shadow: 2px 2px 0 #111;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
-.bbb-comic span {
-    font-size: 0.8rem;
+.bbb-comic-panel {
+    position: relative;
+    height: 150px;
+    border: 2px solid #111;
+    border-radius: 4px;
+    overflow: hidden;
+    background: repeating-conic-gradient(from 0deg at 50% 60%, #fef08a 0deg 10deg, #fbbf24 10deg 20deg);
+}
+.bbb-comic-panel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(rgba(0, 0, 0, 0.28) 1px, transparent 1.6px) 0 0 / 5px 5px;
+    mix-blend-mode: multiply;
+}
+.bbb-comic-hero {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    width: 104px;
+    height: 104px;
+    margin-left: -52px;
+    object-fit: cover;
+    border-radius: 50% 50% 8px 8px;
+    border: 3px solid #111;
+    filter: contrast(1.35) saturate(1.5) brightness(1.05);
+}
+.bbb-comic-hero.is-flipped {
+    transform: scaleX(-1);
+}
+.bbb-comic-bubble {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    max-width: 92px;
+    padding: 3px 6px;
+    background: white;
+    color: #111;
+    border: 2px solid #111;
+    border-radius: 10px;
+    font-size: 0.62rem;
     font-weight: 700;
+    line-height: 1.15;
+    z-index: 1;
+}
+.bbb-comic-bubble::after {
+    content: "";
+    position: absolute;
+    left: 18px;
+    bottom: -10px;
+    border: 4px solid transparent;
+    border-top: 6px solid #111;
+}
+.bbb-comic-sfx {
+    position: absolute;
+    right: 4px;
+    bottom: 34px;
+    transform: rotate(-12deg);
+    color: #fde047;
+    font-weight: 900;
+    font-size: 0.95rem;
+    -webkit-text-stroke: 1px #111;
+    text-shadow: 2px 2px 0 #b91c1c;
+    z-index: 1;
+}
+.bbb-comic-prop {
+    position: absolute;
+    left: 6px;
+    bottom: 6px;
+    font-size: 1.3rem;
+    z-index: 1;
+}
+.bbb-comic-rival {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 40px;
+    text-align: center;
+    z-index: 1;
+}
+.bbb-comic-rival img {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 2px solid #111;
+    filter: grayscale(1) contrast(1.3);
+    display: block;
+}
+.bbb-comic-rival span {
+    display: inline-block;
+    margin-top: -8px;
+    padding: 0 3px;
+    background: #111;
+    color: #fde047;
+    font-size: 0.6rem;
+    font-weight: 900;
+    position: relative;
 }
 .bbb-morph {
     position: relative;

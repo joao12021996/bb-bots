@@ -287,16 +287,33 @@ export const HideAndGoVetoComp: CompDefinition = {
 // ---------------- BB Comics ----------------
 
 const COMIC_ROUNDS = 5;
-const COMIC_STUDY = 4; // seconds
+const COMIC_STUDY = 6; // seconds
 const COMIC_ADJECTIVES = ["Amazing", "Incredible", "Uncanny", "Mighty", "Invincible", "Savage", "Sneaky", "Fearless"];
-const COMIC_EMBLEMS = ["⚡", "🔥", "💎", "🕷️", "🦇", "🛡️", "☄️", "🐍", "👁️", "🌪️"];
+const COMIC_PROPS = ["⚡", "🔥", "💎", "🛡️", "☄️", "🐍", "👁️", "🌪️", "🔑", "🏆"];
 const COMIC_COLORS = ["#b91c1c", "#1d4ed8", "#047857", "#7e22ce", "#c2410c", "#0f766e", "#be185d"];
+const COMIC_SFX = ["KAPOW!", "ZAP!", "BOOM!", "WHAM!", "SPLAT!", "CRASH!", "BAM!"];
+const COMIC_QUOTES = [
+    "You're going on the block!",
+    "The veto is mine!",
+    "Trust no one!",
+    "Backdoor activated!",
+    "I'm playing both sides!",
+    "Expect the unexpected!",
+    "Not in my alliance!",
+    "Pawn? Me?!",
+];
 
+// A comic book cover starring a houseguest: their portrait as the hero (maybe mirrored), a rival in the corner,
+// a speech bubble, a sound effect, a prop, the title, the cover color and the issue number.
 interface Cover {
     adjective: string;
-    emblem: string;
+    prop: string;
     color: string;
     issue: number;
+    sfx: string;
+    quote: string;
+    rivalId: number;
+    flipped: boolean;
 }
 
 interface ComicRound {
@@ -307,29 +324,43 @@ interface ComicRound {
 }
 
 function sameCover(a: Cover, b: Cover): boolean {
-    return a.adjective === b.adjective && a.emblem === b.emblem && a.color === b.color && a.issue === b.issue;
+    return (Object.keys(a) as (keyof Cover)[]).every((k) => a[k] === b[k]);
+}
+
+function otherThan<T>(rand: Rand, list: T[], not: T): T {
+    return pick(rand, list.filter((x) => x !== not));
 }
 
 // A copy of the cover with exactly one detail changed.
-function forgery(rand: Rand, real: Cover): Cover {
-    const detail = randInt(rand, 0, 3);
-    if (detail === 0) return { ...real, adjective: pick(rand, COMIC_ADJECTIVES.filter((a) => a !== real.adjective)) };
-    if (detail === 1) return { ...real, emblem: pick(rand, COMIC_EMBLEMS.filter((e) => e !== real.emblem)) };
-    if (detail === 2) return { ...real, color: pick(rand, COMIC_COLORS.filter((c) => c !== real.color)) };
+function forgery(rand: Rand, real: Cover, rivals: number[]): Cover {
+    const details = ["adjective", "prop", "color", "issue", "sfx", "quote", "flipped", ...(rivals.length > 1 ? ["rivalId"] : [])];
+    const detail = pick(rand, details);
+    if (detail === "adjective") return { ...real, adjective: otherThan(rand, COMIC_ADJECTIVES, real.adjective) };
+    if (detail === "prop") return { ...real, prop: otherThan(rand, COMIC_PROPS, real.prop) };
+    if (detail === "color") return { ...real, color: otherThan(rand, COMIC_COLORS, real.color) };
+    if (detail === "sfx") return { ...real, sfx: otherThan(rand, COMIC_SFX, real.sfx) };
+    if (detail === "quote") return { ...real, quote: otherThan(rand, COMIC_QUOTES, real.quote) };
+    if (detail === "flipped") return { ...real, flipped: !real.flipped };
+    if (detail === "rivalId") return { ...real, rivalId: otherThan(rand, rivals, real.rivalId) };
     return { ...real, issue: real.issue + pick(rand, [-2, -1, 1, 2]) };
 }
 
 function comicRounds(gs: GameState, rand: Rand): ComicRound[] {
     return sample(rand, gs.houseguests, COMIC_ROUNDS).map((hg) => {
+        const rivals = gs.houseguests.filter((h) => h.id !== hg.id).map((h) => h.id);
         const real: Cover = {
             adjective: pick(rand, COMIC_ADJECTIVES),
-            emblem: pick(rand, COMIC_EMBLEMS),
+            prop: pick(rand, COMIC_PROPS),
             color: pick(rand, COMIC_COLORS),
             issue: randInt(rand, 3, 98),
+            sfx: pick(rand, COMIC_SFX),
+            quote: pick(rand, COMIC_QUOTES),
+            rivalId: rivals.length > 0 ? pick(rand, rivals) : hg.id,
+            flipped: rand() < 0.5,
         };
         const fakes: Cover[] = [];
-        for (let guard = 0; fakes.length < 2 && guard < 20; guard++) {
-            const fake = forgery(rand, real);
+        for (let guard = 0; fakes.length < 2 && guard < 30; guard++) {
+            const fake = forgery(rand, real, rivals);
             if (!fakes.some((f) => sameCover(f, fake))) fakes.push(fake);
         }
         const options = shuffled(rand, [real, ...fakes]);
@@ -337,16 +368,31 @@ function comicRounds(gs: GameState, rand: Rand): ComicRound[] {
     });
 }
 
-function ComicCover(props: { hg: Houseguest; cover: Cover; onClick?: () => void }) {
-    const { hg, cover } = props;
+function ComicCover(props: { hg: Houseguest; rival?: Houseguest; cover: Cover; onClick?: () => void }) {
+    const { hg, rival, cover } = props;
+    const style = { "--comic-bg": cover.color } as React.CSSProperties;
     return (
-        <button type="button" className="bbb-comic" style={{ background: cover.color }} disabled={!props.onClick} onClick={props.onClick}>
-            <small>
-                #{cover.issue} · {cover.emblem}
-            </small>
-            <img src={hg.imageURL} alt="" />
-            <b>The {cover.adjective}</b>
-            <span>{hg.name}</span>
+        <button type="button" className="bbb-comic" style={style} disabled={!props.onClick} onClick={props.onClick}>
+            <div className="bbb-comic-mast">
+                <span>#{cover.issue}</span>
+                <span className="bbb-comic-brand">BB COMICS</span>
+            </div>
+            <div className="bbb-comic-title">
+                The {cover.adjective}
+                <b>{hg.name}</b>
+            </div>
+            <div className="bbb-comic-panel">
+                <img className={"bbb-comic-hero" + (cover.flipped ? " is-flipped" : "")} src={hg.imageURL} alt="" />
+                <div className="bbb-comic-bubble">{cover.quote}</div>
+                <div className="bbb-comic-sfx">{cover.sfx}</div>
+                <div className="bbb-comic-prop">{cover.prop}</div>
+                {rival && rival.id !== hg.id && (
+                    <div className="bbb-comic-rival">
+                        <img src={rival.imageURL} alt="" />
+                        <span>VS</span>
+                    </div>
+                )}
+            </div>
         </button>
     );
 }
@@ -369,6 +415,7 @@ function BBComics(props: CompProps) {
 
     if (rounds.length === 0) return <Subtle>No comics today.</Subtle>;
     const round = rounds[index];
+    const rivalOf = (cover: Cover) => props.gameState.houseguests.find((h) => h.id === cover.rivalId);
     const labels = round.options.map((_, i) => `Cover ${i + 1}`);
     const answer = (i: number) => {
         if (reveal) return;
@@ -406,11 +453,11 @@ function BBComics(props: CompProps) {
             </Subtle>
             <div className="bbb-comics">
                 {studying ? (
-                    <ComicCover hg={round.hg} cover={round.real} />
+                    <ComicCover hg={round.hg} rival={rivalOf(round.real)} cover={round.real} />
                 ) : (
                     round.options.map((cover, i) => (
                         <div key={i} className={reveal && i === round.answer ? "bbb-comic-real" : ""}>
-                            <ComicCover hg={round.hg} cover={cover} onClick={reveal ? undefined : () => answer(i)} />
+                            <ComicCover hg={round.hg} rival={rivalOf(cover)} cover={cover} onClick={reveal ? undefined : () => answer(i)} />
                             <Subtle>{labels[i]}</Subtle>
                         </div>
                     ))
@@ -432,7 +479,7 @@ export const BBComicsComp: CompDefinition = {
     name: "Comic Covers",
     emoji: "🦸",
     kind: "memory",
-    rules: `Every houseguest stars in their own comic book. Study a cover for ${COMIC_STUDY} seconds, then pick it out from two forgeries that each change one detail: the title, the emblem, the color or the issue number. ${COMIC_ROUNDS} covers. Most right wins; ties go to the fastest.`,
+    rules: `Every houseguest stars in their own comic book. Study a cover for ${COMIC_STUDY} seconds, then pick it out from two forgeries that each change one detail: the title, the speech bubble, the sound effect, the rival, the prop, which way the hero faces, the color or the issue number. ${COMIC_ROUNDS} covers. Most right wins; ties go to a tiebreaker.`,
     maxSeconds: COMIC_ROUNDS * (COMIC_STUDY + 14),
     Component: BBComics,
     simulate: simulateBBComics,
@@ -558,7 +605,7 @@ export const OverOrUnderComp: CompDefinition = {
     name: "Over or Under",
     emoji: "🫙",
     kind: "skill",
-    rules: `A counting comp. A pile of things flashes for ${COUNT_LOOK} seconds: far too many to count. Then you're given a number: were there more, or fewer? ${COUNT_ROUNDS} rounds. Most right wins; ties go to the fastest.`,
+    rules: `A counting comp. A pile of things flashes for ${COUNT_LOOK} seconds: far too many to count. Then you're given a number: were there more, or fewer? ${COUNT_ROUNDS} rounds. Most right wins; ties go to a tiebreaker.`,
     maxSeconds: COUNT_ROUNDS * (COUNT_LOOK + 10),
     Component: OverOrUnder,
     simulate: simulateOverOrUnder,
@@ -786,7 +833,7 @@ export const FaceMorphComp: CompDefinition = {
     name: "Face Morph",
     emoji: "🎭",
     kind: "memory",
-    rules: `Two houseguests' faces have been morphed into one. Name them both. ${MORPH_ROUNDS} morphs, ${MORPH_SECONDS} seconds each, one point for every face you get right. Most points wins; ties go to the fastest.`,
+    rules: `Two houseguests' faces have been morphed into one. Name them both. ${MORPH_ROUNDS} morphs, ${MORPH_SECONDS} seconds each, one point for every face you get right. Most points wins; ties go to a tiebreaker.`,
     maxSeconds: MORPH_ROUNDS * MORPH_SECONDS + 10,
     Component: FaceMorph,
     simulate: simulateFaceMorph,

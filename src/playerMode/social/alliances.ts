@@ -256,7 +256,15 @@ export interface MeetingResult {
 
 // An alliance meeting: everyone suggests a target, the persuasive (high Social) members try to win the others
 // over, and the alliance goes with the most influential pick. Disagreement costs chemistry.
-export function holdMeeting(gs: MutableGameState, a: Alliance, humanIds: number[], block?: number[], exclude: number[] = []): MeetingResult {
+// A plan B is only picked in Blockbuster weeks (`planB`), where the target can still win the Last Chance comp.
+export function holdMeeting(
+    gs: MutableGameState,
+    a: Alliance,
+    humanIds: number[],
+    block?: number[],
+    exclude: number[] = [],
+    planB: boolean = true
+): MeetingResult {
     const members = aliveMembers(gs, a);
     const name = (id: number) => getById(gs, id).name;
     const isHuman = (id: number) => humanIds.includes(id);
@@ -332,7 +340,7 @@ export function holdMeeting(gs: MutableGameState, a: Alliance, humanIds: number[
 
     // plan B: everyone's backup pick, plus the targets that lost (at half weight)
     let backupId: number | null = null;
-    if (targetId !== null) {
+    if (targetId !== null && planB) {
         const backupWeights: { [target: number]: number } = {};
         const add = (id: number | null | undefined, w: number) => {
             if (id === null || id === undefined || id === targetId) return;

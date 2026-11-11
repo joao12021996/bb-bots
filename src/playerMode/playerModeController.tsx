@@ -37,7 +37,7 @@ import { KNOCKOUT_ID, KNOCKOUT_RULES } from "./comps/knockout";
 import { compById, finaleComps, pickQuickComp, pickWeeklyComp } from "./comps";
 import { botPercentile } from "./comps/botScores";
 import { sample, seededRand } from "./comps/random";
-import { CompResult } from "./comps/compRunner";
+import { CompResult, tiedForFirst } from "./comps/compRunner";
 import {
     ACTIONS_PER_BLOCK,
     answerPitch,
@@ -519,9 +519,15 @@ export class PlayerModeController {
         });
     }
 
+    // Plan B only matters in Blockbuster weeks, where the target can still win the Last Chance comp.
+    public get planBWeek(): boolean {
+        return !!this.state.week.blockbuster;
+    }
+
     // The target came off the block: alliances with a plan B on the block switch to it.
     private planB() {
         const s = this.state;
+        if (!this.planBWeek) return;
         const block = (s.week.nomineeIds || []).filter((id) => !this.player(id).isEvicted);
         if (block.length === 0) return;
         fallBackToPlanB(s.gameState, s.book, block).forEach(({ alliance, from, to }) =>
@@ -1131,8 +1137,7 @@ export class PlayerModeController {
         if (humans.length === 0) {
             // nobody's playing, but everyone can watch: the results come in from last place up.
             // A tie for first goes to the tiebreaker, like any other.
-            const top = Math.max(...bots.map((r) => r.score));
-            const tiedIds = bots.filter((r) => r.score === top).map((r) => r.id);
+            const tiedIds = tiedForFirst(comp, bots);
             const tie = tiedIds.length > 1;
             this.show({
                 kind: "compResults",
@@ -1153,8 +1158,7 @@ export class PlayerModeController {
             if (i >= humans.length) {
                 // any tie for first goes to a tiebreaker question
                 const results = [...bots, ...humanResults];
-                const top = Math.max(...results.map((r) => r.score));
-                const tiedIds = results.filter((r) => r.score === top).map((r) => r.id);
+                const tiedIds = tiedForFirst(comp, results);
                 const tiebreak = tiedIds.length > 1;
                 this.show({
                     kind: "compResults",
@@ -2405,7 +2409,7 @@ export class PlayerModeController {
         const a = getAlliance(s.book, allianceId);
         if (!a || a.met) return [];
         a.suggestions[actor.id] = targetId;
-        a.backupSuggestions = { ...(a.backupSuggestions || {}), [actor.id]: backupId !== targetId ? backupId : null };
+        a.backupSuggestions = { ...(a.backupSuggestions || {}), [actor.id]: this.planBWeek && backupId !== targetId ? backupId : null };
         a.memberIds.forEach((m) => this.noteRead(actor.id, m)); // alliance time: you get a read on your allies
         const later = this.alivePlayers.slice(s.socialTurn + 1).filter((p) => a.memberIds.includes(p.id));
         if (later.length > 0) {
@@ -2413,7 +2417,7 @@ export class PlayerModeController {
             return [`Your pick is in. ${later.map((p) => p.name).join(" and ")} will weigh in before ${a.name} decides.`];
         }
         this.reseed(`meeting:${a.id}`);
-        const result = this.mutate((gs) => holdMeeting(gs, a, s.humanIds, this.targetBlock(), this.targetExclude()));
+        const result = this.mutate((gs) => holdMeeting(gs, a, s.humanIds, this.targetBlock(), this.targetExclude(), this.planBWeek));
         this.tellAlliance(a, `🤝 ${a.name} met. ${result.lines[result.lines.length - 1]}`, actor.id);
         result.lines.forEach((line) => s.socialLog.push(`🤝 ${line}`));
         if (a.chemistry <= 0) this.dissolve(a);
@@ -2507,7 +2511,7 @@ export class PlayerModeController {
             s.book.alliances
                 .filter((a) => !a.met && aliveMembers(gs, a).length >= 2 && this.allianceTimeOpen())
                 .forEach((a) => {
-                    const result = holdMeeting(gs, a, s.humanIds, this.targetBlock());
+                    const result = holdMeeting(gs, a, s.humanIds, this.targetBlock(), [], this.planBWeek);
                     this.tellAlliance(a, `🤝 ${a.name} met without you. ${result.lines[result.lines.length - 1]}`);
                 });
             s.book.alliances.filter((a) => a.chemistry <= 0).forEach((a) => this.dissolve(a));
@@ -2631,7 +2635,7 @@ export class PlayerModeController {
                 s.book.alliances
                     .filter((a) => !a.met && aliveMembers(gs, a).length >= 2)
                     .forEach((a) => {
-                        const result = holdMeeting(gs, a, s.humanIds, undefined, this.targetExclude());
+                        const result = holdMeeting(gs, a, s.humanIds, undefined, this.targetExclude(), this.planBWeek);
                         this.tellAlliance(a, `🤝 ${a.name} met before nominations. ${result.lines[result.lines.length - 1]}`);
                     })
             );

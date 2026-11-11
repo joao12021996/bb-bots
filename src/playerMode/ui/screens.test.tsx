@@ -505,6 +505,31 @@ describe("player mode screens", () => {
         }
     });
 
+    it("a player finalist can answer every jury question, not just the first", () => {
+        const controller = controllerAtSocial();
+        const container = mount(<PlayerModeScreen controller={controller} />);
+        const answered: string[] = [];
+        const ask = (i: number) =>
+            (controller as any).show({
+                kind: "juryQuestion",
+                actorId: 0,
+                jurorId: i + 1,
+                question: { jurorId: i + 1, finalistId: 0, secondhand: false, question: `Question ${i + 1}?` },
+                onAnswer: (a: string) => {
+                    answered.push(`${i + 1}:${a}`);
+                    if (i < 2) ask(i + 1);
+                },
+            });
+        act(() => ask(0));
+        for (let i = 0; i < 3; i++) {
+            expect(container.textContent).toContain(`Question ${i + 1}?`);
+            const button = Array.from(container.querySelectorAll("button")).find((b) => b.textContent!.includes("Talk up"))!;
+            expect(button.disabled).toBe(false);
+            act(() => button.click());
+        }
+        expect(answered).toEqual(["1:own", "2:own", "3:own"]);
+    });
+
     it("every scene in a season can be continued with its own Continue button (the finale used to get stuck)", () => {
         const { rankResults } = require("../comps/compRunner");
         for (const humanId of [0, 3]) {

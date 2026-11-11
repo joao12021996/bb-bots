@@ -198,7 +198,7 @@ export const MemoryWallComp: CompDefinition = {
     name: "Who Had What",
     emoji: "🧠",
     kind: "memory",
-    rules: `Houseguests appear with a mystery item each. You have ${STUDY_SECONDS} seconds to memorize who had what, then answer ${QUESTIONS} questions. Most right answers wins; ties go to whoever answered fastest.`,
+    rules: `Houseguests appear with a mystery item each. You have ${STUDY_SECONDS} seconds to memorize who had what, then answer ${QUESTIONS} questions. Most right answers wins; ties go to a tiebreaker.`,
     maxSeconds: 180,
     Component: MemoryWall,
     simulate: simulateMemoryWall,

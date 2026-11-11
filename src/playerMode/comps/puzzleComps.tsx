@@ -125,7 +125,7 @@ export const ScrambleComp: CompDefinition = {
     name: "Word Scramble",
     emoji: "🔤",
     kind: "skill",
-    rules: `Unscramble ${SCRAMBLE_WORDS} reality show words by tapping the letters in order. Skip any you can't get. Most words solved wins; ties go to the fastest.`,
+    rules: `Unscramble ${SCRAMBLE_WORDS} reality show words by tapping the letters in order. Skip any you can't get. Most words solved wins; ties go to a tiebreaker.`,
     maxSeconds: 180,
     Component: Scramble,
     simulate: simulateScramble,

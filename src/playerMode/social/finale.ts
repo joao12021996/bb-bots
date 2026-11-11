@@ -136,24 +136,30 @@ export function botOwns(p: PersonalityId | undefined, moves: Move[]): string[] {
 }
 
 // Each bot juror asks one question: about what they hold against a finalist most, or a general one.
+// Every juror questions both finalists: about what they hold against them if there's something to ask, a general
+// question otherwise. The finalist they hold the most against goes first.
+const GENERAL: ((other: string) => string)[] = [
+    (other) => `Why do you deserve to win more than ${other}?`,
+    () => "What was your best move this season?",
+    () => "Is there one move you regret?",
+    (other) => `What did you do in this game that ${other} didn't?`,
+];
+
 export function juryQuestions(gs: GameState, jury: JuryBook, finalistIds: number[], botJurorIds: number[]): JuryQuestion[] {
     const questions: JuryQuestion[] = [];
-    botJurorIds.forEach((j) => {
-        const worst = [...finalistIds].sort((a, b) => grudgeOf(jury, j, a).amount - grudgeOf(jury, j, b).amount)[0];
-        const g = grudgeOf(jury, j, worst);
-        const asked = g.amount < -0.15 ? g.reasons.map(bareReason).find((r) => ASKING[r.reason]) : undefined;
-        if (asked) {
-            questions.push({ jurorId: j, finalistId: worst, reason: asked.reason, secondhand: asked.secondhand, question: ASKING[asked.reason] });
-        } else if (rand() < 0.5) {
-            const f = finalistIds[Math.floor(rand() * finalistIds.length)];
-            const other = finalistIds.find((id) => id !== f)!;
-            questions.push({
-                jurorId: j,
-                finalistId: f,
-                secondhand: false,
-                question: `Why do you deserve to win more than ${getById(gs, other).name}?`,
-            });
-        }
+    botJurorIds.forEach((j, ji) => {
+        const order = [...finalistIds].sort((a, b) => grudgeOf(jury, j, a).amount - grudgeOf(jury, j, b).amount);
+        order.forEach((f, fi) => {
+            const g = grudgeOf(jury, j, f);
+            const asked = g.amount < -0.15 ? g.reasons.map(bareReason).find((r) => ASKING[r.reason]) : undefined;
+            if (asked) {
+                questions.push({ jurorId: j, finalistId: f, reason: asked.reason, secondhand: asked.secondhand, question: ASKING[asked.reason] });
+                return;
+            }
+            const other = finalistIds.find((id) => id !== f);
+            const general = GENERAL[(ji + fi) % GENERAL.length];
+            questions.push({ jurorId: j, finalistId: f, secondhand: false, question: general(other === undefined ? "the others" : getById(gs, other).name) });
+        });
     });
     return questions;
 }

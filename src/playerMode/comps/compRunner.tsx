@@ -13,6 +13,19 @@ export interface CompResult {
     threw?: boolean; // a bot that lost on purpose
 }
 
+// Everyone tied for first. A tie is what the houseguests see: scores that read the same (the same number right,
+// the same rounded time) are tied, even if a hidden time bonus would split them. Endurance comps are last one
+// standing: whoever outlasts the rest wins, however close it was, so only an exactly equal score ties there.
+export function tiedForFirst(comp: { format: (score: number) => string; kind?: string }, results: CompResult[]): number[] {
+    if (results.length === 0) return [];
+    const top = Math.max(...results.map((r) => r.score));
+    const shown = comp.format(top);
+    const exact = comp.kind === "endurance";
+    const tied = results.filter((r) => r.score === top || (!exact && comp.format(r.score) === shown));
+    // the best score first, so a lone winner is tied[0]
+    return tied.sort((a, b) => b.score - a.score).map((r) => r.id);
+}
+
 // Ranks results best first. Nobody wins a tie for free: a tie for first goes to a tiebreaker.
 export function rankResults(results: CompResult[], _humanIds: number[] = []): CompResult[] {
     return [...results].sort((a, b) => b.score - a.score);

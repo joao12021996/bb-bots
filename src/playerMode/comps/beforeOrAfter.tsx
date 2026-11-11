@@ -201,7 +201,7 @@ export const BeforeOrAfterComp: CompDefinition = {
     emoji: "❓",
     kind: "quiz",
     finaleOnly: true,
-    rules: `How well do you know this season? Answer up to ${MAX_QUESTIONS} questions about past HoHs, vetoes, nominations and evictions. ${SECONDS_PER_QUESTION} seconds per question. Most right answers wins; ties go to the fastest.`,
+    rules: `How well do you know this season? Answer up to ${MAX_QUESTIONS} questions about past HoHs, vetoes, nominations and evictions. ${SECONDS_PER_QUESTION} seconds per question. Most right answers wins; ties go to a tiebreaker.`,
     maxSeconds: MAX_QUESTIONS * SECONDS_PER_QUESTION + 15,
     Component: BeforeOrAfter,
     simulate: simulateBeforeOrAfter,

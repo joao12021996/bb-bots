@@ -1095,7 +1095,9 @@ describe("tiebreaker", () => {
         controller.prompt$.subscribe((p) => (prompt = p));
         let winner = -1;
         const seen: string[] = [];
-        (controller as any).runComp("HoH", WEEKLY_COMPS[0], ids.map((id) => controller.player(id)), (id: number) => (winner = id));
+        // plain scores: what you see is the score, so only equal scores tie
+        const comp = { ...WEEKLY_COMPS[0], format: (sc: number) => `${sc}` };
+        (controller as any).runComp("HoH", comp, ids.map((id) => controller.player(id)), (id: number) => (winner = id));
         for (let guard = 0; guard < 50 && winner < 0; guard++) {
             const p = prompt as unknown as Prompt;
             seen.push(p.kind);
@@ -2207,6 +2209,8 @@ describe("final two speeches and jury questions", () => {
         expect(q7.finalistId).toBe(1);
         expect(q7.question).toContain("wasn't the target");
         expect(qs.find((q) => q.jurorId === 8)!.secondhand).toBe(true);
+        // every juror questions both finalists
+        [7, 8, 9].forEach((j) => expect(qs.filter((q) => q.jurorId === j).map((q) => q.finalistId).sort()).toEqual([1, 2]));
         const effect = (type: any, a: any) => {
             const j = emptyJury();
             answerJuror(gs, j, q7, a, type);
@@ -2397,10 +2401,35 @@ describe("alliances and the block", () => {
         a.target = 5;
         a.backup = 6;
         a.targetWeek = controller.gameState.phase;
+        controller.state.week.blockbuster = true;
         controller.state.week.nomineeIds = [6, 7];
         (controller as any).planB();
         expect(a.target).toBe(6);
         expect(controller.state.news[0].some((n: string) => n.includes("plan B"))).toBe(true);
+    });
+
+    it("plan B only applies in Blockbuster weeks", () => {
+        const gs = house();
+        const book = emptyBook();
+        const a = createAlliance(gs, book, [1, 2, 3], "The Vault");
+        a.suggestions[1] = 6;
+        a.backupSuggestions = { 1: 7 };
+        seedRng("planb");
+        const result = holdMeeting(gs, a, [1], undefined, [], false);
+        expect(result.targetId).not.toBeNull();
+        expect(a.backup).toBeUndefined();
+        expect(result.lines.some((l) => l.includes("Plan B"))).toBe(false);
+        // a leftover plan B doesn't kick in outside a Blockbuster week
+        const controller = new PlayerModeController(newPlayerSave(prepareNextWeek(newGame(10), BigBrotherVanilla), [0]));
+        const b = createAlliance(new MutableGameState(controller.gameState), controller.book, [0, 3], "Duo");
+        b.target = 5;
+        b.backup = 6;
+        b.targetWeek = controller.gameState.phase;
+        controller.state.week.blockbuster = false;
+        controller.state.week.nomineeIds = [6, 7];
+        (controller as any).planB();
+        expect(b.target).toBe(5);
+        expect(controller.planBWeek).toBe(false);
     });
 
     it("alliances convene after the HoH comp, before nominations; the new HoH can't be the target", () => {
@@ -2499,6 +2528,13 @@ describe("watching comps you're not in", () => {
         expect(p.spectating).toBe(true);
         expect(winner).toBe(-1); // nothing happens until they've watched it
         p.onDone(-1);
+        // a tie for first plays out a tiebreaker, to watch as well
+        for (let guard = 0; guard < 20 && winner < 0; guard++) {
+            const next = prompt as unknown as Prompt;
+            if (next.kind === "tiebreakResults") next.onDone();
+            else if (next.kind === "handoff") next.next();
+            else break;
+        }
         expect(bots.map((b) => b.id)).toContain(winner);
     });
 });
