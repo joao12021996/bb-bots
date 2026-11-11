@@ -4,7 +4,7 @@ import { cast$, pushToMainContentStream } from "../../subjects/subjects";
 import { Screens } from "../../components/topbar/topBar";
 import { actorOf, Difficulty, PlayerModeController, PlayerSave, Prompt } from "../playerModeController";
 import { NetSession, NetStatus, SessionOptions, setActiveSession } from "../net/netSession";
-import { cleanRoomCode, joinLink, newRoomCode, openRoom } from "../net/room";
+import { cleanRoomCode, joinLink, newRoomCode, openRoom, parseInvite } from "../net/room";
 import { buildOnlineSeason, defaultSetup, houseOf, maxHouse, minHouse } from "../net/lobby";
 import { inlineBlobImages, readOnlineSave } from "../save/serialize";
 import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
@@ -66,8 +66,9 @@ export function HostOnlineButton(props: { disabled?: boolean }) {
     );
 }
 
-export function showJoinScreen(code?: string) {
-    pushToMainContentStream(<JoinOnline initialCode={code} />, Screens.Ingame);
+// autoJoin: came from an invite link, so go straight in
+export function showJoinScreen(code?: string, autoJoin: boolean = false) {
+    pushToMainContentStream(<JoinOnline initialCode={code} autoJoin={autoJoin} />, Screens.Ingame);
 }
 
 // A `?join=CODE` link: open the join screen with the code filled in.
@@ -108,15 +109,50 @@ function CopyButton(props: { text: string; label: string }) {
     );
 }
 
+// Sends the invite link through the phone's share sheet (WhatsApp, Messages…), or copies it.
+function ShareLinkButton(props: { code: string }) {
+    const [copied, setCopied] = React.useState(false);
+    const link = joinLink(props.code);
+    const canShare = typeof navigator !== "undefined" && typeof (navigator as any).share === "function";
+    return (
+        <button
+            type="button"
+            className="button is-warning"
+            onClick={async () => {
+                if (canShare) {
+                    try {
+                        await (navigator as any).share({ title: "Houseguest Bots", text: "Join my Houseguest Bots season!", url: link });
+                        return;
+                    } catch (e) {
+                        // cancelled, or not allowed: copy it instead
+                    }
+                }
+                try {
+                    await navigator.clipboard.writeText(link);
+                    setCopied(true);
+                } catch (e) {
+                    // no clipboard: the link is on screen to copy by hand
+                }
+            }}
+        >
+            {copied ? "✓ Link copied: send it to your friends" : canShare ? "📤 Share invite link" : "🔗 Copy invite link"}
+        </button>
+    );
+}
+
+// How friends get in: a link that drops them straight into the game (the code still works too).
 function RoomCode(props: { code: string }) {
+    const link = joinLink(props.code);
     return (
         <div className="bbb-room-code">
-            <span>Room code</span>
-            <b>{props.code}</b>
+            <span>Send friends this link: opening it puts them straight in the game</span>
+            <input className="input bbb-invite-link" type="text" readOnly value={link} onFocus={(e) => e.target.select()} />
             <div className="bbb-room-actions">
-                <CopyButton text={props.code} label="📋 Copy code" />
-                <CopyButton text={joinLink(props.code)} label="🔗 Copy invite link" />
+                <ShareLinkButton code={props.code} />
             </div>
+            <span className="bbb-room-fallback">
+                or join from the start screen with code <b>{props.code}</b> <CopyButton text={props.code} label="📋" />
+            </span>
         </div>
     );
 }
@@ -404,9 +440,10 @@ function SeatPicker(props: { session: NetSession; status: NetStatus }) {
 
 // ---------- joining ----------
 
-export function JoinOnline(props: { initialCode?: string }) {
+export function JoinOnline(props: { initialCode?: string; autoJoin?: boolean }) {
     const saved = readOnlineSave();
-    const [code, setCode] = React.useState(props.initialCode || "");
+    const [text, setText] = React.useState(props.initialCode || "");
+    const code = parseInvite(text);
     const [session, setSession] = React.useState<NetSession | null>(null);
     const [error, setError] = React.useState<string | null>(null);
     const [busy, setBusy] = React.useState(false);
@@ -426,14 +463,34 @@ export function JoinOnline(props: { initialCode?: string }) {
         setBusy(false);
     };
 
+    // opened from an invite link: join right away (rejoining if it's the season this device was playing)
+    const autoJoined = React.useRef(false);
+    React.useEffect(() => {
+        if (!props.autoJoin || autoJoined.current || code.length !== 6) return;
+        autoJoined.current = true;
+        join(code, !!saved && saved.code === code);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     if (session) return <OnlineLobby session={session} />;
     const valid = code.length === 6;
+    if (props.autoJoin && valid && !error) {
+        return (
+            <Panel>
+                <div className="bbb-hero small">
+                    <div className="bbb-hero-kicker">Online season</div>
+                    <Title>Joining the game…</Title>
+                    <Subtle>Connecting to your friends. This takes a few seconds.</Subtle>
+                </div>
+            </Panel>
+        );
+    }
     return (
         <Panel>
             <div className="bbb-hero small">
                 <div className="bbb-hero-kicker">Online season</div>
                 <Title>Join a game</Title>
-                <Subtle>Enter the room code from the host's screen.</Subtle>
+                <Subtle>Paste the invite link your host sent you, or type the room code from their screen.</Subtle>
             </div>
             <form
                 className="bbb-add-yourself"
@@ -443,19 +500,19 @@ export function JoinOnline(props: { initialCode?: string }) {
                 }}
             >
                 <input
-                    className="input bbb-code-input"
+                    className="input"
                     type="text"
-                    inputMode="text"
-                    autoCapitalize="characters"
+                    inputMode="url"
                     autoComplete="off"
-                    placeholder="ABC123"
-                    value={code}
-                    onChange={(e) => setCode(cleanRoomCode(e.target.value))}
+                    placeholder="Invite link or code (ABC123)"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
                 />
                 <button type="submit" className="button is-warning" disabled={!valid || busy}>
                     {busy ? "Connecting…" : "Join"}
                 </button>
             </form>
+            {text.trim() && !valid && <Subtle>That doesn't look like an invite link or a 6-letter code.</Subtle>}
             {saved && saved.code !== code && (
                 <p style={{ marginTop: 12 }}>
                     <button type="button" className="button is-light" disabled={busy} onClick={() => join(saved.code, true)}>
@@ -478,7 +535,7 @@ export function OnlineBar(props: { session: NetSession; controller: PlayerModeCo
         <div className="bbb-online-bar">
             <span>
                 🌐 <b>{status.code}</b>
-                {status.isHost && " · 👑 host"}
+                {status.isHost && " · 👑 host"} <CopyButton text={joinLink(status.code)} label="🔗 invite link" />
             </span>
             <span className="bbb-online-players">
                 {status.slots.map((slot) => {

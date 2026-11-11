@@ -32,6 +32,12 @@ export function cleanRoomCode(text: string): string {
         .slice(0, 6);
 }
 
+// The room code in whatever someone pasted: an invite link (…?join=ABC123) or the code itself.
+export function parseInvite(text: string): string {
+    const match = /[?&#]join=([A-Za-z0-9]+)/.exec(text);
+    return cleanRoomCode(match ? match[1] : text);
+}
+
 export function joinLink(code: string): string {
     const { origin, pathname } = window.location;
     return `${origin}${pathname}?join=${code}`;

@@ -47,7 +47,7 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
             } catch (e) {
                 // fine: the link just stays in the address bar
             }
-            setTimeout(() => showJoinScreen(code), 0);
+            setTimeout(() => showJoinScreen(code, true), 0);
         }
     }
 

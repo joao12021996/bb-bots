@@ -1701,3 +1701,19 @@ input[type="number"] {
 .bbb-lobby-settings {
     margin: 8px auto;
 }
+.bbb-invite-link {
+    margin: 6px 0 10px;
+    text-align: center;
+    font-size: 0.85rem;
+}
+.bbb-room-code .bbb-room-fallback {
+    margin-top: 10px;
+    font-size: 0.8rem;
+}
+.bbb-room-code .bbb-room-fallback b {
+    display: inline;
+    font-size: inherit;
+    letter-spacing: 0.1em;
+    margin: 0;
+    color: var(--bbb-text);
+}
