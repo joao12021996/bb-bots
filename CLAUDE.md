@@ -2,7 +2,7 @@
 
 ## Tests
 
-The full jest suite is very slow (over 10 minutes), so don't run all of it after every change.
+The full jest suite takes about 3 minutes (playerMode.test.tsx ~170s, netSession.test.tsx ~100s), so don't run all of it after every change.
 
 - Run only the test file(s) that cover the code you changed, e.g.
   `CI=true npx react-scripts test --watchAll=false src/playerMode/comps`
