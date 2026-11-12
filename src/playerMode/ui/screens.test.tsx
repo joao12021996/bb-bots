@@ -16,7 +16,7 @@ import { JuryReveal } from "./finaleScreens";
 import { HouseWall } from "./houseWall";
 import { CompResults } from "../comps/compRunner";
 import { FactOrFictionComp } from "../comps/houseComps";
-import { FindTheKeyComp } from "../comps/memoryComps";
+import { FindTheKeyComp, KNOCKOUT_ROUNDS } from "../comps/memoryComps";
 import { seededRand } from "../comps/random";
 import { useQuizClock } from "../comps/compUi";
 
@@ -457,7 +457,7 @@ describe("player mode screens", () => {
         }
     });
 
-    it("find the key: the boxes shuffle and then you can pick one (it used to get stuck)", async () => {
+    it("find the key: the boxes shuffle, you pick one, and it goes on until you miss (it used to get stuck)", async () => {
         jest.useFakeTimers();
         try {
             const controller = controllerAtSocial();
@@ -490,14 +490,15 @@ describe("player mode screens", () => {
             const lifts = Array.from(c.querySelectorAll("button[aria-label^='Box']")).map((b) => (b as HTMLElement).style.transform);
             expect(lifts.some((t) => t.includes("translateY(-62px)"))).toBe(true);
             expect(lifts.some((t) => t.includes("translateY(62px)"))).toBe(true);
-            await wait((4 * 600) - 100);
-            for (let round = 1; round <= 5; round++) {
-                if (round > 1) await wait(1300 + (4 + (round - 1) * 2) * 600);
-                expect(c.textContent).toContain("Which box has the key?");
+            // one wrong box and you're out; get through every round and it's a speed score
+            for (let round = 1; round <= KNOCKOUT_ROUNDS; round++) {
+                for (let t = 0; t < 400 && !c.textContent!.includes("Which box has the key?"); t++) await wait(100);
+                expect(c.textContent).toContain(`Round ${round} of ${KNOCKOUT_ROUNDS}`);
                 const box = c.querySelector("button[aria-label^='Box']") as HTMLButtonElement;
                 act(() => box.click());
                 expect(c.textContent).toMatch(/You found it!|Wrong box!/);
-                click(c, round < 5 ? "Next question" : "See how I did");
+                await wait(1100);
+                if (finished.length) break;
             }
             expect(finished.length).toBe(1);
         } finally {

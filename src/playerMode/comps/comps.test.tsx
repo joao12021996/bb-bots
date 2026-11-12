@@ -314,6 +314,28 @@ describe("ties", () => {
         // both lasted the full time: that's a real tie
         expect(tiedForFirst(wall, [{ id: 1, score: 300 }, { id: 2, score: 300 }])).toEqual([1, 2]);
     });
+
+    it("memory knockouts: getting through every round beats missing, and the fastest of those wins", () => {
+        const { tiedForFirst } = require("./compRunner");
+        const { speedScore, KNOCKOUT_ROUNDS } = require("./memoryComps");
+        const key = ALL_COMPS.find((c) => c.id === "find-the-key")!;
+        const fast = speedScore(KNOCKOUT_ROUNDS, 8.2);
+        const slow = speedScore(KNOCKOUT_ROUNDS, 11.5);
+        expect(key.format(fast)).toBe(`${KNOCKOUT_ROUNDS} keys found in 8.2s`);
+        expect(key.format(4)).toBe("4 keys found");
+        expect(tiedForFirst(key, [{ id: 1, score: slow }, { id: 2, score: fast }, { id: 3, score: KNOCKOUT_ROUNDS - 1 }])).toEqual([2]);
+        // out in the same round: still a tie, for the tiebreaker
+        expect(tiedForFirst(key, [{ id: 1, score: 6 }, { id: 2, score: 6 }, { id: 3, score: 3 }])).toEqual([1, 2]);
+        // bots never go past the last round
+        const simon = ALL_COMPS.find((c) => c.id === "simon-says")!;
+        const gs = game();
+        const ctx = { seed: 9, gameState: gs, history, participants: nonEvictedHouseguests(gs) };
+        for (let i = 0; i < 50; i++) {
+            const s = simon.simulate(ctx, 1, seededRand(i)).score;
+            expect(s).toBeLessThan(13);
+            if (s > 12) expect(simon.format(s)).toMatch(/^sequence of 12 in \d+\.\ds$/);
+        }
+    });
 });
 
 describe("the score between stages", () => {

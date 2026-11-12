@@ -1,24 +1,58 @@
 import React from "react";
 import { Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
-import { AnswerReveal, guessFrom, KnockoutPause, Keypad, Reveal, revealRows, sleep, rightSoFar, sumSoFar, useQuizClock, useRivalsPlaying } from "./compUi";
+import { AnswerReveal, guessFrom, KnockoutPause, Keypad, Reveal, revealRows, sleep, sumSoFar, useRivalsPlaying } from "./compUi";
 import { chance, clamp, gaussian, pick, Rand, randInt, sample, seededRand, shuffled } from "./random";
 
 const EMOJIS = ["🍕", "🎸", "👑", "🔑", "🐍", "💎", "🎲", "🧸", "🍩", "🚀", "🌵", "🎩"];
 
+// ---------------- memory knockouts ----------------
+// Simon Says, Digit Span and Find the Key keep going until you make a mistake: the last one standing wins.
+// After KNOCKOUT_ROUNDS rounds it stops, and whoever got through every round fastest wins: their score is the
+// top level plus a bonus for speed (only the time spent answering counts, not the time spent watching).
+
+export const KNOCKOUT_ROUNDS = 10;
+const SPEED_SCALE = 1000; // seconds: the bonus is (SPEED_SCALE - seconds) / SPEED_SCALE, between 0 and 1
+
+export function speedScore(top: number, seconds: number): number {
+    return top + (SPEED_SCALE - clamp(seconds, 0, SPEED_SCALE - 1)) / SPEED_SCALE;
+}
+
+// The seconds a speed score stands for (only for scores above `top`).
+export function speedSeconds(top: number, score: number): number {
+    return (top + 1 - score) * SPEED_SCALE;
+}
+
+function formatKnockout(score: number, top: number, what: (n: number) => string): string {
+    return score > top ? `${what(top)} in ${speedSeconds(top, score).toFixed(1)}s` : what(score);
+}
+
+// How long a bot takes to answer every round: `units` is the work in each round (taps, digits, picks).
+function botSeconds(noise: Rand, skill: number, units: number[], perUnit: number, perRound = 0): number {
+    const pace = perUnit * (0.75 + 0.9 * (1 - skill)) * clamp(1 + 0.12 * gaussian(noise), 0.7, 1.4);
+    return units.reduce((total, u) => total + u * pace + perRound, 0);
+}
+
+// The level in each of the rounds, starting from `first`.
+const levels = (first: number) => Array.from({ length: KNOCKOUT_ROUNDS }, (_, i) => first + i);
+
 // ---------------- Simon Says ----------------
 
 const PADS = ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f"];
+const SIMON_FIRST = 3; // the first sequence
+const SIMON_TOP = SIMON_FIRST + KNOCKOUT_ROUNDS - 1;
 
 function SimonSays(props: CompProps) {
     const rivals = useRivalsPlaying(); // online: other players still playing
     const [sequence] = React.useState(() => Array.from({ length: 40 }, () => randInt(props.rand, 0, 3)));
-    const [level, setLevel] = React.useState(3);
+    const [level, setLevel] = React.useState(SIMON_FIRST);
     const [lit, setLit] = React.useState<number | null>(null);
     const [showing, setShowing] = React.useState(true);
     const [input, setInput] = React.useState(0);
     const [cleared, setCleared] = React.useState<number | null>(null); // between rounds: who's out
     const alive = React.useRef(true);
+    const turnStart = React.useRef(0);
+    const answering = React.useRef(0); // seconds spent tapping, all rounds together
 
     React.useEffect(() => () => void (alive.current = false), []);
     React.useEffect(() => {
@@ -34,6 +68,7 @@ function SimonSays(props: CompProps) {
                 await sleep(160);
             }
             if (!cancelled) {
+                turnStart.current = performance.now();
                 setShowing(false);
                 setInput(0);
             }
@@ -52,6 +87,11 @@ function SimonSays(props: CompProps) {
             return;
         }
         if (input + 1 === level) {
+            answering.current += (performance.now() - turnStart.current) / 1000;
+            if (level >= SIMON_TOP) {
+                props.finish(speedScore(SIMON_TOP, answering.current));
+                return;
+            }
             props.report(level);
             if (props.opponents.length > 0 || rivals) {
                 if (props.pauseClock) props.pauseClock(true);
@@ -67,7 +107,7 @@ function SimonSays(props: CompProps) {
             <KnockoutPause
                 opponents={props.opponents}
                 cleared={cleared}
-                first={cleared === 3}
+                first={cleared === SIMON_FIRST}
                 what={(n) => `sequence of ${n}`}
                 onNext={() => {
                     if (props.pauseClock) props.pauseClock(false);
@@ -79,7 +119,9 @@ function SimonSays(props: CompProps) {
     }
     return (
         <div>
-            <Title>Sequence of {level}</Title>
+            <Title>
+                Round {level - SIMON_FIRST + 1} of {KNOCKOUT_ROUNDS}: sequence of {level}
+            </Title>
             <Subtle>{showing ? "Watch closely…" : `Your turn: ${input}/${level}`}</Subtle>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, width: "min(80vw, 300px)", margin: "0 auto" }}>
                 {PADS.map((c, i) => (
@@ -104,8 +146,10 @@ function SimonSays(props: CompProps) {
 }
 
 function simulateSimonSays(_ctx: SimContext, skill: number, noise: Rand): SimResult {
-    // the longest sequence this bot repeats correctly
-    return { score: clamp(Math.round(2 + 10 * skill + 1.5 * gaussian(noise)), 0, 39) };
+    // the longest sequence this bot repeats correctly; get through them all and it's how fast they tapped
+    const best = clamp(Math.round(2 + 10 * skill + 1.5 * gaussian(noise)), 0, 39);
+    if (best < SIMON_TOP) return { score: best };
+    return { score: speedScore(SIMON_TOP, botSeconds(noise, skill, levels(SIMON_FIRST), 0.45)) };
 }
 
 export const SimonSaysComp: CompDefinition = {
@@ -113,12 +157,12 @@ export const SimonSaysComp: CompDefinition = {
     name: "Simon Says",
     emoji: "🟩",
     kind: "memory",
-    rules: "Watch the pads light up, then tap them back in the same order. Each round adds one more. One mistake and you're out. The longest sequence wins.",
+    rules: `Watch the pads light up, then tap them back in the same order. Each round adds one more. One mistake and you're out: the last one standing wins. Get through all ${KNOCKOUT_ROUNDS} rounds and the fastest tapper wins.`,
     maxSeconds: 180,
     Component: SimonSays,
     simulate: simulateSimonSays,
     botScore: (p) => 2 + Math.round(10 * p),
-    format: (s) => `sequence of ${s}`,
+    format: (s) => formatKnockout(s, SIMON_TOP, (n) => `sequence of ${n}`),
     staged: true,
 };
 
@@ -252,23 +296,36 @@ export const ConcentrationComp: CompDefinition = {
 
 // ---------------- Digit Span ----------------
 
+const DIGITS_FIRST = 4; // the first number's length
+const DIGITS_TOP = DIGITS_FIRST + KNOCKOUT_ROUNDS - 1;
+
 function DigitSpan(props: CompProps) {
     const rivals = useRivalsPlaying(); // online: other players still playing
-    const [length, setLength] = React.useState(4);
-    const [digits, setDigits] = React.useState(() => Array.from({ length: 4 }, () => randInt(props.rand, 0, 9)).join(""));
+    const [length, setLength] = React.useState(DIGITS_FIRST);
+    const [digits, setDigits] = React.useState(() => Array.from({ length: DIGITS_FIRST }, () => randInt(props.rand, 0, 9)).join(""));
     const [phase, setPhase] = React.useState<"show" | "enter">("show");
     const [value, setValue] = React.useState("");
     const [cleared, setCleared] = React.useState<number | null>(null); // between rounds: who's out
+    const turnStart = React.useRef(0);
+    const answering = React.useRef(0); // seconds spent typing, all rounds together
 
     React.useEffect(() => {
         if (phase !== "show") return;
-        const t = setTimeout(() => setPhase("enter"), 700 + length * 550);
+        const t = setTimeout(() => {
+            turnStart.current = performance.now();
+            setPhase("enter");
+        }, 700 + length * 550);
         return () => clearTimeout(t);
     }, [phase, length]);
 
     const submit = () => {
         if (value !== digits) {
             props.finish(length - 1);
+            return;
+        }
+        answering.current += (performance.now() - turnStart.current) / 1000;
+        if (length >= DIGITS_TOP) {
+            props.finish(speedScore(DIGITS_TOP, answering.current));
             return;
         }
         props.report(length);
@@ -290,7 +347,7 @@ function DigitSpan(props: CompProps) {
             <KnockoutPause
                 opponents={props.opponents}
                 cleared={cleared}
-                first={cleared === 4}
+                first={cleared === DIGITS_FIRST}
                 what={(n) => `${n} digits`}
                 onNext={() => {
                     if (props.pauseClock) props.pauseClock(false);
@@ -303,7 +360,9 @@ function DigitSpan(props: CompProps) {
 
     return (
         <div>
-            <Title>{length} digits</Title>
+            <Title>
+                Round {length - DIGITS_FIRST + 1} of {KNOCKOUT_ROUNDS}: {length} digits
+            </Title>
             {phase === "show" ? (
                 <div style={{ fontSize: "3rem", fontFamily: "monospace", letterSpacing: 6, margin: "24px 0" }}>{digits}</div>
             ) : (
@@ -317,7 +376,9 @@ function DigitSpan(props: CompProps) {
 }
 
 function simulateDigitSpan(_ctx: SimContext, skill: number, noise: Rand): SimResult {
-    return { score: clamp(Math.round(4 + 6 * skill + gaussian(noise)), 3, 15) };
+    const best = clamp(Math.round(4 + 6 * skill + gaussian(noise)), 3, 15);
+    if (best < DIGITS_TOP) return { score: best };
+    return { score: speedScore(DIGITS_TOP, botSeconds(noise, skill, levels(DIGITS_FIRST), 0.4, 0.8)) };
 }
 
 export const DigitSpanComp: CompDefinition = {
@@ -325,12 +386,12 @@ export const DigitSpanComp: CompDefinition = {
     name: "Digit Span",
     emoji: "🔟",
     kind: "memory",
-    rules: "A number flashes on screen. Type it back from memory. Each round adds a digit, and one mistake ends your run. The longest number wins.",
+    rules: `A number flashes on screen. Type it back from memory. Each round adds a digit, and one mistake ends your run: the last one standing wins. Get through all ${KNOCKOUT_ROUNDS} rounds and the fastest typist wins.`,
     maxSeconds: 180,
     Component: DigitSpan,
     simulate: simulateDigitSpan,
     botScore: (p) => 4 + Math.round(6 * p),
-    format: (s) => `${s} digits`,
+    format: (s) => formatKnockout(s, DIGITS_TOP, (n) => `${n} digits`),
     staged: true,
 };
 
@@ -452,24 +513,26 @@ export const CountEmComp: CompDefinition = {
 
 // ---------------- Find the Key ----------------
 
-const KEY_ROUNDS = 5;
 const SLOTS = 3;
 
 function FindTheKey(props: CompProps) {
+    const rivals = useRivalsPlaying(); // online: other players still playing
     const [round, setRound] = React.useState(0);
     const [slots, setSlots] = React.useState([0, 1, 2]); // slots[cup] = position
     const [keyCup, setKeyCup] = React.useState(0);
     const [phase, setPhase] = React.useState<"reveal" | "shuffle" | "pick" | "result">("reveal");
     const [picked, setPicked] = React.useState<number | null>(null);
-    const [correct, setCorrect] = React.useState(0);
-    const [reveal, setReveal] = React.useState<Reveal | null>(null);
+    const [cleared, setCleared] = React.useState<number | null>(null); // between rounds: who's out
     // during a swap, one box lifts over the top (-1) and the other dips underneath (+1), so they never
     // slide through each other and you can always follow the one with the key
     const [lift, setLift] = React.useState([0, 0, 0]);
     const [stepMs, setStepMs] = React.useState(180);
-    const { rand, report, finish, recordAnswer, pauseClock } = props;
-    const clock = useQuizClock(pauseClock);
+    const alive = React.useRef(true);
+    const turnStart = React.useRef(0);
+    const answering = React.useRef(0); // seconds spent picking, all rounds together
+    const { rand, report, finish, pauseClock, opponents } = props;
 
+    React.useEffect(() => () => void (alive.current = false), []);
     // One round: show the key, shuffle, then let the player pick. This runs once per round. (It used to
     // re-run on every phase change, which cancelled the shuffle after one swap and left the round stuck.)
     React.useEffect(() => {
@@ -513,7 +576,10 @@ function FindTheKey(props: CompProps) {
                 setLift([0, 0, 0]);
                 await sleep(step);
             }
-            if (!cancelled) setPhase("pick");
+            if (!cancelled) {
+                turnStart.current = performance.now();
+                setPhase("pick");
+            }
         })();
         return () => {
             cancelled = true;
@@ -522,36 +588,45 @@ function FindTheKey(props: CompProps) {
 
     const choose = (cup: number) => {
         if (phase !== "pick") return;
+        answering.current += (performance.now() - turnStart.current) / 1000;
         setPicked(cup);
-        const right = cup === keyCup;
-        const c = correct + (right ? 1 : 0);
-        setCorrect(c);
-        report(c);
-        if (recordAnswer) recordAnswer(round, right);
         setPhase("result");
-        clock.pause();
-        setReveal({
-            index: round,
-            verdict: right ? "🔑 You found it!" : "📦 Wrong box!",
-            correctText: "the box with the key",
-            rows: revealRows(props, round, { correct: right, answer: right ? "found it" : "wrong box" }, (ok) =>
-                ok ? "found it" : "wrong box"
-            ),
-        });
+        const right = cup === keyCup;
+        const done = round + (right ? 1 : 0); // rounds got through
+        if (right) report(done);
+        // a moment to see where the key was, then on
+        setTimeout(() => {
+            if (!alive.current) return;
+            if (!right) finish(done);
+            else if (done >= KNOCKOUT_ROUNDS) finish(speedScore(KNOCKOUT_ROUNDS, answering.current));
+            else if (opponents.length > 0 || rivals) {
+                if (pauseClock) pauseClock(true);
+                setCleared(done);
+            } else setRound(done);
+        }, 1000);
     };
 
-    const next = () => {
-        setReveal(null);
-        clock.resume();
-        if (round + 1 >= KEY_ROUNDS) finish(correct);
-        else setRound(round + 1);
-    };
+    if (cleared !== null) {
+        return (
+            <KnockoutPause
+                opponents={opponents}
+                cleared={cleared}
+                first={cleared === 1}
+                what={(n) => `key in round ${n}`}
+                onNext={() => {
+                    if (pauseClock) pauseClock(false);
+                    setCleared(null);
+                    setRound(cleared);
+                }}
+            />
+        );
+    }
 
     const showKey = phase === "reveal" || phase === "result";
     return (
         <div>
             <Title>
-                Round {round + 1} of {KEY_ROUNDS}, found {correct}
+                Round {round + 1} of {KNOCKOUT_ROUNDS}
             </Title>
             <Subtle>
                 {phase === "reveal"
@@ -562,7 +637,7 @@ function FindTheKey(props: CompProps) {
                     ? "Which box has the key?"
                     : picked === keyCup
                     ? "You found it!"
-                    : "Wrong box!"}
+                    : "Wrong box! You're out."}
             </Subtle>
             <div style={{ position: "relative", height: 250, width: "min(90vw, 360px)", margin: "0 auto" }}>
                 {[0, 1, 2].map((cup) => (
@@ -599,19 +674,19 @@ function FindTheKey(props: CompProps) {
                     </button>
                 ))}
             </div>
-            {reveal && <AnswerReveal reveal={reveal} last={round + 1 >= KEY_ROUNDS} onNext={next} />}
         </div>
     );
 }
 
 function simulateFindTheKey(_ctx: SimContext, skill: number, noise: Rand): SimResult {
-    // each round has more and faster shuffles, the same as for players
-    const answers: boolean[] = [];
-    for (let round = 0; round < KEY_ROUNDS; round++) {
-        const p = clamp(0.98 - (1 - skill) * 0.25 - round * 0.08 * (1 - skill), 1 / SLOTS, 0.98);
-        answers.push(chance(noise, p));
+    // each round has more and faster shuffles, the same as for players; one wrong box and they're out
+    let streak = 0;
+    while (streak < KNOCKOUT_ROUNDS) {
+        const p = clamp(0.98 - (1 - skill) * 0.25 - streak * 0.08 * (1 - skill), 1 / SLOTS, 0.98);
+        if (!chance(noise, p)) return { score: streak };
+        streak++;
     }
-    return { score: answers.filter(Boolean).length, answers };
+    return { score: speedScore(KNOCKOUT_ROUNDS, botSeconds(noise, skill, levels(1).map(() => 1), 1.0)) };
 }
 
 export const FindTheKeyComp: CompDefinition = {
@@ -619,11 +694,11 @@ export const FindTheKeyComp: CompDefinition = {
     name: "Find the Key",
     emoji: "🔑",
     kind: "memory",
-    rules: `A key goes in one of three boxes, then the boxes shuffle. Pick the box with the key. ${KEY_ROUNDS} rounds, and the shuffles get faster. Most keys found wins.`,
-    maxSeconds: 120,
+    rules: `A key goes in one of three boxes, then the boxes shuffle. Pick the box with the key. One wrong box and you're out: the last one standing wins. The shuffles get faster every round, and if anyone gets through all ${KNOCKOUT_ROUNDS}, the fastest picker wins.`,
+    maxSeconds: 240,
     Component: FindTheKey,
     simulate: simulateFindTheKey,
-    botScore: (p) => Math.round(1 + 4 * p),
-    format: (s) => `${s} of ${KEY_ROUNDS} found`,
-    progress: (r, n) => rightSoFar(r, n),
+    botScore: (p) => Math.round(1 + 8 * p),
+    format: (s) => formatKnockout(s, KNOCKOUT_ROUNDS, (n) => `${n} ${n === 1 ? "key" : "keys"} found`),
+    staged: true,
 };
