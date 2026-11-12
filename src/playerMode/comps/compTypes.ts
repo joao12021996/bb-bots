@@ -78,6 +78,7 @@ export interface CompDefinition {
     maxSeconds: number; // hard cap enforced by the CompRunner (always <= 900)
     hideTimer?: boolean; // for comps about judging time: don't show the countdown
     finaleOnly?: boolean; // reserved for the final HoH
+    tiebreakOnly?: boolean; // not a weekly comp: Hide the Veto, which breaks ties now
     Component: React.ComponentType<CompProps>;
     // A bot plays the same instance the players got (same questions, dice, maze...). `skill` is the bot's
     // performance percentile from its Comp score (0 = worst, 1 = best); `noise` is the bot's own seeded randomness.

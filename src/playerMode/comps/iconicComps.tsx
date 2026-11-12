@@ -184,14 +184,14 @@ const SPOT_NAMES = [
     "Taped under the kitchen table",
 ];
 
-interface HidingSpot {
+export interface HidingSpot {
     name: string;
     obvious: number; // 1 (nobody looks here) to 3 (the first place anyone looks)
     searchedAt: number; // 1 = searched first
 }
 
 // The same house for everyone: where the spots are, how obvious each one is, and the order they get searched.
-function hidingSpots(rand: Rand): HidingSpot[] {
+export function hidingSpots(rand: Rand): HidingSpot[] {
     const spots = shuffled(rand, SPOT_NAMES).map((name) => ({ name, obvious: randInt(rand, 1, 3), key: 0 }));
     // obvious spots tend to be torn apart first, but the search is chaos
     spots.forEach((s) => (s.key = rand() * (4 - s.obvious)));
@@ -278,6 +278,7 @@ export const HideAndGoVetoComp: CompDefinition = {
     rules:
         "Everyone hides a veto card somewhere in the house, then the house gets torn apart looking for them. The card found last wins. " +
         "Obvious spots tend to get searched first, but nothing is certain. Share a spot with someone and you'll need a tiebreaker.",
+    tiebreakOnly: true, // it's the tiebreaker now (see hideTiebreak); kept so older saves still load
     maxSeconds: 120,
     Component: HideAndGoVeto,
     simulate: simulateHideAndGoVeto,

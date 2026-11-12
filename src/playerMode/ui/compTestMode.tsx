@@ -5,7 +5,7 @@ import { ALL_COMPS } from "../comps";
 import { CompPlay, CompResult, CompResults, tiedForFirst } from "../comps/compRunner";
 import { CompDefinition, Opponent } from "../comps/compTypes";
 import { seededRand } from "../comps/random";
-import { botGuess, closestGuesses, makeTiebreaker, TiebreakGuess, TiebreakPlay, TiebreakResults } from "../comps/tiebreaker";
+import { botHide, HideTiebreakPlay, HideTiebreakResults, hideOutcome, tiebreakHouse, VetoHide } from "../comps/hideTiebreak";
 import { initialsAvatar } from "./avatar";
 import { BigButton, Panel, Subtle, Title } from "./common";
 
@@ -62,8 +62,8 @@ export function testOpponents(comp: CompDefinition, gs: GameState, history: Week
     return participants.slice(1).map((hg) => ({ hg, ...comp.simulate(ctx, testSkill(seed, hg.id), seededRand(seed * 7 + hg.id)) }));
 }
 
-// A tie for first, as in a season: one closest-number question, again and again until someone wins it.
-type Tiebreak = { ids: number[]; round: number; guesses?: TiebreakGuess[] };
+// A tie for first, as in a season: Hide the Veto, again and again until someone wins it.
+type Tiebreak = { ids: number[]; round: number; hides?: VetoHide[] };
 
 type Game = { comp: CompDefinition; seed: number; gameState: GameState; history: WeekRecord[]; participants: Houseguest[]; opponents: Opponent[] };
 
@@ -91,44 +91,45 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
         setTiebreak(null);
         setGame(null);
     };
-    const question = (g: Game, round: number) => makeTiebreaker(g.seed * 13 + round);
-    const botGuesses = (g: Game, ids: number[], round: number): TiebreakGuess[] =>
+    const house = (g: Game, round: number) => tiebreakHouse(g.seed * 13 + round);
+    const botHides = (g: Game, ids: number[], round: number): VetoHide[] =>
         ids
             .filter((id) => id !== g.participants[0].id)
-            .map((id) => ({ id, guess: botGuess(question(g, round), testSkill(g.seed, id), seededRand(g.seed * 17 + round * 101 + id)) }));
-    // you're not in it: the bots answer straight away, and you see how it went
+            .map((id) => ({ id, spot: botHide(house(g, round), testSkill(g.seed, id), seededRand(g.seed * 17 + round * 101 + id)) }));
+    // you're not in it: the bots hide straight away, and you watch the search
     const startTiebreak = (g: Game, ids: number[], round: number) =>
-        setTiebreak({ ids, round, guesses: ids.includes(g.participants[0].id) ? undefined : botGuesses(g, ids, round) });
+        setTiebreak({ ids, round, hides: ids.includes(g.participants[0].id) ? undefined : botHides(g, ids, round) });
     if (game && tiebreak) {
         const me = game.participants[0];
         const tied = tiebreak.ids.map((id) => game.participants.find((hg) => hg.id === id)!);
-        const q = question(game, tiebreak.round);
-        if (!tiebreak.guesses) {
+        const spots = house(game, tiebreak.round);
+        if (!tiebreak.hides) {
             return (
                 <div className="bbb-test-mode">
-                    <TiebreakPlay
+                    <HideTiebreakPlay
                         key={tiebreak.round}
                         title="🧪 Test mode"
                         player={me}
                         tied={tied}
-                        question={q}
+                        spots={spots}
                         moreToPlay={false}
-                        onGuess={(guess) => setTiebreak({ ...tiebreak, guesses: [{ id: me.id, guess }, ...botGuesses(game, tiebreak.ids, tiebreak.round)] })}
+                        onHide={(spot) => setTiebreak({ ...tiebreak, hides: [{ id: me.id, spot }, ...botHides(game, tiebreak.ids, tiebreak.round)] })}
                     />
                 </div>
             );
         }
-        const closest = closestGuesses(q.answer, tiebreak.guesses);
+        const outcome = hideOutcome(spots, tiebreak.hides);
         return (
             <div className="bbb-test-mode">
-                <TiebreakResults
+                <HideTiebreakResults
+                    key={tiebreak.round}
                     title="🧪 Test mode"
-                    question={q}
+                    spots={spots}
                     tied={tied}
-                    guesses={tiebreak.guesses}
-                    winnerId={closest.length === 1 ? closest[0] : undefined}
+                    hides={tiebreak.hides}
+                    winnerId={outcome.winnerId}
                     humanIds={[me.id]}
-                    onDone={() => (closest.length > 1 ? startTiebreak(game, closest, tiebreak.round + 1) : done())}
+                    onDone={() => (outcome.winnerId === undefined ? startTiebreak(game, outcome.tied, tiebreak.round + 1) : done())}
                 />
             </div>
         );
@@ -207,7 +208,7 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
                 </button>
             </div>
             {KINDS.map(({ kind, label }) => {
-                const comps = ALL_COMPS.filter((c) => c.kind === kind);
+                const comps = ALL_COMPS.filter((c) => c.kind === kind && !c.tiebreakOnly);
                 if (comps.length === 0) return null;
                 return (
                     <div key={kind} className="bbb-test-group">

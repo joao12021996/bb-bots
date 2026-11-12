@@ -569,6 +569,8 @@ function activity(prompt: Prompt): string {
             return `is playing the ${prompt.comp.name}`;
         case "tiebreak":
             return "is answering the tiebreaker";
+        case "hideTiebreak":
+            return "is hiding their veto card";
         case "social":
             return "is having their social time";
         case "alliance":

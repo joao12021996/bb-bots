@@ -73,7 +73,7 @@ export function compById(id: string): CompDefinition {
     return comp;
 }
 
-export const WEEKLY_COMPS = ALL_COMPS.filter((c) => !c.finaleOnly);
+export const WEEKLY_COMPS = ALL_COMPS.filter((c) => !c.finaleOnly && !c.tiebreakOnly);
 
 // Picks a comp for a weekly HoH or veto. Never repeats a comp within a season while unplayed ones remain;
 // only a season longer than the comp library (more than ~13 weeks) falls back to the least recently played.

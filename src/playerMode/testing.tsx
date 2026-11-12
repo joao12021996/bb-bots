@@ -100,6 +100,10 @@ export function answer(controller: PlayerModeController, p: Prompt, strategy: St
         p.onGuess(Math.floor(Math.random() * 200));
     } else if (p.kind === "tiebreakResults") {
         p.onDone();
+    } else if (p.kind === "hideTiebreak") {
+        p.onHide(Math.floor(Math.random() * p.spots.length));
+    } else if (p.kind === "hideResults") {
+        p.onDone();
     } else if (p.kind === "compPlay") {
         const win = humansWin === "random" ? Math.random() < 0.5 : humansWin;
         p.onScore(win ? 1e9 : -1e9);

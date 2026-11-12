@@ -425,7 +425,7 @@ function Standings(props: CompResultsProps) {
                     <div>
                         <div className="bbb-winner-label">⚖️ It's a tie!</div>
                         <div className="bbb-winner-name">{tied.map((id) => byId(id).name).join(" vs ")}</div>
-                        <div>A tiebreaker question will decide it.</div>
+                        <div>A tiebreaker decides it: Hide the Veto.</div>
                     </div>
                 </div>
             ) : (

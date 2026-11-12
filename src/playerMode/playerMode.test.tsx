@@ -11,6 +11,7 @@ import { bestReason, reasonFit } from "./social/pitch";
 import { botPawnTalk, NOMINATION_HIT, nominationHit, settlePawnTalk, tellPawn } from "./social/pawnTalk";
 import { evictionSpeech, makePromise, nominationSpeech, vetoSpeech } from "./social/speeches";
 import { botGuess, closestGuesses, makeTiebreaker } from "./comps/tiebreaker";
+import { botHide, hideOutcome, tiebreakHouse } from "./comps/hideTiebreak";
 import { WineCellarComp } from "./comps/wineCellar";
 import { botSwaps, STRIKES_OUT, TAINTED_WINE_ID } from "./comps/taintedWine";
 import { seededRand } from "./comps/random";
@@ -1000,10 +1001,27 @@ describe("tiebreaker", () => {
         expect(error(0.9)).toBeLessThan(error(0.1));
     });
 
+    it("hide the veto: the card found last wins; cards found together at the end are still tied", () => {
+        const spots = tiebreakHouse(31);
+        expect(tiebreakHouse(31)).toEqual(spots);
+        const at = (n: number) => spots.findIndex((s) => s.searchedAt === n);
+        // three tied: the first two found are out, the last one standing wins
+        expect(hideOutcome(spots, [{ id: 1, spot: at(2) }, { id: 2, spot: at(9) }, { id: 3, spot: at(5) }])).toEqual({ winnerId: 2, tied: [2] });
+        // the last two hid in the same spot: they're found together, and still tied
+        expect(hideOutcome(spots, [{ id: 1, spot: at(7) }, { id: 2, spot: at(7) }, { id: 3, spot: at(1) }])).toEqual({ tied: [1, 2] });
+        // smarter bots stay away from the obvious spots
+        const obvious = (skill: number) => {
+            let total = 0;
+            for (let i = 0; i < 300; i++) total += spots[botHide(spots, skill, seededRand(i + 1))].obvious;
+            return total;
+        };
+        expect(obvious(0.9)).toBeLessThan(obvious(0.1));
+    });
+
     it("a comp that ties for first goes to the tiebreaker (pass-and-play players all max out the comp)", () => {
         const { seen } = playSeason(8, [0, 1], "random", true);
-        expect(seen.has("tiebreak")).toBe(true);
-        expect(seen.has("tiebreakResults")).toBe(true);
+        expect(seen.has("hideTiebreak")).toBe(true);
+        expect(seen.has("hideResults")).toBe(true);
     });
 
     // Runs one comp with fixed results and answers whatever it asks. Returns the prompts seen and the winner.
@@ -1023,27 +1041,27 @@ describe("tiebreaker", () => {
             seen.push(p.kind);
             if (p.kind === "compPlay") p.onScore(scores[p.playerId]);
             else if (p.kind === "compResults") p.onDone(-1);
-            else if (p.kind === "tiebreak") p.onGuess(p.question.answer); // a perfect guess
-            else if (p.kind === "tiebreakResults") p.onDone();
+            else if (p.kind === "hideTiebreak") p.onHide(p.spots.findIndex((s) => s.searchedAt === p.spots.length)); // the spot searched last
+            else if (p.kind === "hideResults") p.onDone();
             else if (p.kind === "handoff") p.next();
         }
         return { seen, winner };
     }
 
     it("no tie, no tiebreaker; any tie for first, players or not, goes to one", () => {
-        expect(compWithResults({ 0: 50, 1: 90, 2: 40 }, [0]).seen).not.toContain("tiebreakResults");
+        expect(compWithResults({ 0: 50, 1: 90, 2: 40 }, [0]).seen).not.toContain("hideResults");
         expect(compWithResults({ 0: 50, 1: 90, 2: 40 }, [0]).winner).toBe(1);
         // two bots tied for first: they go to the tiebreaker, and you watch
         const bots = compWithResults({ 0: 50, 1: 90, 2: 90, 3: 10 }, [0]);
-        expect(bots.seen).toContain("tiebreakResults");
+        expect(bots.seen).toContain("hideResults");
         expect([1, 2]).toContain(bots.winner);
-        // a player tied with a bot no longer wins the tie for free: they win it with a perfect guess
+        // a player tied with a bot no longer wins the tie for free: they hide their veto like everyone else
         const withPlayer = compWithResults({ 0: 90, 1: 90, 2: 40 }, [0]);
-        expect(withPlayer.seen).toContain("tiebreak");
+        expect(withPlayer.seen).toContain("hideTiebreak");
         expect([0, 1]).toContain(withPlayer.winner);
         // a comp nobody's playing in can tie too
         const watched = compWithResults({ 3: 70, 4: 70, 5: 20 }, [0]);
-        expect(watched.seen).toContain("tiebreakResults");
+        expect(watched.seen).toContain("hideResults");
         expect([3, 4]).toContain(watched.winner);
     });
 
@@ -1392,8 +1410,8 @@ describe("deals during endurance", () => {
         for (let seed = 1; seed < 40; seed++) {
             const { controller, play, current } = atTheWall(0, seed);
             // the bot that would outlast everyone makes the offer
-            const best = [...play.opponents].sort((a, b) => b.score - a.score)[0];
-            if (!play.deals!.offerFrom.includes(best.hg.id)) continue;
+            const [best, second] = [...play.opponents].sort((a, b) => b.score - a.score);
+            if (!play.deals || !play.deals.offerFrom.includes(best.hg.id) || second.score === best.score) continue; // a tie goes to the tiebreaker
             play.onDeal!("accept", best.hg.id, 0);
             play.onScore(best.score - 1);
             for (let guard = 0; guard < 20 && current().kind !== "hohVisit"; guard++) answer(controller, current(), "random", true);
@@ -1413,9 +1431,9 @@ describe("iconic comp formats", () => {
 
     it("are in the weekly rotation, and the season quizzes wait until there's a season to ask about", () => {
         const gs = newGame(10);
-        [OtevComp, HideAndGoVetoComp, BBComicsComp, OverOrUnderComp, DaysQuizComp, FaceMorphComp].forEach((c) =>
-            expect(WEEKLY_COMPS).toContain(c)
-        );
+        [OtevComp, BBComicsComp, OverOrUnderComp, DaysQuizComp, FaceMorphComp].forEach((c) => expect(WEEKLY_COMPS).toContain(c));
+        // Hide the Veto is the tiebreaker now, not a weekly comp
+        expect(WEEKLY_COMPS).not.toContain(HideAndGoVetoComp);
         expect(OtevComp.available!(gs, [])).toBe(false);
         expect(OtevComp.available!(gs, history)).toBe(true);
         expect(DaysQuizComp.available!(gs, [])).toBe(false);
@@ -2592,7 +2610,7 @@ describe("watching comps you're not in", () => {
         // a tie for first plays out a tiebreaker, to watch as well
         for (let guard = 0; guard < 20 && winner < 0; guard++) {
             const next = prompt as unknown as Prompt;
-            if (next.kind === "tiebreakResults") next.onDone();
+            if (next.kind === "hideResults") next.onDone();
             else if (next.kind === "handoff") next.next();
             else break;
         }

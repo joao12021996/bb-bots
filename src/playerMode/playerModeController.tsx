@@ -89,6 +89,8 @@ import { botPawnTalk, nominationHit, PawnTalk, settlePawnTalk } from "./social/p
 import { evictionSpeech, nominationSpeech, SpeechResult, SpeechToneId, vetoSpeech } from "./social/speeches";
 import { SpeechTone } from "./ui/speechPrompt";
 import { botGuess, closestGuesses, makeTiebreaker, TiebreakGuess, TiebreakQuestion } from "./comps/tiebreaker";
+import { botHide, hideOutcome, tiebreakHouse, VetoHide } from "./comps/hideTiebreak";
+import { HidingSpot } from "./comps/iconicComps";
 import { DAY_PART, dayLabel, dayOf, totalWeeks, weekStartDay } from "./days";
 import {
     ALL_POWERS,
@@ -407,7 +409,7 @@ export type Prompt =
           comp: CompDefinition;
           participants: Houseguest[];
           results: CompResult[];
-          tiedIds?: number[]; // a tie for first that a tiebreaker question will settle
+          tiedIds?: number[]; // a tie for first that the tiebreaker (Hide the Veto) will settle
           spectating?: boolean; // no players in it: the players watch the results come in
           sealed?: boolean; // a secret Head of House week: the winner stays a secret
           onDone: (winnerId: number) => void;
@@ -422,6 +424,25 @@ export type Prompt =
           heading?: string;
           intro?: string;
           onGuess: (guess: number) => void;
+      }
+    | {
+          kind: "hideTiebreak"; // the tiebreaker: hide your veto card
+          title: string;
+          spots: HidingSpot[];
+          tied: Houseguest[];
+          playerId: number;
+          moreToPlay: boolean;
+          onHide: (spot: number) => void;
+      }
+    | {
+          kind: "hideResults"; // the tiebreaker: the search, and who's left standing
+          title: string;
+          spots: HidingSpot[];
+          tied: Houseguest[];
+          hides: VetoHide[];
+          winnerId?: number; // none: still tied, and they hide again
+          sealed?: boolean; // a secret Head of House week: the winner stays a secret
+          onDone: () => void;
       }
     | {
           kind: "tiebreakResults";
@@ -525,6 +546,7 @@ export function actorOf(prompt: Prompt): number | null {
         case "handoff":
         case "compPlay":
         case "tiebreak":
+        case "hideTiebreak":
             return prompt.playerId;
         case "social":
         case "alliance":
@@ -2023,39 +2045,36 @@ export class PlayerModeController {
         pourTurn(first);
     }
 
-    // The tiebreaker: everyone tied for first answers one closest-number question.
+    // The tiebreaker: everyone tied for first hides a veto card, then the house is searched. The first card found
+    // loses; the last one standing wins. Cards found together at the end hide again.
     private tiebreak(title: string, tiedIds: number[], seed: number, done: (winnerId: number) => void, round: number = 0) {
-        const question = makeTiebreaker(hashcode(`${seed}:tiebreak${round ? `:${round}` : ""}`));
+        const spots = tiebreakHouse(hashcode(`${seed}:hide:${round}`));
         const tied = tiedIds.map((id) => this.player(id));
-        const guesses: TiebreakGuess[] = tied
-            .filter((hg) => !this.isHuman(hg))
-            .map((hg) => ({
-                id: hg.id,
-                guess: botGuess(question, this.botSkill(hg, `${seed}:tiebreak:${round}`), seededRand(hashcode(`${seed}:tiebreak:${round}:${hg.id}`))),
-            }));
+        const botSpot = (hg: Houseguest) =>
+            botHide(spots, this.botSkill(hg, `${seed}:hide:${round}`), seededRand(hashcode(`${seed}:hide:${round}:${hg.id}`)));
+        const hides: VetoHide[] = tied.filter((hg) => !this.isHuman(hg)).map((hg) => ({ id: hg.id, spot: botSpot(hg) }));
         const humans = this.playingHumans(tied);
         this.gather<number>(
-            `tb:${seed}:${round}`,
+            `hide:${seed}:${round}`,
             humans,
             title,
-            (player) => `${player.name}'s turn at the tiebreaker`,
-            (player, moreToPlay, onGuess) => ({ kind: "tiebreak", title, question, tied, playerId: player.id, moreToPlay, onGuess }),
+            (player) => `${player.name}'s turn to hide the veto`,
+            (player, moreToPlay, onHide) => ({ kind: "hideTiebreak", title, spots, tied, playerId: player.id, moreToPlay, onHide }),
             (answers) => {
-                humans.forEach((h) => guesses.push({ id: h.id, guess: answers[h.id] }));
-                const closest = closestGuesses(question.answer, guesses);
-                const again = closest.length > 1;
+                humans.forEach((h) => hides.push({ id: h.id, spot: answers[h.id] }));
+                const { winnerId, tied: still } = hideOutcome(spots, hides);
                 this.show({
-                    kind: "tiebreakResults",
+                    kind: "hideResults",
                     title,
-                    question,
+                    spots,
                     tied,
-                    guesses,
-                    winnerId: again ? undefined : closest[0],
+                    hides,
+                    winnerId,
                     sealed: this.sealed(),
-                    onDone: () => (again ? this.tiebreak(title, closest, seed, done, round + 1) : done(closest[0])),
+                    onDone: () => (winnerId === undefined ? this.tiebreak(title, still, seed, done, round + 1) : done(winnerId)),
                 });
             },
-            (player) => botGuess(question, this.botSkill(player, `${seed}:tiebreak:${round}`), seededRand(hashcode(`${seed}:tiebreak:${round}:${player.id}`)))
+            botSpot
         );
     }
 

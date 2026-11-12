@@ -11,6 +11,7 @@ import { HohRoomScreen, HohVisitScreen } from "./hohRoomScreen";
 import { openHohRoom } from "../social/hohRoom";
 import { SpeechPrompt } from "./speechPrompt";
 import { makeTiebreaker, TiebreakPlay, TiebreakResults } from "../comps/tiebreaker";
+import { HideTiebreakPlay, HideTiebreakResults, tiebreakHouse } from "../comps/hideTiebreak";
 import { PlayerModeScreen } from "./playerModeScreen";
 import { JuryReveal } from "./finaleScreens";
 import { HouseWall } from "./houseWall";
@@ -231,6 +232,41 @@ describe("player mode screens", () => {
         expect(r.textContent).toContain(`There were ${question.answer}`);
         expect(r.textContent).toContain("off by 20");
         expect(guess).toBe(-1);
+    });
+
+    it("hide the veto tiebreaker: hide a card, then the search knocks out whoever's found first", () => {
+        const controller = controllerAtSocial();
+        const tied = [0, 1].map((id) => controller.player(id));
+        const spots = tiebreakHouse(9);
+        let hid = -1;
+        const c = mount(<HideTiebreakPlay title="HoH Competition" player={tied[0]} tied={tied} spots={spots} moreToPlay={true} onHide={(s) => (hid = s)} />);
+        expect(c.textContent).toContain("It's a tie between HG0, HG1");
+        expect(c.textContent).toContain("Keep your spot a secret");
+        expect((Array.from(c.querySelectorAll("button")).find((b) => b.textContent!.includes("Hide it here")) as HTMLButtonElement).disabled).toBe(true);
+        act(() => (c.querySelectorAll(".bbb-spot")[3] as HTMLButtonElement).click());
+        click(c, "Hide it here");
+        expect(hid).toBe(3);
+        // the search: HG1's card is found first, so HG0 wins
+        const at = (n: number) => spots.findIndex((s) => s.searchedAt === n);
+        let done = false;
+        const r = mount(
+            <HideTiebreakResults
+                title="HoH Competition"
+                spots={spots}
+                tied={tied}
+                hides={[{ id: 0, spot: at(8) }, { id: 1, spot: at(4) }]}
+                winnerId={0}
+                humanIds={[0]}
+                onDone={() => (done = true)}
+            />
+        );
+        expect(r.textContent).toContain("still hidden");
+        click(r, "Skip to the end");
+        expect(r.textContent).toContain("🏆 Winner");
+        expect(r.textContent).toContain("HG0 (you!)");
+        expect(r.textContent).toContain(`found ${spots[at(4)].name.toLowerCase()}`);
+        click(r, "Continue");
+        expect(done).toBe(true);
     });
 
     it("campaign time: a nominee can make a vote deal, count votes, and see their promises", () => {
@@ -560,7 +596,8 @@ describe("player mode screens", () => {
                     else if (p.kind === "compPlay") p.onScore(humanId === 0 ? 1e9 : -1e9);
                     else if (p.kind === "compResults") p.onDone(rankResults(p.results)[0].id);
                     else if (p.kind === "tiebreak") p.onGuess(p.question.answer);
-                    else if (p.kind === "tiebreakResults" || p.kind === "knockout" || p.kind === "juryReveal") p.onDone();
+                    else if (p.kind === "hideTiebreak") p.onHide(0);
+                    else if (p.kind === "tiebreakResults" || p.kind === "hideResults" || p.kind === "knockout" || p.kind === "juryReveal") p.onDone();
                     else if (p.kind === "choose") p.resolve(p.noneLabel ? [] : p.options.slice(0, p.count).map((o) => o.id));
                     else if (p.kind === "speech") {
                         p.deliver(p.tones[0].id, p.tones[0].pick ? [p.tones[0].pick.options[0].id] : []);

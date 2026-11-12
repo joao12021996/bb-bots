@@ -18,6 +18,7 @@ import { JuryQuestionPrompt, JuryReveal, OwnMovesPrompt } from "./finaleScreens"
 import { HouseWall } from "./houseWall";
 import { LiveFeed } from "./liveFeed";
 import { TiebreakPlay, TiebreakResults } from "../comps/tiebreaker";
+import { HideTiebreakPlay, HideTiebreakResults } from "../comps/hideTiebreak";
 import { KnockoutBoard } from "../comps/knockout";
 import { WineDrink, WinePour } from "../comps/taintedWine";
 
@@ -263,6 +264,34 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                     />
                 );
                 break;
+            case "hideTiebreak":
+                body = (
+                    <HideTiebreakPlay
+                        key={key}
+                        title={prompt.title}
+                        player={controller.player(prompt.playerId)}
+                        tied={prompt.tied}
+                        spots={prompt.spots}
+                        moreToPlay={prompt.moreToPlay}
+                        onHide={prompt.onHide}
+                    />
+                );
+                break;
+            case "hideResults":
+                body = (
+                    <HideTiebreakResults
+                        key={key}
+                        title={prompt.title}
+                        spots={prompt.spots}
+                        tied={prompt.tied}
+                        hides={prompt.hides}
+                        winnerId={prompt.winnerId}
+                        sealed={prompt.sealed}
+                        humanIds={controller.state.humanIds}
+                        onDone={prompt.onDone}
+                    />
+                );
+                break;
             case "tiebreakResults":
                 body = (
                     <TiebreakResults
@@ -402,8 +431,8 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                     !(prompt.kind === "scene" && /Eviction/.test(prompt.scene.title)) && (
                         <div className="bbb-banner">{banner}</div>
                     )}
-                {!["handoff", "compPlay", "tiebreak", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(chrome) && <LiveFeed controller={controller} />}
-                {!["handoff", "compPlay", "tiebreak", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(chrome) && (
+                {!["handoff", "compPlay", "tiebreak", "hideTiebreak", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(chrome) && <LiveFeed controller={controller} />}
+                {!["handoff", "compPlay", "tiebreak", "hideTiebreak", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(chrome) && (
                     <div className="bbb-mwall-box">
                         <button
                             type="button"

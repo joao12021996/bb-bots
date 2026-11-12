@@ -340,9 +340,10 @@ describe("BB Comics", () => {
 });
 
 describe("test mode", () => {
-    it("lists every comp, and marks the ones that wouldn't come up yet", () => {
+    it("lists every comp (but the tiebreaker), and marks the ones that wouldn't come up yet", () => {
         const html = renderToStaticMarkup(<CompTestMode cast={cast} />);
-        ALL_COMPS.forEach((c) => expect(html).toContain(c.name.replace(/'/g, "&#x27;")));
+        ALL_COMPS.filter((c) => !c.tiebreakOnly).forEach((c) => expect(html).toContain(c.name.replace(/'/g, "&#x27;")));
+        expect(html).not.toContain("Hide the Veto");
         expect(html).toContain("Jury phase");
         expect(html).toContain("Bots:");
     });
