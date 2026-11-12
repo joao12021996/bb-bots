@@ -12,6 +12,7 @@ import { openHohRoom } from "../social/hohRoom";
 import { SpeechPrompt } from "./speechPrompt";
 import { makeTiebreaker, TiebreakPlay, TiebreakResults } from "../comps/tiebreaker";
 import { HideTiebreakPlay, HideTiebreakResults, tiebreakHouse } from "../comps/hideTiebreak";
+import { duelDeck, MemoryDuelBoard } from "../comps/memoryDuel";
 import { PlayerModeScreen } from "./playerModeScreen";
 import { JuryReveal } from "./finaleScreens";
 import { HouseWall } from "./houseWall";
@@ -232,6 +233,49 @@ describe("player mode screens", () => {
         expect(r.textContent).toContain(`There were ${question.answer}`);
         expect(r.textContent).toContain("off by 20");
         expect(guess).toBe(-1);
+    });
+
+    it("memory duel: replays the rival's turn, then lets the player turn over one card at a time", () => {
+        jest.useFakeTimers();
+        try {
+            const controller = controllerAtSocial();
+            const players = [0, 1].map((id) => controller.player(id));
+            const deck = duelDeck(4);
+            const twin = deck.indexOf(deck[0], 1);
+            const miss = deck.findIndex((f, i) => i > 0 && f !== deck[0]);
+            const flipped: number[] = [];
+            const c = mount(
+                <MemoryDuelBoard
+                    title="HoH Competition"
+                    note="Duel 1 of 3"
+                    players={players}
+                    actorId={0}
+                    deck={deck}
+                    matched={{ 0: 1, [twin]: 1 }}
+                    open={[]}
+                    scores={{ 0: 0, 1: 1 }}
+                    recent={[{ by: 1, cards: [0, twin] }, { by: 1, cards: [miss, miss + 1 === twin ? miss + 2 : miss + 1] }]}
+                    onFlip={(card) => flipped.push(card)}
+                />
+            );
+            // the rival's pair, face up, and nothing to click until the replay is over
+            expect(c.textContent).toContain(`${players[1].name} turned over ${deck[0]} and ${deck[0]}: a pair!`);
+            const cards = () => Array.from(c.querySelectorAll(".bbb-duel-card")) as HTMLButtonElement[];
+            expect(cards().every((b) => b.disabled)).toBe(true);
+            act(() => {
+                jest.advanceTimersByTime(1300);
+            });
+            expect(c.textContent).toContain("no match");
+            click(c, "Skip ahead");
+            expect(c.textContent).toContain(`${players[0].name}, your turn`);
+            // the pair stays face up; the rest can be turned over, once
+            expect(cards()[0].disabled).toBe(true);
+            act(() => cards()[miss].click());
+            act(() => cards()[miss].click());
+            expect(flipped).toEqual([miss]);
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it("hide the veto tiebreaker: hide a card, then the search knocks out whoever's found first", () => {
@@ -607,6 +651,7 @@ describe("player mode screens", () => {
                         controller.continue();
                     } else if (p.kind === "hohRoom") controller.endHohRoom();
                     else if (p.kind === "winePour") p.onPour({ offerTainted: true, claim: "clean" });
+                    else if (p.kind === "memoryDuel") p.onDone ? p.onDone() : p.onFlip!(p.deck.findIndex((_, i) => p.matched[i] === undefined && !p.open.includes(i)));
                     else if (p.kind === "wineDrink") p.onDecide(false);
                     else if (p.kind === "ownMoves") p.onDone([]);
                     else if (p.kind === "juryQuestion") p.onAnswer("own");

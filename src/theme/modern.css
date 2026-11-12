@@ -2203,3 +2203,106 @@ input[type="number"] {
 .bbb-test-mode > .button {
     margin-top: 10px;
 }
+
+/* ---------- Memory Duel ---------- */
+.bbb-duel-score {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    margin: 0.75rem 0 0.5rem;
+}
+.bbb-duel-player {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.8rem 0.4rem 0.4rem;
+    border-radius: 999px;
+    border: 2px solid var(--bbb-border);
+    background: rgba(255, 255, 255, 0.04);
+    opacity: 0.65;
+    transition: opacity 0.2s, border-color 0.2s, transform 0.2s;
+    min-width: 0;
+}
+.bbb-duel-player img {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: none;
+}
+.bbb-duel-player b {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.bbb-duel-player.is-p0 { --duel-color: #38bdf8; }
+.bbb-duel-player.is-p1 { --duel-color: #f472b6; }
+.bbb-duel-player.is-turn,
+.bbb-duel-player.is-winner {
+    opacity: 1;
+    border-color: var(--duel-color);
+    transform: scale(1.04);
+}
+.bbb-duel-player.is-winner { border-color: var(--bbb-gold); }
+.bbb-duel-pairs {
+    font-family: var(--bbb-display);
+    font-weight: 800;
+    font-size: 1.3rem;
+    color: var(--duel-color);
+}
+.bbb-duel-status {
+    text-align: center;
+    min-height: 1.5em;
+    color: var(--bbb-muted);
+    margin-bottom: 0.75rem;
+}
+.bbb-duel-cards {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.5rem;
+    max-width: 640px;
+    margin: 0 auto;
+}
+@media (max-width: 560px) {
+    .bbb-duel-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 340px; }
+    .bbb-duel-score { flex-direction: column; align-items: stretch; }
+}
+.bbb-duel-card {
+    aspect-ratio: 3 / 4;
+    border-radius: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.12);
+    background:
+        repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.06) 0 6px, transparent 6px 12px),
+        linear-gradient(160deg, var(--bbb-accent), #4c1d95);
+    color: #1f1b33;
+    font-size: clamp(1.4rem, 5vw, 2.2rem);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.18s, background 0.18s, box-shadow 0.18s;
+    padding: 0;
+}
+.bbb-duel-card:not(:disabled):hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(139, 92, 246, 0.45);
+}
+.bbb-duel-card:disabled { cursor: default; }
+.bbb-duel-card.is-up {
+    background: #fdfcff;
+    animation: bbb-duel-flip 0.25s ease-out;
+}
+.bbb-duel-card.is-open { border-color: var(--bbb-gold); box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.35); }
+.bbb-duel-card.is-matched { opacity: 0.55; }
+.bbb-duel-card.is-matched.is-p0 { border-color: #38bdf8; }
+.bbb-duel-card.is-matched.is-p1 { border-color: #f472b6; }
+@keyframes bbb-duel-flip {
+    from { transform: rotateY(90deg); }
+    to { transform: rotateY(0); }
+}
+.bbb-duel-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 0.9rem;
+    min-height: 2.5rem;
+}

@@ -589,6 +589,8 @@ function activity(prompt: Prompt): string {
         case "winePour":
         case "wineDrink":
             return "is making their move in Tainted Wine";
+        case "memoryDuel":
+            return "is turning over a card in the Memory Duel";
         default:
             return "is making a move";
     }

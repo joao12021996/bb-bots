@@ -100,6 +100,15 @@ export function answer(controller: PlayerModeController, p: Prompt, strategy: St
         p.onGuess(Math.floor(Math.random() * 200));
     } else if (p.kind === "tiebreakResults") {
         p.onDone();
+    } else if (p.kind === "memoryDuel") {
+        if (p.onDone) p.onDone();
+        else {
+            const free = p.deck.map((_, i) => i).filter((i) => p.matched[i] === undefined && !p.open.includes(i));
+            // humans who win: they know where every card is
+            const twin = p.open.length ? free.find((i) => p.deck[i] === p.deck[p.open[0]]) : undefined;
+            const best = humansWin === true && twin !== undefined ? twin : free[Math.floor(Math.random() * free.length)];
+            p.onFlip!(best);
+        }
     } else if (p.kind === "hideTiebreak") {
         p.onHide(Math.floor(Math.random() * p.spots.length));
     } else if (p.kind === "hideResults") {

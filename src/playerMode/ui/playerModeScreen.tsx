@@ -19,6 +19,7 @@ import { HouseWall } from "./houseWall";
 import { LiveFeed } from "./liveFeed";
 import { TiebreakPlay, TiebreakResults } from "../comps/tiebreaker";
 import { HideTiebreakPlay, HideTiebreakResults } from "../comps/hideTiebreak";
+import { MemoryDuelBoard } from "../comps/memoryDuel";
 import { KnockoutBoard } from "../comps/knockout";
 import { WineDrink, WinePour } from "../comps/taintedWine";
 
@@ -157,7 +158,9 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         const waiting = !!session && actor !== null && (actor !== session.localPlayerId || !session.mayActFor(actor));
         const chrome = waiting ? "waiting" : prompt.kind;
         let body: JSX.Element;
-        if (waiting) body = <WaitingFor session={session!} controller={controller} prompt={prompt} />;
+        // online: everyone watches a Memory Duel's board, not a waiting screen
+        if (waiting && prompt.kind === "memoryDuel") body = <MemoryDuelBoard key={key} {...prompt} watching onFlip={undefined} />;
+        else if (waiting) body = <WaitingFor session={session!} controller={controller} prompt={prompt} />;
         else switch (prompt.kind) {
             case "waiting":
                 body = session ? (
@@ -263,6 +266,9 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                         onGuess={prompt.onGuess}
                     />
                 );
+                break;
+            case "memoryDuel":
+                body = <MemoryDuelBoard key={key} {...prompt} />;
                 break;
             case "hideTiebreak":
                 body = (
@@ -431,8 +437,8 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                     !(prompt.kind === "scene" && /Eviction/.test(prompt.scene.title)) && (
                         <div className="bbb-banner">{banner}</div>
                     )}
-                {!["handoff", "compPlay", "tiebreak", "hideTiebreak", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(chrome) && <LiveFeed controller={controller} />}
-                {!["handoff", "compPlay", "tiebreak", "hideTiebreak", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(chrome) && (
+                {!["handoff", "compPlay", "tiebreak", "hideTiebreak", "memoryDuel", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(chrome) && <LiveFeed controller={controller} />}
+                {!["handoff", "compPlay", "tiebreak", "hideTiebreak", "memoryDuel", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(chrome) && (
                     <div className="bbb-mwall-box">
                         <button
                             type="button"

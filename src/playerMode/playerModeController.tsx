@@ -90,6 +90,7 @@ import { evictionSpeech, nominationSpeech, SpeechResult, SpeechToneId, vetoSpeec
 import { SpeechTone } from "./ui/speechPrompt";
 import { botGuess, closestGuesses, makeTiebreaker, TiebreakGuess, TiebreakQuestion } from "./comps/tiebreaker";
 import { botHide, hideOutcome, tiebreakHouse, VetoHide } from "./comps/hideTiebreak";
+import { botFlip, duelDeck, DuelTurn, Matched, MEMORY_DUEL_ID, MEMORY_DUEL_RULES } from "./comps/memoryDuel";
 import { HidingSpot } from "./comps/iconicComps";
 import { DAY_PART, dayLabel, dayOf, totalWeeks, weekStartDay } from "./days";
 import {
@@ -386,6 +387,20 @@ export type Prompt =
           onDone: () => void;
       }
     | {
+          kind: "memoryDuel"; // Concentration, one on one: whoever's turn it is turns over a card (or, at the end, Continue)
+          title: string;
+          note: string;
+          players: Houseguest[];
+          actorId: number;
+          deck: string[];
+          matched: Matched;
+          open: number[];
+          scores: { [id: number]: number };
+          recent: DuelTurn[]; // the turns since the last time a player turned a card over, replayed first
+          onFlip?: (card: number) => void;
+          onDone?: () => void; // the duel is over
+      }
+    | {
           kind: "winePour";
           title: string;
           pourerId: number;
@@ -559,6 +574,8 @@ export function actorOf(prompt: Prompt): number | null {
             return prompt.actorId;
         case "winePour":
             return prompt.pourerId;
+        case "memoryDuel":
+            return prompt.onFlip ? prompt.actorId : null;
         case "wineDrink":
             return prompt.drinkerId;
         default:
@@ -1877,11 +1894,23 @@ export class PlayerModeController {
         );
     }
 
-    // HoH or Veto: the special comps (Knockout, Tainted Wine) or a regular one. Picked once and saved.
+    // Memory Duel, like Tainted Wine: once a season, with a player in it.
+    private useMemoryDuel(competitors: Houseguest[]): boolean {
+        return (
+            !this.state.week.secretHoh &&
+            !this.state.usedComps.includes(MEMORY_DUEL_ID) &&
+            competitors.length >= 3 &&
+            this.playingHumans(competitors).length > 0 &&
+            Math.abs(rng().randomFloat()) < 0.25
+        );
+    }
+
+    // HoH or Veto: the special comps (Knockout, Tainted Wine, Memory Duel) or a regular one. Picked once and saved.
     private pickComp(competitors: Houseguest[], hoh: boolean): string {
         return this.compChoice(() => {
             if (hoh && this.useKnockout(competitors)) return KNOCKOUT_ID;
             if (this.useTaintedWine(competitors)) return TAINTED_WINE_ID;
+            if (this.useMemoryDuel(competitors)) return MEMORY_DUEL_ID;
             return pickWeeklyComp(this.state.gameState, this.state.history, this.state.usedComps).id;
         });
     }
@@ -2043,6 +2072,137 @@ export class PlayerModeController {
         const first = sample(noise, remaining, 1)[0];
         lines.push(`🎲 ${name(first)} was drawn to pour first.`);
         pourTurn(first);
+    }
+
+    // Memory Duel: Concentration, king of the hill. Two at a time, in a drawn order: the winner of each duel faces
+    // the next challenger, and the loser is out. Players turn over one card at a time, each card saved as it's
+    // turned over; bots turn theirs over from the comp's seed, so a reload replays the comp exactly.
+    private runMemoryDuel(title: string, participants: Houseguest[], onWinner: (id: number, worstFirst: number[]) => void) {
+        const s = this.state;
+        const seed = hashcode(`${s.seed}:${this.gameState.phase}:${s.step}:${MEMORY_DUEL_ID}`);
+        const noise = seededRand(seed);
+        const name = (id: number) => this.player(id).name;
+        const queue = shuffled(noise, participants.map((p) => p.id));
+        const total = queue.length - 1;
+        const out: number[] = [];
+        const wins: { [id: number]: number } = {};
+        queue.forEach((id) => (wins[id] = 0));
+        let lines: string[] = [
+            MEMORY_DUEL_RULES,
+            `🎲 The draw: ${queue.map(name).join(", ")}. ${name(queue[0])} and ${name(queue[1])} duel first.`,
+        ];
+        let champ = queue[0];
+        let next = 2;
+
+        // as in Tainted Wine: the board shows what happened since it was last shown
+        const board = (then: () => void, winnerId?: number) => {
+            if (lines.length === 0 && winnerId === undefined) return then();
+            const shown = lines;
+            lines = [];
+            const captions: { [id: number]: string } = {};
+            queue.forEach((id) => (captions[id] = wins[id] ? `🃏 ${wins[id]} win${wins[id] === 1 ? "" : "s"}` : "🃏 no duels won"));
+            this.show({
+                kind: "knockout",
+                title,
+                emoji: "🃏",
+                name: "Memory Duel",
+                lines: shown,
+                remaining: queue.filter((id) => !out.includes(id)).map((id) => this.player(id)),
+                out: out.map((id) => this.player(id)),
+                captions,
+                winnerId,
+                onDone: then,
+            });
+        };
+
+        const finish = () => {
+            s.usedComps = [...s.usedComps, MEMORY_DUEL_ID];
+            board(() => onWinner(champ, [...out]), champ);
+        };
+
+        const duel = (no: number, a: number, b: number) => {
+            const dseed = hashcode(`${seed}:duel:${no}`);
+            const deck = duelDeck(dseed);
+            const players = [this.player(a), this.player(b)];
+            const humanIn = players.some((p) => this.isHuman(p));
+            const note = `Duel ${no} of ${total}`;
+            const matched: Matched = {};
+            const scores: { [id: number]: number } = { [a]: 0, [b]: 0 };
+            const seen: number[] = [];
+            let actor = seededRand(dseed)() < 0.5 ? a : b;
+            let open: number[] = [];
+            let recent: DuelTurn[] = [];
+            const turnOver = (card: number) => {
+                seen.push(card);
+                open = [...open, card];
+                if (open.length < 2) return;
+                recent.push({ by: actor, cards: open });
+                if (deck[open[0]] === deck[open[1]]) {
+                    open.forEach((c) => (matched[c] = actor));
+                    scores[actor]++;
+                } else actor = actor === a ? b : a;
+                open = [];
+            };
+            const prompt = (extra: Partial<Extract<Prompt, { kind: "memoryDuel" }>>, shownRecent: DuelTurn[]): Prompt => ({
+                kind: "memoryDuel",
+                title,
+                note,
+                players,
+                actorId: actor,
+                deck,
+                matched: { ...matched },
+                open: [...open],
+                scores: { ...scores },
+                recent: shownRecent,
+                ...extra,
+            });
+
+            const end = () => {
+                const [w, l] = scores[a] > scores[b] ? [a, b] : [b, a];
+                wins[w]++;
+                out.push(l);
+                champ = w;
+                lines.push(`🃏 ${name(w)} beat ${name(l)}, ${scores[w]} pairs to ${scores[l]}. ${name(l)} is out!`);
+                const onward = () => {
+                    if (next >= queue.length) return finish();
+                    const challenger = queue[next++];
+                    lines.push(`🃏 Next up: ${name(w)} vs ${name(challenger)}.`);
+                    duel(no + 1, w, challenger);
+                };
+                if (!humanIn) return onward();
+                const shownRecent = recent;
+                recent = [];
+                this.decide<boolean>(
+                    `md:${seed}:${no}:end`,
+                    (answer) => this.show(prompt({ actorId: w, onDone: () => answer(true) }, shownRecent)),
+                    onward
+                );
+            };
+
+            const play = (): void => {
+                while (Object.keys(matched).length < deck.length) {
+                    if (!this.isHuman(this.player(actor))) {
+                        const skill = this.botSkill(this.player(actor), `${seed}:duel`);
+                        turnOver(botFlip(deck, matched, seen, open.length ? open[0] : null, skill, hashcode(`${dseed}:${seen.length}`)));
+                        continue;
+                    }
+                    const shownRecent = recent;
+                    recent = [];
+                    return this.decide<number>(
+                        `md:${seed}:${no}:${seen.length}`,
+                        (answer) => board(() => this.show(prompt({ onFlip: answer }, shownRecent))),
+                        (card) => {
+                            turnOver(card);
+                            play();
+                        }
+                    );
+                }
+                end();
+            };
+            play();
+        };
+
+        duel(1, queue[0], queue[1]);
     }
 
     // The tiebreaker: everyone tied for first hides a veto card, then the house is searched. The first card found
@@ -3546,6 +3706,7 @@ export class PlayerModeController {
         const choice = this.pickComp(competitors, true);
         if (choice === KNOCKOUT_ID) return this.runKnockout(title, competitors, onWinner);
         if (choice === TAINTED_WINE_ID) return this.runTaintedWine(title, competitors, onWinner);
+        if (choice === MEMORY_DUEL_ID) return this.runMemoryDuel(title, competitors, onWinner);
         this.runComp(title, compById(choice), competitors, onWinner, "hoh");
     }
 
@@ -4235,6 +4396,7 @@ export class PlayerModeController {
             this.showScene(this.vetoWinnerScene(players, pov, noms, hoh), Step.VetoCeremony);
         };
         if (choice === TAINTED_WINE_ID) return this.runTaintedWine("Veto Competition", players, onWinner);
+        if (choice === MEMORY_DUEL_ID) return this.runMemoryDuel("Veto Competition", players, onWinner);
         this.runComp("Veto Competition", compById(choice), players, onWinner, "veto");
     }
 

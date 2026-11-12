@@ -12,6 +12,7 @@ import { botPawnTalk, NOMINATION_HIT, nominationHit, settlePawnTalk, tellPawn } 
 import { evictionSpeech, makePromise, nominationSpeech, vetoSpeech } from "./social/speeches";
 import { botGuess, closestGuesses, makeTiebreaker } from "./comps/tiebreaker";
 import { botHide, hideOutcome, tiebreakHouse } from "./comps/hideTiebreak";
+import { botFlip, DUEL_PAIRS, duelDeck, Matched, MEMORY_DUEL_ID } from "./comps/memoryDuel";
 import { WineCellarComp } from "./comps/wineCellar";
 import { botSwaps, STRIKES_OUT, TAINTED_WINE_ID } from "./comps/taintedWine";
 import { seededRand } from "./comps/random";
@@ -1134,7 +1135,7 @@ describe("knockout comps", () => {
             for (let guard = 0; guard < 1500; guard++) {
                 const p = prompt as Prompt | null;
                 if (!p || p.kind === "gameOver") break;
-                if (p.kind === "knockout") {
+                if (p.kind === "knockout" && p.name !== "Memory Duel" && p.name !== "Tainted Wine") {
                     boards.push(p);
                     if (onBoard) onBoard(controller, p, boards.length);
                 }
@@ -1247,6 +1248,102 @@ describe("tainted wine", () => {
         const plain = { offerTainted: true, claim: "clean" as const };
         expect(rate(plain, 1)).toBeGreaterThan(rate(plain, 0) + 0.05);
         expect(rate({ ...plain, tell: "can't stop smirking" }, 0)).toBeGreaterThan(0.7);
+    });
+});
+
+describe("memory duel", () => {
+    // Plays seasons until a Memory Duel comes up, recording its boards and the duel screens.
+    function findDuel(stopAfterFlips?: number) {
+        for (let id = 0; id < 60; id++) {
+            const controller = new PlayerModeController(newPlayerSave(newGame(8), [id % 8]));
+            controller.state.seed = 5100 + id;
+            let prompt: Prompt | null = null;
+            controller.prompt$.subscribe((p) => (prompt = p));
+            controller.start();
+            const boards: Extract<Prompt, { kind: "knockout" }>[] = [];
+            const duels: Extract<Prompt, { kind: "memoryDuel" }>[] = [];
+            for (let guard = 0; guard < 4000; guard++) {
+                const p = prompt as Prompt | null;
+                if (!p || p.kind === "gameOver") break;
+                if (p.kind === "knockout" && p.name === "Memory Duel") boards.push(p);
+                if (p.kind === "memoryDuel") duels.push(p);
+                if (stopAfterFlips !== undefined && duels.filter((d) => d.onFlip).length > stopAfterFlips) return { controller, boards, duels, current: () => prompt as Prompt };
+                if (boards.length > 0 && boards[boards.length - 1].winnerId !== undefined) return { controller, boards, duels, current: () => prompt as Prompt };
+                answer(controller, p, "random", "random");
+            }
+        }
+        throw new Error("No Memory Duel came up");
+    }
+
+    it("is one on one, winner stays on, loser is out, until one houseguest is left", () => {
+        const { controller, boards, duels } = findDuel();
+        const last = boards[boards.length - 1];
+        expect(last.remaining.map((hg) => hg.id)).toEqual([last.winnerId]);
+        const results = boards.flatMap((b) => b.lines).filter((l) => l.includes(" beat "));
+        expect(results.length).toBe(last.out.length);
+        // every duel clears the board: the pairs add up
+        results.forEach((l) => {
+            const [, w, x] = l.match(/, (\d+) pairs to (\d+)/)!;
+            expect(+w + +x).toBe(DUEL_PAIRS);
+            expect(+w).toBeGreaterThan(+x);
+        });
+        // the player turned cards over one at a time, and saw who won each of their duels
+        const flips = duels.filter((d) => d.onFlip);
+        expect(flips.length).toBeGreaterThan(0);
+        flips.forEach((d) => expect(d.open.length).toBeLessThan(2));
+        expect(duels.filter((d) => d.onDone).length).toBeGreaterThan(0);
+        expect(controller.state.usedComps.filter((c) => c === MEMORY_DUEL_ID).length).toBe(1);
+    });
+
+    it("picks up a reloaded duel where it was, card for card", () => {
+        const { controller, current } = findDuel(3);
+        const before = current() as Extract<Prompt, { kind: "memoryDuel" }>;
+        expect(before.kind).toBe("memoryDuel");
+        const resumed = new PlayerModeController(migrateSave(deserialize<any>(serialize(controller.state)))!);
+        let rp: Prompt | null = null;
+        resumed.prompt$.subscribe((p) => (rp = p));
+        resumed.start();
+        for (let guard = 0; guard < 20 && (rp as Prompt | null)?.kind !== "memoryDuel"; guard++) answer(resumed, rp!, "random", "random");
+        const after = rp as unknown as Extract<Prompt, { kind: "memoryDuel" }>;
+        expect(after.kind).toBe("memoryDuel");
+        expect(after.deck).toEqual(before.deck);
+        expect(after.matched).toEqual(before.matched);
+        expect(after.open).toEqual(before.open);
+        expect(after.scores).toEqual(before.scores);
+    });
+
+    it("bots take pairs they remember, and sharper bots win more duels", () => {
+        const deck = duelDeck(9);
+        const face = deck[0];
+        const twin = deck.indexOf(face, 1);
+        // a sharp bot that just saw both cards of a pair turns one over, then the other
+        const first = botFlip(deck, {}, [0, twin], null, 1, 3);
+        expect([0, twin]).toContain(first);
+        expect(botFlip(deck, {}, [0, twin], first, 1, 3)).toBe(first === 0 ? twin : 0);
+        // whole duels between two bots
+        const play = (skillA: number, skillB: number, seed: number) => {
+            const d = duelDeck(seed);
+            const matched: Matched = {};
+            const seen: number[] = [];
+            const score = [0, 0];
+            let turn = seed % 2;
+            while (Object.keys(matched).length < d.length) {
+                const skill = turn === 0 ? skillA : skillB;
+                const c1 = botFlip(d, matched, seen, null, skill, seed * 1000 + seen.length);
+                seen.push(c1);
+                const c2 = botFlip(d, matched, seen, c1, skill, seed * 1000 + seen.length);
+                seen.push(c2);
+                expect(c2).not.toBe(c1);
+                if (d[c1] === d[c2]) {
+                    matched[c1] = matched[c2] = turn;
+                    score[turn]++;
+                } else turn = 1 - turn;
+            }
+            return score[0] > score[1];
+        };
+        let sharpWins = 0;
+        for (let seed = 1; seed <= 200; seed++) if (play(0.9, 0.1, seed)) sharpWins++;
+        expect(sharpWins).toBeGreaterThan(110);
     });
 });
 
