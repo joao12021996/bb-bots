@@ -35,6 +35,7 @@ export const NETWORKED_METHODS = [
     "endSocial",
     "respondApproach",
     "respondSides",
+    "talkToBot",
     "askVote",
     "allianceSuggest",
     "allianceDiscuss",

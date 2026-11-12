@@ -47,6 +47,7 @@ import {
     botSocialTime,
     performSocialAction,
     shiftRelationship,
+    socialFactor,
     DealAction,
     isDealAction,
     SocialAction,
@@ -128,7 +129,9 @@ import {
     settleEvictionPledges,
     settleFinalPledges,
     settleNominationPledges,
+    hasFinal2,
 } from "./social/promises";
+import { feelingReply, mentionsIn, opinionReply, readMessage, Reply, TALK_MAX_LENGTH, TALKS_PER_BLOCK, talkLine, TalkLine } from "./social/botTalk";
 import {
     acceptFinal2,
     answerVoteQuestion,
@@ -326,6 +329,18 @@ export interface PlayerSave {
     diary?: DiaryEntry[];
     // everything that happened in the jury house, for the jury's chat
     juryLog?: { week: number; text: string }[];
+    // players' conversations with bots, in their own words (see talkToBot): per player, per houseguest
+    talks?: { [viewerId: number]: { [botId: number]: BotTalk } };
+}
+
+// A player's conversation with a bot. `key`: the social block that `n` (messages so far) and the answers
+// are for: asking twice in one block gets the same answer.
+export interface BotTalk {
+    lines: TalkLine[];
+    key: string;
+    n: number;
+    warm?: boolean; // they've had a friendly word this block
+    target?: number | null; // what they said about their target this block (null: they wouldn't say)
 }
 
 export type Prompt =
@@ -2648,6 +2663,248 @@ export class PlayerModeController {
         s.socialLog.push(`${outcome.good ? "👍" : "👎"} ${outcome.text}`);
         this.save();
         return outcome;
+    }
+
+    // ---------- talking to bots in your own words ----------
+
+    public talkWith(viewerId: number, botId: number): TalkLine[] {
+        const mine = this.state.talks && this.state.talks[viewerId];
+        return (mine && mine[botId] && mine[botId].lines) || [];
+    }
+
+    // The current player says something to a bot during social time. The message is read for what it's
+    // about (see botTalk.ts), and the bot reacts by the same rules as the social buttons: questions and small
+    // talk are free, while deals, pitches and the like use up a social action, just like the buttons do.
+    public talkToBot(botId: number, text: string): { lines: TalkLine[]; outcome?: SocialOutcome } | null {
+        const s = this.state;
+        const actor = this.socialActor;
+        const clean = String(text || "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, TALK_MAX_LENGTH);
+        if (!actor || !clean || s.socialStage !== "social" || !this.isHuman(actor) || !SOCIAL_BLOCK_NAMES[s.step]) return null;
+        if (s.approachKey[actor.id] !== `${s.gameState.phase}:${s.step}`) return null; // their social screen isn't up yet
+        const bot = s.gameState.houseguests.find((hg) => hg.id === botId);
+        if (!bot || bot.isEvicted || bot.id === actor.id || this.isHuman(bot)) return null;
+        const gs = this.gameState;
+        const talks = (s.talks = s.talks || {});
+        const mine = (talks[actor.id] = talks[actor.id] || {});
+        const talk = (mine[botId] = mine[botId] || { lines: [], key: "", n: 0 });
+        const block = `${gs.phase}:${s.step}`;
+        if (talk.key !== block) {
+            talk.key = block;
+            talk.n = 0;
+            talk.warm = false;
+            delete talk.target;
+        }
+        const day = this.currentDay();
+        const said: TalkLine[] = [];
+        const add = (who: TalkLine["who"], t: string) => {
+            const l = { who, text: t, day };
+            talk.lines.push(l);
+            said.push(l);
+        };
+        add("me", clean);
+        talk.n++;
+        const p = this.personalities[botId];
+        const lineKey = `${s.seed}:${block}:${actor.id}:${botId}:${talk.n}`;
+        const line = (reply: Reply, who: string = "") => talkLine(p, reply, `${lineKey}:${reply}`, who);
+        const name = (id: number) => (id === actor.id ? "you" : this.player(id).name);
+        const botSays = (t: string) => add("bot", t);
+        const finish = (outcome?: SocialOutcome) => {
+            if (talk.lines.length > 60) talk.lines = talk.lines.slice(talk.lines.length - 60);
+            this.save();
+            return { lines: said, outcome };
+        };
+
+        if (talk.n > TALKS_PER_BLOCK) {
+            botSays(line("tired"));
+            return finish();
+        }
+
+        this.reseed(`talk:${actor.id}:${botId}:${talk.n}`);
+        const rand = () => Math.abs(rng().randomFloat());
+        const others = nonEvictedHouseguests(gs).filter((hg) => hg.id !== actor.id && hg.id !== botId);
+        const iAmHoh = s.week.hohId === actor.id;
+        const intent = readMessage(clean, mentionsIn(clean, others), { iAmHoh });
+        const noms = (s.week.nomineeIds || []).filter((id) => !this.player(id).isEvicted);
+        const nomsSet = noms.length >= 2 && [Step.SocialAfternoon, Step.SocialBlockbuster, Step.SocialCampaign].includes(s.step);
+        const hohId = s.week.hohId;
+        const botVotes = botId !== hohId && !noms.includes(botId);
+        const real = bot.relationships[actor.id] ?? 0;
+        const info = this.traitsOf(botId);
+        const lies = info ? info.lies : 1;
+
+        // an action, as if the player had pressed its button (no actions left: the bot puts it off)
+        const act = (action: SocialAction, yes: Reply, no: Reply, about: string = "") => {
+            if (s.actionsLeft <= 0) {
+                botSays(line("busy"));
+                return finish();
+            }
+            const outcome = this.socialAct(action);
+            if (!outcome) {
+                botSays(line("notNow"));
+                return finish();
+            }
+            botSays(line(outcome.good ? yes : no, about));
+            add("note", outcome.text);
+            return finish(outcome);
+        };
+        // small talk: a friendly word helps a little, once per block
+        const friendly = (reply: Reply, delta: number = 0.015) => {
+            if (!talk.warm) {
+                talk.warm = true;
+                this.mutate((m) => shiftRelationship(m, actor.id, botId, delta * socialFactor(actor) * (0.5 + rand())));
+            }
+            botSays(line(reply));
+            this.noteRead(actor.id, botId);
+            return finish();
+        };
+
+        switch (intent.kind) {
+            case "askTarget": {
+                if (talk.target === undefined) {
+                    let target: number | undefined;
+                    if (botId === hohId && nomsSet) {
+                        target = noms.reduce((a, b) => ((bot.relationships[a] ?? 0) <= (bot.relationships[b] ?? 0) ? a : b));
+                    } else {
+                        const everyone = nonEvictedHouseguests(gs).filter((hg) => hg.id !== botId);
+                        target = everyone.length
+                            ? everyone.reduce((a, b) => ((bot.relationships[a.id] ?? 0) <= (bot.relationships[b.id] ?? 0) ? a : b)).id
+                            : undefined;
+                    }
+                    const decoys = others.filter((hg) => hg.id !== target);
+                    if (target === undefined) talk.target = null;
+                    else if (target === actor.id) {
+                        // nobody tells you to your face... though a liar might name somebody else
+                        talk.target = decoys.length && rand() < Math.min(0.9, 0.5 * lies) ? decoys[rng().randomInt(0, decoys.length - 1)].id : null;
+                    } else if (real > 0.15 || rand() < 0.15) {
+                        // friends tell you, and liars sometimes name the wrong person
+                        talk.target = decoys.length && rand() < 0.12 * lies ? decoys[rng().randomInt(0, decoys.length - 1)].id : target;
+                    } else talk.target = null;
+                }
+                const told = talk.target;
+                if (told === null || told === undefined) {
+                    botSays(line(p === "floater" && rand() < 0.5 ? "targetNoone" : "targetSecret"));
+                } else {
+                    botSays(line(botId === hohId && nomsSet ? "targetHoh" : "targetIs", name(told)));
+                    this.noteIntel(actor.id, botId, `🗣️ Told you their target is ${name(told)} (week ${gs.phase}).`);
+                }
+                this.noteRead(actor.id, botId);
+                return finish();
+            }
+            case "askVote": {
+                if (!nomsSet) botSays(line("voteNoNoms"));
+                else if (noms.includes(botId)) botSays(line("voteNominee"));
+                else if (botId === hohId) botSays(line("voteHoh"));
+                else if (s.step !== Step.SocialCampaign) botSays(line("voteNotYet"));
+                else {
+                    const vote = this.askVote(botId);
+                    if (vote === null || vote === undefined) botSays(line("dodge"));
+                    else botSays(this.say(botId, "voteAnswer", "ask", this.player(vote).name));
+                }
+                return finish();
+            }
+            case "askFeeling":
+                botSays(line(feelingReply(this.feelingOf(actor.id, botId))));
+                this.noteRead(actor.id, botId);
+                return finish();
+            case "askOpinion": {
+                const about = this.player(intent.aboutId);
+                const v = apparentRelationship(bot.relationships[about.id] ?? 0, p, `${s.seed}:${gs.phase}:${botId}:${about.id}:talk`, false);
+                botSays(line(opinionReply(v), about.name));
+                return finish();
+            }
+            case "askAllies": {
+                const shared = this.alliancesOf(actor.id).filter((a) => a.memberIds.includes(botId));
+                if (shared.length > 0) botSays(line("alliesYours", shared[0].name));
+                else {
+                    const closest = [...others].sort((a, b) => (bot.relationships[b.id] ?? 0) - (bot.relationships[a.id] ?? 0))[0];
+                    if (closest && real > 0.45 && rand() < 0.6) {
+                        botSays(line("alliesClose", closest.name));
+                        this.noteIntel(actor.id, botId, `🗣️ Said they're close with ${closest.name} (week ${gs.phase}).`);
+                    } else botSays(line("alliesSecret"));
+                }
+                this.noteRead(actor.id, botId);
+                return finish();
+            }
+            case "final2":
+                if (hasFinal2(this.ledger, actor.id, botId)) {
+                    botSays(line("alreadyF2"));
+                    return finish();
+                }
+                if (others.length < 2) {
+                    botSays(line("notNow"));
+                    return finish();
+                }
+                return act({ kind: "final2", botId }, "accept", "decline");
+            case "alliance": {
+                const together = this.alliancesOf(actor.id).find((a) => a.memberIds.includes(botId));
+                if (together && !intent.name) {
+                    botSays(line("alreadyAllied", together.name));
+                    return finish();
+                }
+                if (!this.allianceTimeOpen()) {
+                    botSays(line("notNow"));
+                    return finish();
+                }
+                return act({ kind: "alliance", botId, name: intent.name }, "accept", "decline");
+            }
+            case "pitch":
+                return act({ kind: "pitch", botId, targetId: intent.targetId, reason: intent.reason }, "pitchYes", "pitchNo", name(intent.targetId));
+            case "tellVote":
+                if (!nomsSet || iAmHoh || noms.includes(actor.id) || !noms.includes(intent.targetId)) {
+                    botSays(line(nomsSet ? "listen" : "voteNoNoms"));
+                    return finish();
+                }
+                return act({ kind: "tellVote", botId, targetId: intent.targetId }, "heard", "listen");
+            case "tellTarget":
+                return act({ kind: "tellTarget", botId, targetId: intent.targetId }, "heard", "listen");
+            case "keepMe":
+                if (s.step !== Step.SocialCampaign || !noms.includes(actor.id) || !botVotes) {
+                    botSays(line(noms.includes(actor.id) ? "voteNotYet" : "listen"));
+                    return finish();
+                }
+                return act({ kind: intent.pity ? "pity" : "voteDeal", botId }, "accept", "decline");
+            case "flirt":
+                return act({ kind: "flirt", botId }, "flirtYes", "flirtNo");
+            case "insult":
+                this.mutate((m) => shiftRelationship(m, actor.id, botId, -0.04 * (p === "villain" ? 1.5 : 1)));
+                botSays(line("insult"));
+                this.noteRead(actor.id, botId);
+                return finish();
+            case "compliment":
+                return friendly("compliment", p === "villain" ? 0.005 : p === "floater" ? 0.025 : 0.015);
+            case "thanks":
+                return friendly("thanks");
+            case "apology":
+                return friendly("apology", 0.02);
+            case "bye":
+                botSays(line("bye"));
+                return finish();
+            case "howAreYou":
+                return friendly(botId === hohId ? "howHoh" : noms.includes(botId) ? "howNominee" : this.isHaveNot(botId) ? "howHaveNot" : "howFine");
+            case "greet":
+                return friendly("greet");
+            case "small": {
+                const topic: Reply =
+                    intent.topic === "comps"
+                        ? "smallComps"
+                        : intent.topic === "home"
+                        ? "smallHome"
+                        : intent.topic === "food"
+                        ? this.isHaveNot(botId)
+                            ? "howHaveNot"
+                            : "smallFood"
+                        : intent.topic === "game"
+                        ? "smallGame"
+                        : "small";
+                return friendly(topic);
+            }
+            default:
+                botSays(line(intent.question ? "dodge" : "listen"));
+                return finish();
+        }
     }
 
     // Read by the screens, so it changes nothing (see approachesFor).

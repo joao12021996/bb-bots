@@ -1951,3 +1951,25 @@ input[type="number"] {
     font: inherit;
     font-size: 16px; /* no zoom on phones */
 }
+
+/* talking to a bot on the social screen */
+.bbb-talk {
+    display: flex;
+    flex-direction: column;
+    max-width: 560px;
+    margin: 10px auto;
+    border: 1px solid var(--bbb-border);
+    border-radius: 14px;
+    background: var(--bbb-card);
+    text-align: left;
+}
+.bbb-talk .bbb-chat-thread {
+    min-height: 120px;
+    max-height: 320px;
+}
+.bbb-talk-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 8px 4px;
+}

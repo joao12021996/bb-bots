@@ -722,4 +722,32 @@ describe("online play", () => {
         hub.flush();
         expect(texts(of(first))).toContain("hi everyone");
     });
+
+    it("a player's conversation with a bot reaches every device, and answers the same everywhere", () => {
+        const { hub, host, clients, all } = setup(8, [0, 3], 31);
+        const client = clients[0];
+        let talked = 0;
+        for (let guard = 0; guard < 3000 && talked < 3; guard++) {
+            const own = client.controller!.personal$.value[3] || prompt(client);
+            if (own && own.kind === "social" && actorOf(own) === 3) {
+                const bot = client.controller!.gameState.houseguests.find((hg) => !hg.isEvicted && hg.id !== 0 && hg.id !== 3)!;
+                const before = client.controller!.state.actionsLeft;
+                client.controller!.talkToBot(bot.id, "hey! who are you targeting?");
+                client.controller!.talkToBot(bot.id, "final two? you and me");
+                hub.flush();
+                expectInSync(all);
+                const lines = host.controller!.talkWith(3, bot.id);
+                expect(lines.length).toBeGreaterThanOrEqual(4);
+                expect(client.controller!.talkWith(3, bot.id)).toEqual(lines);
+                // the other player has nothing to show for it
+                expect(host.controller!.talkWith(0, bot.id).filter((l) => l.text.includes("final two? you and me"))).toEqual([]);
+                expect(host.controller!.state.actionsLeft).toBeLessThanOrEqual(before);
+                talked++;
+            }
+            if (!step(hub, all)) break;
+        }
+        expect(talked).toBe(3);
+        settle(hub, host);
+        all.forEach((s) => expect(s.resyncs).toBe(0));
+    });
 });

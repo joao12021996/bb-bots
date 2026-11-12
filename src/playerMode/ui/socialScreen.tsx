@@ -9,6 +9,7 @@ import { suggestAllianceName } from "../social/alliances";
 import { PITCH_REASONS, reasonLine } from "../social/pitch";
 import { BigButton, Face, Grid, Panel, Subtle, Title, whenDone } from "./common";
 import { HOH } from "../terms";
+import { BotTalkPanel } from "./botTalkPanel";
 
 interface SocialScreenProps {
     controller: PlayerModeController;
@@ -18,6 +19,7 @@ interface SocialScreenProps {
 type Mode =
     | { kind: "pickBot" }
     | { kind: "pickAction"; botId: number }
+    | { kind: "talk"; botId: number }
     | { kind: "pickTarget"; botId: number; only?: number[]; prompt?: string }
     | { kind: "tell"; botId: number; what: "tellVote" | "tellTarget" }
     | { kind: "rumourAbout"; botId: number }
@@ -245,7 +247,7 @@ export function SocialScreen(props: SocialScreenProps) {
                 <Subtle>
                     {actionsLeft > 0
                         ? `Who do you want to talk to? (${actionsLeft} action${actionsLeft === 1 ? "" : "s"} left)`
-                        : "You're out of time for now."}
+                        : "You're out of actions, but you can still talk to people."}
                 </Subtle>
                 <Grid>
                     {everyoneElse.map((hg) => (
@@ -261,7 +263,9 @@ export function SocialScreen(props: SocialScreenProps) {
                                               setMode({ kind: "alliance", botId: hg.id });
                                           } else setMode({ kind: "pickAction", botId: hg.id });
                                       }
-                                    : undefined
+                                    : controller.isHuman(hg)
+                                    ? undefined
+                                    : () => setMode({ kind: "talk", botId: hg.id }) // out of actions: you can still talk
                             }
                         />
                     ))}
@@ -295,6 +299,9 @@ export function SocialScreen(props: SocialScreenProps) {
                 </Subtle>
                 <Subtle>What do you want to do with {bot.name}?</Subtle>
                 <div>
+                    <BigButton kind="primary" onClick={() => setMode({ kind: "talk", botId: bot.id })}>
+                        ✍️ Talk (in your own words)
+                    </BigButton>
                     <BigButton kind="info" onClick={() => act({ kind: "chat", botId: bot.id })}>
                         💬 Chat
                     </BigButton>
@@ -384,6 +391,18 @@ export function SocialScreen(props: SocialScreenProps) {
                     </div>
                 )}
                 <BigButton kind="light" onClick={() => setMode({ kind: "pickBot" })}>
+                    Back
+                </BigButton>
+            </div>
+        );
+    } else if (mode.kind === "talk") {
+        const bot = getById(gs, mode.botId);
+        body = (
+            <div>
+                <Face hg={bot} caption={caption(bot)} small={true} />
+                <Subtle>{actionsLeft > 0 ? `${actionsLeft} action${actionsLeft === 1 ? "" : "s"} left` : "Out of actions: offers will have to wait."}</Subtle>
+                <BotTalkPanel controller={controller} botId={bot.id} onOutcome={record} />
+                <BigButton kind="light" onClick={() => setMode(actionsLeft > 0 ? { kind: "pickAction", botId: bot.id } : { kind: "pickBot" })}>
                     Back
                 </BigButton>
             </div>
