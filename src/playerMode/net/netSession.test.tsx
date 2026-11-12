@@ -200,6 +200,74 @@ describe("online play", () => {
         now.forEach((s) => expect(s.resyncs).toBeLessThanOrEqual(2));
     });
 
+    it("plays comps at the same time, with everyone's score coming in live", () => {
+        const { hub, host, all } = setup(10, [1, 4, 7], 23);
+        let comps: ReturnType<typeof ownScreens> = [];
+        for (let guard = 0; guard < 5000; guard++) {
+            comps = ownScreens(all).filter((o) => o.prompt.kind === "compPlay");
+            if (comps.length >= 2) break;
+            expect(step(hub, all)).toBe(true);
+        }
+        expect(comps.length).toBeGreaterThanOrEqual(2);
+        const [a, b] = comps;
+        const pa = a.prompt as Extract<Prompt, { kind: "compPlay" }>;
+        const pb = b.prompt as Extract<Prompt, { kind: "compPlay" }>;
+        expect(pa.live!.humanIds).toContain(b.owner);
+        // the bots are opponents up front; the other players come in live
+        expect(pa.opponents.map((o) => o.hg.id)).not.toContain(b.owner);
+        hub.instant = true;
+        pa.onStart!();
+        pa.onReport!(7);
+        hub.instant = false;
+        hub.flush();
+        all.forEach((s) => expect(s.controller!.liveScores(pa.seed, [a.owner])).toEqual([{ id: a.owner, score: 7, answers: undefined, done: false }]));
+        // b's screen re-reads them as they come in
+        expect(b.session.controller!.liveScores(pb.seed, pb.live!.humanIds).find((l) => l.id === a.owner)!.score).toBe(7);
+        hub.instant = true;
+        pa.onScore(9);
+        hub.instant = false;
+        hub.flush();
+        all.forEach((s) => expect(s.controller!.liveScores(pa.seed, [a.owner])[0]).toMatchObject({ score: 9, done: true }));
+        // done: a's device shows the standings while the others play on
+        const waiting = prompt(a.session);
+        expect(waiting.kind).toBe("waiting");
+        expect(waiting.kind === "waiting" && waiting.comp && waiting.comp.humanIds).toContain(b.owner);
+        settle(hub, host);
+        expectInSync(all);
+        all.forEach((s) => expect(s.resyncs).toBe(0));
+    });
+
+    it("a player who reloads mid-comp keeps the score they had, everywhere", () => {
+        const { hub, host, clients, all } = setup(10, [1, 4, 7], 23);
+        let mine: ReturnType<typeof ownScreens>[number] | undefined;
+        for (let guard = 0; guard < 5000 && !mine; guard++) {
+            mine = ownScreens(clients).find((o) => o.prompt.kind === "compPlay" && o.session !== host && ownScreens(all).length >= 2);
+            if (!mine) expect(step(hub, all)).toBe(true);
+        }
+        const play = mine!.prompt as Extract<Prompt, { kind: "compPlay" }>;
+        hub.instant = true;
+        play.onStart!();
+        play.onReport!(5);
+        hub.instant = false;
+        hub.flush();
+        const leaving = mine!.session;
+        leaving.leave();
+        hub.flush();
+        const back = NetSession.join(hub.join("c9"), "TEST", opts, { playerId: mine!.owner, json: "{}" });
+        hub.flush();
+        const now = [host, ...clients.filter((c) => c !== leaving), back];
+        const again = back.controller!.personal$.value[mine!.owner] as Extract<Prompt, { kind: "compPlay" }>;
+        expect(again.kind).toBe("compPlay");
+        expect(again.forfeitScore).toBe(5);
+        hub.instant = true;
+        again.onScore(again.forfeitScore!); // what the screen hands in
+        hub.instant = false;
+        hub.flush();
+        now.forEach((s) => expect(s.controller!.liveScores(play.seed, [mine!.owner])[0]).toMatchObject({ score: 5, done: true }));
+        settle(hub, host);
+        expectInSync(now);
+    });
+
     it("only lets the player a prompt belongs to answer it", () => {
         const { hub, host, clients, all } = setup(8, [0, 3], 5);
         let guard = 0;

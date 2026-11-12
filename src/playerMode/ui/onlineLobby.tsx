@@ -583,7 +583,13 @@ function activity(prompt: Prompt): string {
 }
 
 // Shown while several players decide at the same time, once this device's player has (or isn't asked).
-export function WaitingOnPlayers(props: { session: NetSession; controller: PlayerModeController; title: string; waitingOn: number[] }) {
+export function WaitingOnPlayers(props: {
+    session: NetSession;
+    controller: PlayerModeController;
+    title: string;
+    waitingOn: number[];
+    children?: React.ReactNode; // shown below, e.g. a comp's standings so far
+}) {
     useStatus(props.session); // re-render when people come and go
     const me = props.session.localPlayerId;
     return (
@@ -606,6 +612,7 @@ export function WaitingOnPlayers(props: { session: NetSession; controller: Playe
                     })}
                 </div>
             </div>
+            {props.children}
         </Panel>
     );
 }

@@ -46,17 +46,71 @@ interface CompPlayProps {
     onScore: (score: number, answers?: boolean[], picks?: (number | string)[]) => void;
     // the player started playing (saved, so reloading mid-comp can't get them a do-over)
     onStart?: () => void;
-    // the player's score so far, saved now and then: reloading mid-comp leaves them with it
-    onReport?: (score: number) => void;
+    // the player's score so far (and answers, in question comps), saved now and then: reloading mid-comp
+    // leaves them with it. Online, the other players see it come in.
+    onReport?: (score: number, answers?: boolean[]) => void;
+    // online: the other players in it, playing at the same time
+    live?: LiveScore[];
+    // they left in the middle of their turn: no do-overs, this is their score
+    forfeitScore?: number;
+    // online: hand in the score as soon as it's done (the standings come next, while the others finish)
+    autoSubmit?: boolean;
+}
+
+// Another player's score in a comp everyone's playing at the same time.
+export interface LiveScore {
+    id: number;
+    score: number | null; // null: nothing yet
+    answers?: boolean[];
+    picks?: (number | string)[];
+    done: boolean;
+}
+
+// The other players in a comp being played at the same time, as opponents the comp can show: those done with
+// their final score. Endurance comps are last one standing, so those still going count as still up.
+export function liveOpponents(comp: CompDefinition, participants: Houseguest[], live: LiveScore[]): Opponent[] {
+    const out: Opponent[] = [];
+    live.forEach((l) => {
+        const hg = participants.find((p) => p.id === l.id);
+        if (!hg) return;
+        if (l.done && l.score !== null) out.push({ hg, score: l.score, answers: l.answers, picks: l.picks, live: { done: true } });
+        else if (!l.done && comp.kind === "endurance") out.push({ hg, score: Infinity, live: { done: false } });
+    });
+    return out;
+}
+
+// How the other players are doing, while you play.
+function LiveStrip(props: { comp: CompDefinition; participants: Houseguest[]; live: LiveScore[] }) {
+    if (props.live.length === 0) return null;
+    return (
+        <div className="bbb-live-strip">
+            {props.live.map((l) => {
+                const hg = props.participants.find((p) => p.id === l.id);
+                if (!hg) return null;
+                const text = l.done
+                    ? `✓ ${l.score !== null ? props.comp.format(l.score) : "done"}`
+                    : l.score !== null
+                    ? `${props.comp.format(l.score)} so far`
+                    : "playing…";
+                return (
+                    <span key={l.id} className={`bbb-live-chip ${l.done ? "is-done" : ""}`}>
+                        <img src={hg.imageURL} alt="" />
+                        <b>{hg.name}</b> {text}
+                    </span>
+                );
+            })}
+        </div>
+    );
 }
 
 type Phase = "rules" | "countdown" | "play" | "done";
 
 // One player's turn at a competition: rules -> countdown -> play (with a hard time limit) -> their score.
 export function CompPlay(props: CompPlayProps) {
-    const [phase, setPhase] = React.useState<Phase>("rules");
+    const forfeited = props.forfeitScore !== undefined;
+    const [phase, setPhase] = React.useState<Phase>(forfeited ? "done" : "rules");
     const [count, setCount] = React.useState(3);
-    const [score, setScore] = React.useState<number | null>(null);
+    const [score, setScore] = React.useState<number | null>(forfeited ? props.forfeitScore! : null);
     const [playStart, setPlayStart] = React.useState(0);
     const [now, setNow] = React.useState(Date.now());
     const [rand] = React.useState(() => seededRand(props.seed));
@@ -79,19 +133,35 @@ export function CompPlay(props: CompPlayProps) {
     }, []);
     const done = React.useRef(false);
 
-    const finish = React.useCallback((s: number) => {
-        if (done.current) return;
-        done.current = true;
-        setScore(s);
-        setPhase("done");
-    }, []);
-    const { onReport, onStart } = props;
+    const { onReport, onStart, onScore, autoSubmit } = props;
+    const submit = React.useCallback(
+        (s: number) => onScore(s, answers.current.length ? [...answers.current] : undefined, picks.current.length ? [...picks.current] : undefined),
+        [onScore]
+    );
+    const finish = React.useCallback(
+        (s: number) => {
+            if (done.current) return;
+            done.current = true;
+            setScore(s);
+            setPhase("done");
+            if (autoSubmit) submit(s);
+        },
+        [autoSubmit, submit]
+    );
     const report = React.useCallback(
         (s: number) => {
             lastReported.current = s;
-            if (onReport) onReport(s);
+            if (onReport) onReport(s, answers.current.length ? [...answers.current] : undefined);
         },
         [onReport]
+    );
+    // the other players, as opponents the comp can show (only changes when their scores do)
+    const liveKey = JSON.stringify(props.live || []);
+    const baseOpponents = props.opponents;
+    const opponents = React.useMemo(
+        () => [...baseOpponents, ...liveOpponents(props.comp, props.participants, JSON.parse(liveKey))],
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [baseOpponents, liveKey]
     );
 
     React.useEffect(() => {
@@ -181,13 +251,14 @@ export function CompPlay(props: CompPlayProps) {
                         <span className={`bbb-timer ${remaining < 15 ? "is-low" : ""}`}>⏳ {formatSeconds(remaining)}</span>
                     )}
                 </div>
+                {props.live && <LiveStrip comp={props.comp} participants={props.participants} live={props.live} />}
                 <Component
                     participants={props.participants}
                     human={props.player}
                     gameState={props.gameState}
                     history={props.history}
                     rand={rand}
-                    opponents={props.opponents}
+                    opponents={opponents}
                     report={report}
                     finish={finish}
                     pauseClock={pauseClock}
@@ -201,13 +272,16 @@ export function CompPlay(props: CompPlayProps) {
     return (
         <Panel>
             {header}
+            {forfeited && <Subtle>⏱️ You left in the middle of your turn. No do-overs: your score stands.</Subtle>}
             <Title>Your result: {props.comp.format(score!)}</Title>
-            <Subtle>{props.moreToPlay ? "Don't tell anyone! Pass the device to the next player." : "Let's see how everyone did…"}</Subtle>
-            <BigButton
-                onClick={() =>
-                    props.onScore(score!, answers.current.length ? answers.current : undefined, picks.current.length ? picks.current : undefined)
-                }
-            >{props.moreToPlay ? "Next player" : "See the results"}</BigButton>
+            {autoSubmit && !forfeited ? (
+                <Subtle>Waiting for the others…</Subtle>
+            ) : (
+                <>
+                    <Subtle>{props.moreToPlay ? "Don't tell anyone! Pass the device to the next player." : "Let's see how everyone did…"}</Subtle>
+                    <BigButton onClick={() => submit(score!)}>{props.moreToPlay ? "Next player" : forfeited ? "Continue" : "See the results"}</BigButton>
+                </>
+            )}
         </Panel>
     );
 }
@@ -353,5 +427,34 @@ function Standings(props: CompResultsProps) {
             )}
             <BigButton onClick={() => props.onDone(winner.id)}>{tied ? "On to the tiebreaker" : "Continue"}</BigButton>
         </Panel>
+    );
+}
+
+// While players are still playing a comp (online): everyone's score so far, best first. Bots' results are in;
+// players still going show their score so far.
+export function LiveStandings(props: { comp: CompDefinition; participants: Houseguest[]; bots: CompResult[]; live: LiveScore[]; youId?: number }) {
+    const rows = [
+        ...props.bots.map((b) => ({ id: b.id, score: b.score as number | null, done: true, human: false })),
+        ...props.live.map((l) => ({ id: l.id, score: l.score, done: l.done, human: true })),
+    ].sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity));
+    const byId = (id: number) => props.participants.find((hg) => hg.id === id);
+    return (
+        <ol className="bbb-leaderboard bbb-live-standings">
+            {rows.map((r) => {
+                const hg = byId(r.id);
+                if (!hg) return null;
+                const score = r.score === null ? "—" : props.comp.format(r.score);
+                return (
+                    <li key={r.id} className={r.human ? "is-human" : ""}>
+                        <img src={hg.imageURL} alt="" />
+                        <span className="bbb-lb-name">
+                            {r.id === props.youId ? "You" : hg.name}
+                            {r.human ? " 🎮" : ""}
+                        </span>
+                        <span className="bbb-lb-score">{r.done ? score : r.score === null ? "playing…" : `${score} so far`}</span>
+                    </li>
+                );
+            })}
+        </ol>
     );
 }

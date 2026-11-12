@@ -1328,7 +1328,7 @@ describe("deals during endurance", () => {
         for (let seed = 1; seed < 40; seed++) {
             const { controller, play, current } = atTheWall(0, seed);
             const bots = play.opponents.filter((o) => o.score > 20).map((o) => o.hg.id);
-            const taker = bots.find((botId) => play.deals!.askBot(botId, 10));
+            const taker = bots.find((botId) => play.onDeal!("ask", botId, 10));
             if (taker === undefined) continue;
             expect(controller.state.week.wallDeals).toEqual([{ hohId: 0, toId: taker }]);
             play.onScore(1e9);
@@ -1347,7 +1347,7 @@ describe("deals during endurance", () => {
             // the bot that would outlast everyone makes the offer
             const best = [...play.opponents].sort((a, b) => b.score - a.score)[0];
             if (!play.deals!.offerFrom.includes(best.hg.id)) continue;
-            play.deals!.accept(best.hg.id);
+            play.onDeal!("accept", best.hg.id, 0);
             play.onScore(best.score - 1);
             for (let guard = 0; guard < 20 && current().kind !== "hohVisit"; guard++) answer(controller, current(), "random", true);
             expect(controller.state.week.hohId).toBe(best.hg.id);

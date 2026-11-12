@@ -10,6 +10,7 @@ export interface Opponent {
     score: number;
     answers?: boolean[]; // question comps: right/wrong for each question, in order
     picks?: (number | string)[]; // question comps: what they answered (a number, or a label), when it matters
+    live?: { done: boolean }; // online: another player, playing at the same time (not done: their score so far)
 }
 
 // Everything a bot needs to play the exact same comp instance the players get.
@@ -30,7 +31,7 @@ export interface SimResult {
 export interface EnduranceDeals {
     offerFrom: number[]; // bots who will offer the player safety for dropping, once it's down to the two of them
     // the player asks a bot still on the wall to drop for safety: true if the bot takes the deal (and drops)
-    askBot: (botId: number, seconds: number) => boolean;
+    askBot: (botId: number, seconds: number) => boolean | Promise<boolean>; // online: the answer comes back from the host
     // the player takes a bot's offer (and drops)
     accept: (botId: number) => void;
 }

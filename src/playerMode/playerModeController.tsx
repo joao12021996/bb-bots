@@ -38,7 +38,7 @@ import { botPour, botSwaps, botTarget, Claim, claimLine, Pour, STRIKES_OUT, TAIN
 import { compById, finaleComps, pickQuickComp, pickWeeklyComp } from "./comps";
 import { botPercentile } from "./comps/botScores";
 import { sample, seededRand } from "./comps/random";
-import { CompResult, tiedForFirst } from "./comps/compRunner";
+import { CompResult, LiveScore, tiedForFirst } from "./comps/compRunner";
 import {
     ACTIONS_PER_BLOCK,
     answerPitch,
@@ -332,10 +332,16 @@ export type Prompt =
           seed: number;
           opponents: Opponent[];
           moreToPlay: boolean;
-          deals?: EnduranceDeals;
+          deals?: { offerFrom: number[] }; // endurance HoH comps: deals on the wall, made through onDeal
+          // online: the other players in it, whose scores come in live (see liveScores)
+          live?: { humanIds: number[] };
+          // they left in the middle of their turn: no do-overs, this is their score
+          forfeitScore?: number;
           onScore: (score: number, answers?: boolean[], picks?: (number | string)[]) => void;
           onStart?: () => void;
-          onReport?: (score: number) => void;
+          onReport?: (score: number, answers?: boolean[]) => void;
+          // a deal on the wall: ask a bot to drop for safety (whether they did), or take a bot's offer
+          onDeal?: (action: "ask" | "accept", botId: number, seconds: number) => boolean;
       }
     | {
           kind: "knockout";
@@ -425,7 +431,18 @@ export type Prompt =
     | { kind: "juryReveal"; votes: { jurorId: number; finalistId: number }[]; onDone: () => void }
     | { kind: "gameOver"; content: JSX.Element }
     // online: players are deciding on their own screens at the same time (see gather)
-    | { kind: "waiting"; title: string; waitingOn: number[] };
+    | { kind: "waiting"; title: string; waitingOn: number[]; comp?: LiveComp };
+
+// A comp being played online, for the standings while players wait: the bots' results are known up front, the
+// players' come in live (see liveScores).
+export interface LiveComp {
+    comp: CompDefinition;
+    seed: number;
+    participants: Houseguest[];
+    bots: CompResult[];
+    humanIds: number[];
+}
+
 
 // Upgrades older saves to the current format.
 export function migrateSave(save: any): PlayerSave | null {
@@ -724,7 +741,8 @@ export class PlayerModeController {
         waitingTitle: string,
         reason: (player: Houseguest) => string,
         ask: (player: Houseguest, moreToPlay: boolean, answer: (value: T) => void) => Prompt,
-        done: (answers: { [playerId: number]: T }) => void
+        done: (answers: { [playerId: number]: T }) => void,
+        waitingComp?: LiveComp
     ) {
         const keyOf = (id: number) => `${key}:${id}`;
         const finish = () => {
@@ -750,7 +768,7 @@ export class PlayerModeController {
             return turn(0);
         }
         const left = pending.map((p) => p.id);
-        const showWaiting = () => this.show({ kind: "waiting", title: waitingTitle, waitingOn: [...left] });
+        const showWaiting = () => this.show({ kind: "waiting", title: waitingTitle, waitingOn: [...left], comp: waitingComp });
         showWaiting();
         pending.forEach((player) =>
             this.showPersonal(
@@ -1267,6 +1285,8 @@ export class PlayerModeController {
     private wallDeals(player: Houseguest, bots: CompResult[], seed: number): EnduranceDeals {
         const week = this.state.week;
         const noise = seededRand(hashcode(`${seed}:deals:${player.id}`));
+        // each ask its own roll, so it comes out the same however many were asked before (on every device)
+        const askRoll = (botId: number) => seededRand(hashcode(`${seed}:ask:${player.id}:${botId}`))();
         const feels = (botId: number) => this.player(botId).relationships[player.id];
         const record = (hohId: number, toId: number) => {
             week.wallDeals = [...(week.wallDeals || []), { hohId, toId }];
@@ -1281,8 +1301,10 @@ export class PlayerModeController {
                 // a bot that's about to fall anyway is happy to get something for it
                 const tired = Math.max(0, Math.min(1, 1 - (bot.score - seconds) / 60));
                 const p = Math.max(0.05, Math.min(0.9, 0.2 + 0.4 * feels(botId) + 0.3 * tired));
-                if (noise() >= p) return false;
+                if (askRoll(botId) >= p) return false;
                 bot.score = seconds;
+                // saved, so the results are the same after a reload
+                week.locks = { ...(week.locks || {}), [`wallDrop:${seed}:${botId}`]: seconds };
                 record(player.id, botId);
                 return true;
             },
@@ -1304,6 +1326,11 @@ export class PlayerModeController {
     ) {
         const seed = hashcode(`${this.state.seed}:${this.gameState.phase}:${this.state.step}:${comp.id}`);
         const bots = this.simulateBots(comp, participants, seed, role);
+        // bots who dropped off the wall for a deal
+        bots.forEach((b) => {
+            const dropped = this.locked<number>(`wallDrop:${seed}:${b.id}`);
+            if (dropped !== undefined) b.score = dropped;
+        });
         const humans = this.playingHumans(participants);
         const done = (winnerId: number) => {
             this.noteComp(comp);
@@ -1329,24 +1356,78 @@ export class PlayerModeController {
         }
         const humanResults: CompResult[] = [];
         const byId = (id: number) => getById(this.gameState, id);
+        const showResults = () => {
+            // any tie for first goes to a tiebreaker question
+            const results = [...bots, ...humanResults];
+            const tiedIds = tiedForFirst(comp, results);
+            const tiebreak = tiedIds.length > 1;
+            this.show({
+                kind: "compResults",
+                title,
+                comp,
+                participants,
+                results,
+                sealed: this.sealed(),
+                tiedIds: tiebreak ? tiedIds : undefined,
+                onDone: tiebreak ? () => this.tiebreak(title, tiedIds, seed, done) : () => done(tiedIds[0]),
+            });
+        };
+        const deals = (player: Houseguest) => (role === "hoh" && comp.kind === "endurance" ? this.wallDeals(player, bots, seed) : undefined);
+        const dealPrompt = (d: EnduranceDeals | undefined) =>
+            d
+                ? {
+                      deals: { offerFrom: d.offerFrom },
+                      onDeal: (action: "ask" | "accept", botId: number, seconds: number) => {
+                          if (action === "ask") return d.askBot(botId, seconds) as boolean;
+                          d.accept(botId);
+                          return true;
+                      },
+                  }
+                : {};
+        if (this.net) {
+            // online: everyone in it plays at the same time, and sees the others' scores come in
+            const sealed = this.sealed();
+            const humanIds = humans.map((p) => p.id);
+            this.gather<CompResult>(
+                `comp:${seed}`,
+                humans,
+                title,
+                (player) => `${player.name}'s turn in the ${comp.name}`,
+                (player, _more, answer) => {
+                    const startKey = `compStart:${seed}:${player.id}`;
+                    const started = this.locked<{ score: number | null }>(startKey);
+                    const forfeitScore = started
+                        ? started.score ?? comp.botScore(0, { gameState: this.gameState, history: this.state.history })
+                        : undefined;
+                    return {
+                        kind: "compPlay",
+                        title,
+                        comp,
+                        participants,
+                        playerId: player.id,
+                        seed,
+                        opponents: bots.map((r) => ({ hg: byId(r.id), score: r.score, answers: r.answers, picks: r.picks })),
+                        moreToPlay: false,
+                        live: sealed ? undefined : { humanIds: humanIds.filter((id) => id !== player.id) },
+                        forfeitScore,
+                        ...dealPrompt(forfeitScore === undefined ? deals(player) : undefined),
+                        // the same input on every device, whatever screen each has: a forfeit's screen hands in that score
+                        onScore: (score, answers, picks) => answer({ id: player.id, score, answers, picks }),
+                        onStart: () => this.lock(startKey, { score: null }),
+                        // the score so far: everyone sees it come in
+                        onReport: (score, answers) => this.lock(startKey, answers ? { score, answers } : { score }),
+                    };
+                },
+                (answers) => {
+                    humans.forEach((p) => humanResults.push(answers[p.id]));
+                    showResults();
+                },
+                sealed ? undefined : { comp, seed, participants, bots, humanIds }
+            );
+            return;
+        }
         const turn = (i: number): void => {
-            if (i >= humans.length) {
-                // any tie for first goes to a tiebreaker question
-                const results = [...bots, ...humanResults];
-                const tiedIds = tiedForFirst(comp, results);
-                const tiebreak = tiedIds.length > 1;
-                this.show({
-                    kind: "compResults",
-                    title,
-                    comp,
-                    participants,
-                    results,
-                    sealed: this.sealed(),
-                    tiedIds: tiebreak ? tiedIds : undefined,
-                    onDone: tiebreak ? () => this.tiebreak(title, tiedIds, seed, done) : () => done(tiedIds[0]),
-                });
-                return;
-            }
+            if (i >= humans.length) return showResults();
             const player = humans[i];
             const resultKey = `comp:${seed}:${player.id}`;
             const startKey = `compStart:${seed}:${player.id}`;
@@ -1384,7 +1465,7 @@ export class PlayerModeController {
                     seed,
                     opponents,
                     moreToPlay: i + 1 < humans.length,
-                    deals: role === "hoh" && comp.kind === "endurance" ? this.wallDeals(player, bots, seed) : undefined,
+                    ...dealPrompt(deals(player)),
                     onScore: (score, answers, picks) => record({ id: player.id, score, answers, picks }),
                     onStart: () => this.lock(startKey, { score: null }),
                     onReport: (score) => {
@@ -1402,6 +1483,16 @@ export class PlayerModeController {
             );
         };
         turn(0);
+    }
+
+    // Players' scores in a comp being played online (see LiveScore). Read by the screens, changes nothing.
+    public liveScores(seed: number, ids: number[]): LiveScore[] {
+        return ids.map((id) => {
+            const result = this.locked<CompResult>(`comp:${seed}:${id}`);
+            if (result) return { id, score: result.score, answers: result.answers, picks: result.picks, done: true };
+            const sofar = this.locked<{ score: number | null; answers?: boolean[] }>(`compStart:${seed}:${id}`);
+            return { id, score: sofar ? sofar.score : null, answers: sofar && sofar.answers, done: false };
+        });
     }
 
     // A knockout HoH comes up once a season, while there are enough houseguests for it to hurt.

@@ -1,7 +1,7 @@
 import React from "react";
 import { Subscription } from "rxjs";
 import { continueOverride$ } from "../../subjects/subjects";
-import { CompPlay, CompResults } from "../comps/compRunner";
+import { CompPlay, CompResults, LiveStandings } from "../comps/compRunner";
 import { actorOf, PlayerModeController, Prompt } from "../playerModeController";
 import { sessionFor } from "../net/netSession";
 import { OnlineBar, WaitingFor, WaitingOnPlayers } from "./onlineLobby";
@@ -67,6 +67,7 @@ export class PlayerModeScreen extends React.Component<Props, State> {
     private sub: Subscription | null = null;
     private personalSub: Subscription | null = null;
     private statusSub: Subscription | null = null;
+    private changedSub: Subscription | null = null;
     state: State = { prompt: null, personal: {} };
     // forces child prompts to remount on every new prompt
     private shown: Prompt | null = null;
@@ -82,6 +83,13 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         this.personalSub = controller.personal$.subscribe((personal) => later(() => this.setState({ personal })));
         // online: re-render when players come and go (who's waiting on whom)
         if (session) this.statusSub = session.status$.subscribe(() => this.forceUpdate());
+        // online: comp scores coming in live from the other players
+        if (session)
+            this.changedSub = controller.changed$.subscribe(() => {
+                const { prompt } = this.pick();
+                const live = prompt && ((prompt.kind === "compPlay" && prompt.live) || (prompt.kind === "waiting" && prompt.comp));
+                if (live) later(() => this.forceUpdate());
+            });
     }
 
     componentWillUnmount() {
@@ -90,6 +98,7 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         this.sub && this.sub.unsubscribe();
         this.personalSub && this.personalSub.unsubscribe();
         this.statusSub && this.statusSub.unsubscribe();
+        this.changedSub && this.changedSub.unsubscribe();
     }
 
     // What this device shows: online, its player's own screen if they have one (or, for the host, the screen of a
@@ -135,7 +144,17 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         else switch (prompt.kind) {
             case "waiting":
                 body = session ? (
-                    <WaitingOnPlayers session={session} controller={controller} title={prompt.title} waitingOn={prompt.waitingOn} />
+                    <WaitingOnPlayers session={session} controller={controller} title={prompt.title} waitingOn={prompt.waitingOn}>
+                        {prompt.comp && (
+                            <LiveStandings
+                                comp={prompt.comp.comp}
+                                participants={prompt.comp.participants}
+                                bots={prompt.comp.bots}
+                                live={controller.liveScores(prompt.comp.seed, prompt.comp.humanIds)}
+                                youId={session.localPlayerId ?? undefined}
+                            />
+                        )}
+                    </WaitingOnPlayers>
                 ) : (
                     <Panel>
                         <Subtle>Waiting…</Subtle>
@@ -162,7 +181,18 @@ export class PlayerModeScreen extends React.Component<Props, State> {
             case "hohVisit":
                 body = <HohVisitScreen key={key} controller={controller} actorId={prompt.actorId} />;
                 break;
-            case "compPlay":
+            case "compPlay": {
+                const onDeal = prompt.onDeal;
+                const deals =
+                    prompt.deals && onDeal
+                        ? {
+                              offerFrom: prompt.deals.offerFrom,
+                              askBot: (botId: number, seconds: number) => onDeal("ask", botId, seconds),
+                              accept: (botId: number) => {
+                                  onDeal("accept", botId, 0);
+                              },
+                          }
+                        : undefined;
                 body = (
                     <CompPlay
                         key={key}
@@ -175,13 +205,17 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                         seed={prompt.seed}
                         opponents={prompt.opponents}
                         moreToPlay={prompt.moreToPlay}
-                        deals={prompt.deals}
+                        deals={deals}
                         onScore={prompt.onScore}
                         onStart={prompt.onStart}
                         onReport={prompt.onReport}
+                        live={prompt.live ? controller.liveScores(prompt.seed, prompt.live.humanIds) : undefined}
+                        forfeitScore={prompt.forfeitScore}
+                        autoSubmit={!!session && !!prompt.live}
                     />
                 );
                 break;
+            }
             case "compResults":
                 body = (
                     <CompResults

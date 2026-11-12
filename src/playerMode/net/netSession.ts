@@ -231,6 +231,7 @@ export class NetSession {
     private depth = 0; // > 0 while the controller is running: calls inside it aren't new inputs
     private savedDuringInput = false;
     private lastReport = 0;
+    private reportTimer: any = undefined;
     private pendingHash: { seq: number; hash: string } | null = null; // hash: see signature()
     private hashTimer: any = null;
     private gapTimer: any = null;
@@ -415,6 +416,7 @@ export class NetSession {
     public leave() {
         clearTimeout(this.hashTimer);
         clearTimeout(this.gapTimer);
+        clearTimeout(this.reportTimer);
         clearTimeout(this.hostWaitTimer);
         if (this.controller) this.controller.net = null;
         this.room.leave();
@@ -740,7 +742,7 @@ export class NetSession {
     // proposes it to the host and applies it when the host sends it back. Returns the result when it's
     // already been applied, otherwise a promise of it.
     private wrap(kind: "prompt" | "method", name: string, raw: (...args: any[]) => any, promptKind?: string, slot?: number | null, stamp?: Stamp) {
-        return (...args: any[]) => {
+        const wrapped = (...args: any[]): any => {
             if (this.depth > 0) return raw(...args); // the controller calling itself
             let owner: number | null;
             if (kind === "prompt") {
@@ -753,9 +755,14 @@ export class NetSession {
             const proposal: Proposal = { kind, name, args: wireCopy(args), promptKind, owner, slot, at: stamp ? stamp.at : undefined };
             if (!this.valid(proposal, this.room.selfId)) return undefined; // not ours, or an old screen
             if (name === "onReport") {
-                // a comp's score so far: not too often
+                // a comp's score so far: not too often, but the latest one always gets sent
                 const now = Date.now();
-                if (now - this.lastReport < 1500) return undefined;
+                clearTimeout(this.reportTimer);
+                const wait = this.lastReport + 1500 - now;
+                if (wait > 0) {
+                    this.reportTimer = setTimeout(() => wrapped(...args), wait);
+                    return undefined;
+                }
                 this.lastReport = now;
             }
             if (this.isHost) return this.sequence(proposal, this.room.selfId);
@@ -775,6 +782,7 @@ export class NetSession {
                 settle = resolve;
             });
         };
+        return wrapped;
     }
 
     // The host: numbers an input, sends it to everyone and applies it.

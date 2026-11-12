@@ -1744,3 +1744,33 @@ input[type="number"] {
     margin: 0;
     color: var(--bbb-text);
 }
+
+/* online comps: how the other players are doing, while you play */
+.bbb-live-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin: 4px 0 8px;
+}
+.bbb-live-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 10px 2px 2px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.07);
+    font-size: 0.85rem;
+}
+.bbb-live-chip img {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.bbb-live-chip.is-done {
+    opacity: 0.75;
+}
+.bbb-live-standings {
+    margin-top: 12px;
+}

@@ -1,5 +1,5 @@
 import React from "react";
-import { BigButton, Subtle, Title } from "../ui/common";
+import { BigButton, Subtle, Title, whenDone } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { clamp, gaussian, Rand, seededRand } from "./random";
 
@@ -123,10 +123,13 @@ function HoldTheWall(props: CompProps) {
     const askToDrop = (botId: number, name: string) => {
         if (!deals || asked.includes(botId)) return;
         setAsked([...asked, botId]);
-        if (deals.askBot(botId, survived)) {
-            setDropped({ ...dropped, [botId]: survived });
-            setDealNews(`🤝 ${name} took the deal and dropped. You owe ${name} safety this week.`);
-        } else setDealNews(`😤 ${name} isn't letting go.`);
+        const at = survived;
+        whenDone(deals.askBot(botId, at), (took) => {
+            if (took) {
+                setDropped((d) => ({ ...d, [botId]: at }));
+                setDealNews(`🤝 ${name} took the deal and dropped. You owe ${name} safety this week.`);
+            } else setDealNews(`😤 ${name} isn't letting go.`);
+        });
     };
     const takeOffer = () => {
         if (!deals || offer === null || finished.current) return;
@@ -184,7 +187,7 @@ function HoldTheWall(props: CompProps) {
             {deals && !fallen && standing.length > 0 && standing.length <= 3 && (
                 <div>
                     {standing
-                        .filter((o) => !asked.includes(o.hg.id))
+                        .filter((o) => !asked.includes(o.hg.id) && !o.live)
                         .map((o) => (
                             <button
                                 type="button"
