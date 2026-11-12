@@ -163,7 +163,29 @@ export interface Reveal {
     index: number; // the question just answered
     verdict: string; // "✅ Right!"
     correctText: React.ReactNode; // the right answer
+    answerLabel?: string; // what correctText is ("The answer", "Fastest this round")
     rows: RevealRow[];
+}
+
+// Someone's guess when all we know is how far off it was (and the real answer): above or below it, the same way
+// every time.
+export function guessFrom(answer: number, miss: number, key: string, min: number = 0): number {
+    if (miss === 0) return answer;
+    const below = answer - miss;
+    return below >= min && Math.abs(hashcode(key)) % 2 === 0 ? below : answer + miss;
+}
+
+// The best of the round's answers, for comps with no right answer: "Name, 18".
+export function bestOf(rows: RevealRow[], value: (r: RevealRow) => number | undefined, show: (v: number) => string, lowest = false): string {
+    let best: { r: RevealRow; v: number }[] = [];
+    rows.forEach((r) => {
+        const v = value(r);
+        if (v === undefined || isNaN(v)) return;
+        if (best.length === 0 || (lowest ? v < best[0].v : v > best[0].v)) best = [{ r, v }];
+        else if (v === best[0].v) best.push({ r, v });
+    });
+    if (best.length === 0) return "nobody yet";
+    return `${best.map((b) => (b.r.you ? "you" : b.r.name)).join(" & ")}, ${show(best[0].v)}`;
 }
 
 // A wrong answer for someone we only know got it wrong: one of the wrong options, the same one every time.
@@ -178,7 +200,7 @@ export function wrongOption(options: string[], correct: string, key: string): st
 export function revealRows(
     props: CompProps,
     index: number,
-    mine: { correct: boolean; answer: string },
+    mine: { correct?: boolean; answer: string },
     describe: (correct: boolean, pick: number | string | undefined, id: number) => string
 ): RevealRow[] {
     return [
@@ -186,12 +208,14 @@ export function revealRows(
         ...props.opponents.map((o) => {
             const correct = o.answers ? o.answers[index] : undefined;
             const pick = o.picks ? o.picks[index] : undefined;
+            // comps with no right or wrong (a time, a score) only have picks
+            const played = correct !== undefined || pick !== undefined;
             return {
                 id: o.hg.id,
                 name: o.hg.name,
                 imageURL: o.hg.imageURL,
                 correct,
-                answer: correct === undefined ? undefined : describe(correct, pick, o.hg.id),
+                answer: played ? describe(!!correct, pick, o.hg.id) : undefined,
             };
         }),
     ];
@@ -271,12 +295,14 @@ export function StageScores(props: { done: number } | { cleared: number }) {
 }
 
 // The pause after an answer: the right answer, and what everyone else said.
-export function AnswerReveal(props: { reveal: Reveal; last: boolean; onNext: () => void }) {
+export function AnswerReveal(props: { reveal: Reveal; last: boolean; onNext: () => void; nextLabel?: string }) {
     const { reveal } = props;
     return (
         <div className="bbb-reveal">
             <Title>{reveal.verdict}</Title>
-            <Subtle>The answer: {reveal.correctText}</Subtle>
+            <Subtle>
+                {reveal.answerLabel || "The answer"}: {reveal.correctText}
+            </Subtle>
             <div className="bbb-answers">
                 {reveal.rows.map((r) => (
                     <div
@@ -292,7 +318,7 @@ export function AnswerReveal(props: { reveal: Reveal; last: boolean; onNext: () 
             </div>
             <StageScores done={reveal.index + 1} />
             <BigButton kind="success" onClick={props.onNext}>
-                {props.last ? "See how I did" : "Next question"}
+                {props.last ? "See how I did" : props.nextLabel || "Next question"}
             </BigButton>
         </div>
     );

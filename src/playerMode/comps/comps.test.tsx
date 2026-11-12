@@ -396,3 +396,90 @@ describe("the score between stages", () => {
         });
     });
 });
+
+describe("after each round: your answer, everyone else's, then the right one", () => {
+    async function mount(id: string, seed: number) {
+        const comp = ALL_COMPS.find((c) => c.id === id)!;
+        const gs = game();
+        const participants = nonEvictedHouseguests(gs).slice(0, 3);
+        const ctx = { seed, gameState: gs, history, participants };
+        const opponents = participants.slice(1).map((hg, i) => ({ hg, ...comp.simulate(ctx, 0.5, seededRand(i + 1)) }));
+        const finished: number[] = [];
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        const Component = comp.Component;
+        await act(async () => {
+            ReactDOM.render(
+                <Component
+                    participants={participants}
+                    human={participants[0]}
+                    gameState={gs}
+                    history={history}
+                    rand={seededRand(seed)}
+                    opponents={opponents}
+                    report={() => undefined}
+                    finish={(s: number) => finished.push(s)}
+                />,
+                container
+            );
+        });
+        const button = (text: string) => {
+            const all = Array.from(container.querySelectorAll("button"));
+            return all.find((b) => b.textContent!.trim() === text) || all.find((b) => b.textContent!.includes(text));
+        };
+        const click = (text: string) => act(async () => button(text)!.click());
+        const answers = () =>
+            Array.from(container.querySelectorAll(".bbb-answer")).map((r) => `${r.querySelector("b")!.textContent}: ${r.querySelector(".bbb-answer-text")!.textContent}`);
+        const done = () => {
+            ReactDOM.unmountComponentAtNode(container);
+            container.remove();
+        };
+        return { container, opponents, participants, button, click, answers, finished, done };
+    }
+
+    it("Count 'Em: everyone's count, and how many there really were", async () => {
+        jest.useFakeTimers();
+        try {
+            const m = await mount("count-em", 31);
+            const { generateCountRounds } = require("./memoryComps");
+            const rounds = generateCountRounds(seededRand(31));
+            for (let r = 0; r < rounds.length; r++) {
+                await act(async () => {
+                    jest.advanceTimersByTime(5000);
+                });
+                for (const d of String(rounds[r].answer + 1)) await m.click(d);
+                await m.click("OK");
+                const rows = m.answers();
+                expect(rows[0]).toBe(`You: ${rounds[r].answer + 1} (1 off)`);
+                m.opponents.forEach((o, i) => {
+                    const miss = o.picks![r];
+                    expect(rows[i + 1]).toMatch(/^\S+: \d+ \((spot on|\d+ off)\)$/);
+                    expect(rows[i + 1]).toContain(`${o.hg.name}: `);
+                    expect(rows[i + 1]).toContain(miss === 0 ? "(spot on)" : `(${miss} off)`);
+                    expect(Math.abs(parseInt(rows[i + 1].split(": ")[1], 10) - rounds[r].answer)).toBe(miss);
+                });
+                expect(m.container.textContent).toContain(`The answer: ${rounds[r].answer}`);
+                expect(m.finished).toEqual([]); // it waits for you
+                await m.click(r + 1 < rounds.length ? "Next round" : "See how I did");
+            }
+            expect(m.finished.length).toBe(1);
+            m.done();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it("Higher or Lower: everyone's call, then the next card", async () => {
+        const m = await mount("higher-or-lower", 8);
+        for (let k = 0; k < 10; k++) {
+            await m.click("Higher");
+            const rows = m.answers();
+            expect(rows[0]).toBe("You: ⬆️ Higher");
+            m.opponents.forEach((o, i) => expect(rows[i + 1]).toBe(`${o.hg.name}: ${o.picks![k] ? "⬆️ Higher" : "⬇️ Lower"}`));
+            expect(m.container.textContent).toContain("The next card:");
+            await m.click(k < 9 ? "Next card" : "See how I did");
+        }
+        expect(m.finished.length).toBe(1);
+        m.done();
+    });
+});

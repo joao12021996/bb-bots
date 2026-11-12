@@ -1,7 +1,7 @@
 import React from "react";
 import { BigButton, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
-import { StageScores, sumSoFar } from "./compUi";
+import { AnswerReveal, bestOf, Reveal, revealRows, sumSoFar } from "./compUi";
 import { gaussian, Rand, randInt, seededRand } from "./random";
 
 const ROUNDS = 3;
@@ -25,6 +25,7 @@ function StopTheClock(props: CompProps) {
     const [startedAt, setStartedAt] = React.useState<number | null>(null);
     const [stoppedAt, setStoppedAt] = React.useState<number | null>(null);
     const [errors, setErrors] = React.useState<number[]>([]);
+    const [reveal, setReveal] = React.useState<Reveal | null>(null);
     const [, tick] = React.useState(0);
 
     const target = targets[round];
@@ -49,6 +50,24 @@ function StopTheClock(props: CompProps) {
         const total = newErrors.reduce((a, b) => a + b, 0);
         // unplayed rounds count as a big miss if time runs out
         props.report(-(total + (ROUNDS - newErrors.length) * target));
+        const off = (m: number) => `${m.toFixed(2)}s off`;
+        const rows = revealRows(props, round, { correct: miss < 0.1, answer: `${elapsed.toFixed(2)}s (${off(miss)})` }, (_ok, pick) => off(Number(pick)));
+        const misses: { [id: number]: number } = {};
+        rows.forEach((r) => {
+            if (r.you) misses[r.id] = miss;
+            else if (r.answer !== undefined) misses[r.id] = parseFloat(r.answer);
+        });
+        setReveal({
+            index: round,
+            verdict: miss < 0.1 ? "🎯 Nailed it!" : `You stopped at ${elapsed.toFixed(2)}s`,
+            correctText: (
+                <>
+                    <b>{target}.00s</b>. Closest: {bestOf(rows, (r) => misses[r.id], off, true)}
+                </>
+            ),
+            answerLabel: "The target",
+            rows,
+        });
     }, [startedAt, stoppedAt, errors, target, props, round]);
 
     // auto-stop if the player waits far too long
@@ -94,15 +113,7 @@ function StopTheClock(props: CompProps) {
                     STOP
                 </button>
             )}
-            {stoppedAt !== null && (
-                <div>
-                    <p>
-                        You were <b>{errors[errors.length - 1].toFixed(2)}s</b> off.
-                    </p>
-                    <StageScores done={errors.length} />
-                    <BigButton onClick={next}>{round + 1 >= ROUNDS ? "Finish" : "Next round"}</BigButton>
-                </div>
-            )}
+            {stoppedAt !== null && reveal && <AnswerReveal reveal={reveal} last={round + 1 >= ROUNDS} onNext={next} nextLabel="Next round" />}
             {errors.length > 0 && (
                 <Subtle>Total so far: {errors.reduce((a, b) => a + b, 0).toFixed(2)}s off</Subtle>
             )}

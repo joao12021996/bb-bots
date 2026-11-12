@@ -2,7 +2,7 @@ import React from "react";
 import { nonEvictedHouseguests } from "../../model";
 import { BigButton, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
-import { StageScores, sumSoFar, useAnimationFrame } from "./compUi";
+import { AnswerReveal, bestOf, Reveal, revealRows, sumSoFar, useAnimationFrame } from "./compUi";
 import { chance, clamp, gaussian, pick, Rand, randInt, seededRand, shuffled } from "./random";
 
 // ---------------- Whack-a-Houseguest ----------------
@@ -125,6 +125,7 @@ function ReactionLights(props: CompProps) {
     const [round, setRound] = React.useState(0);
     const [phase, setPhase] = React.useState<"idle" | "wait" | "go" | "done">("idle");
     const [times, setTimes] = React.useState<number[]>([]);
+    const [reveal, setReveal] = React.useState<Reveal | null>(null);
     const goAt = React.useRef(0);
     const timer = React.useRef<any>(null);
 
@@ -136,16 +137,33 @@ function ReactionLights(props: CompProps) {
         if (props.recordAnswer) props.recordAnswer(t.length - 1, ms < 1000, ms);
         const avg = t.reduce((a, b) => a + b, 0) / t.length;
         props.report(-Math.round((avg * t.length + 1000 * (LIGHT_ROUNDS - t.length)) / LIGHT_ROUNDS));
+        if (props.pauseClock) props.pauseClock(true);
+        const said = (n: number) => (n >= 1000 ? "too early!" : `${n} ms`);
+        const k = t.length - 1;
+        const rows = revealRows(props, k, { correct: ms < 1000, answer: said(ms) }, (_ok, pick) => said(Number(pick)));
+        const fastest = rows.some((r) => r.answer && r.answer !== said(1000))
+            ? bestOf(rows, (r) => (r.answer && r.answer !== said(1000) ? parseInt(r.answer, 10) : undefined), said, true)
+            : "nobody, everyone jumped the gun";
+        setReveal({ index: k, verdict: ms >= 1000 ? "🚫 Too early!" : `⚡ ${ms} ms`, correctText: fastest, answerLabel: "Fastest this round", rows });
         setPhase("done");
-        if (t.length >= LIGHT_ROUNDS) props.finish(-Math.round(avg));
+    };
+    const next = () => {
+        if (props.pauseClock) props.pauseClock(false);
+        setReveal(null);
+        if (times.length >= LIGHT_ROUNDS) {
+            props.finish(-Math.round(times.reduce((a, b) => a + b, 0) / times.length));
+            return;
+        }
+        setRound(round + 1);
+        begin(round + 1);
     };
 
-    const begin = () => {
+    const begin = (r: number = round) => {
         setPhase("wait");
         timer.current = setTimeout(() => {
             goAt.current = performance.now();
             setPhase("go");
-        }, delays[round] * 1000);
+        }, delays[r] * 1000);
     };
 
     const tap = () => {
@@ -184,16 +202,10 @@ function ReactionLights(props: CompProps) {
             >
                 {phase === "wait" ? "Wait for green…" : phase === "go" ? "TAP!" : phase === "done" ? (last >= 1000 ? "Too early!" : `${last} ms`) : "Ready?"}
             </div>
-            {phase === "done" && <StageScores done={times.length} />}
-            {(phase === "idle" || (phase === "done" && times.length < LIGHT_ROUNDS)) && (
-                <BigButton
-                    kind="success"
-                    onClick={() => {
-                        if (phase === "done") setRound(round + 1);
-                        begin();
-                    }}
-                >
-                    {phase === "idle" ? "Start" : "Next round"}
+            {phase === "done" && reveal && <AnswerReveal reveal={reveal} last={times.length >= LIGHT_ROUNDS} onNext={next} nextLabel="Next round" />}
+            {phase === "idle" && (
+                <BigButton kind="success" onClick={() => begin()}>
+                    Start
                 </BigButton>
             )}
         </div>

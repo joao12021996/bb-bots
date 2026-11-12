@@ -2,7 +2,7 @@ import React from "react";
 import { rng } from "../../utils";
 import { BigButton, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
-import { rightSoFar, StageScores, sumSoFar } from "./compUi";
+import { AnswerReveal, bestOf, Reveal, revealRows, rightSoFar, sumSoFar } from "./compUi";
 import { chance, gaussian, Rand, randInt, seededRand } from "./random";
 
 // Luck comps: like Big Brother's "Pandora's box" style comps, skill only matters a little.
@@ -20,7 +20,7 @@ function HigherOrLower(props: CompProps) {
     const [deck] = React.useState(() => Array.from({ length: HL_GUESSES + 1 }, () => randInt(props.rand, 1, 13)));
     const [i, setI] = React.useState(0);
     const [correct, setCorrect] = React.useState(0);
-    const [last, setLast] = React.useState<string>("");
+    const [reveal, setReveal] = React.useState<Reveal | null>(null); // the next card, and everyone's call
 
     const guess = (higher: boolean) => {
         const cur = deck[i];
@@ -28,15 +28,29 @@ function HigherOrLower(props: CompProps) {
         const right = next === cur || (higher ? next > cur : next < cur);
         const c = correct + (right ? 1 : 0);
         setCorrect(c);
-        if (props.recordAnswer) props.recordAnswer(i, right);
+        if (props.recordAnswer) props.recordAnswer(i, right, higher ? 1 : 0);
         props.report(c);
-        setLast(right ? "✅ Right!" : "❌ Wrong!");
-        if (i + 1 >= HL_GUESSES) {
-            setI(i + 1);
-            setTimeout(() => props.finish(c), 700);
-        } else {
-            setI(i + 1);
-        }
+        if (props.pauseClock) props.pauseClock(true);
+        const call = (up: boolean) => (up ? "⬆️ Higher" : "⬇️ Lower");
+        setReveal({
+            index: i,
+            verdict: right ? "✅ Right!" : "❌ Wrong!",
+            correctText: (
+                <>
+                    <b>{CARD[next - 1]}</b> (after {CARD[cur - 1]}){next === cur ? ", a tie: everyone's right" : ""}
+                </>
+            ),
+            answerLabel: "The next card",
+            rows: revealRows(props, i, { correct: right, answer: call(higher) }, (ok, pick) =>
+                pick === undefined ? (ok ? "right" : "wrong") : call(Number(pick) === 1)
+            ),
+        });
+    };
+    const nextCard = () => {
+        if (props.pauseClock) props.pauseClock(false);
+        setReveal(null);
+        if (i + 1 >= HL_GUESSES) props.finish(correct);
+        else setI(i + 1);
     };
     return (
         <div>
@@ -59,11 +73,13 @@ function HigherOrLower(props: CompProps) {
                     boxShadow: "0 8px 20px rgba(0,0,0,0.5)",
                 }}
             >
-                {CARD[deck[i] - 1]}
+                {CARD[deck[reveal ? i + 1 : i] - 1]}
             </div>
-            <Subtle>{last || "Will the next card be higher or lower? (A tie counts as right.)"}</Subtle>
-            {i < HL_GUESSES && (
+            {reveal ? (
+                <AnswerReveal reveal={reveal} last={i + 1 >= HL_GUESSES} onNext={nextCard} nextLabel="Next card" />
+            ) : (
                 <div>
+                    <Subtle>Will the next card be higher or lower? (A tie counts as right.)</Subtle>
                     <BigButton kind="success" onClick={() => guess(true)}>
                         ⬆️ Higher
                     </BigButton>
@@ -72,7 +88,6 @@ function HigherOrLower(props: CompProps) {
                     </BigButton>
                 </div>
             )}
-            {i > 0 && <StageScores done={i} />}
         </div>
     );
 }
@@ -82,13 +97,15 @@ function simulateHigherOrLower(ctx: SimContext, skill: number, noise: Rand): Sim
     const rand = seededRand(ctx.seed);
     const deck = Array.from({ length: HL_GUESSES + 1 }, () => randInt(rand, 1, 13));
     const answers: boolean[] = [];
+    const picks: number[] = []; // 1: higher, 0: lower
     for (let i = 0; i < HL_GUESSES; i++) {
         const playOdds = chance(noise, 0.65 + 0.35 * skill);
         const higher = playOdds ? deck[i] <= 7 : noise() < 0.5;
         const next = deck[i + 1];
         answers.push(next === deck[i] || (higher ? next > deck[i] : next < deck[i]));
+        picks.push(higher ? 1 : 0);
     }
-    return { score: answers.filter(Boolean).length, answers };
+    return { score: answers.filter(Boolean).length, answers, picks };
 }
 
 export const HigherOrLowerComp: CompDefinition = {
@@ -126,21 +143,32 @@ function BankOrBust(props: CompProps) {
     const [total, setTotal] = React.useState(0);
     const [last, setLast] = React.useState<number | null>(null);
     const [between, setBetween] = React.useState<"bust" | "banked" | null>(null); // the scores after a round
-    const [banked, setBanked] = React.useState(0);
+    const [reveal, setReveal] = React.useState<Reveal | null>(null);
 
-    // the round's over: true if that was the last one
+    // the round's over: what everyone banked
     const endRound = (newTotal: number, got: number) => {
         if (props.recordAnswer) props.recordAnswer(round, got > 0, got);
         props.report(newTotal);
-        if (round + 1 >= BANK_ROUNDS) {
-            props.finish(newTotal);
-            return true;
-        }
         if (props.pauseClock) props.pauseClock(true);
+        const said = (n: number) => (n > 0 ? `banked ${n}` : "bust!");
+        const rows = revealRows(props, round, { correct: got > 0, answer: said(got) }, (_ok, pick) => said(Number(pick) || 0));
+        setReveal({
+            index: round,
+            verdict: got > 0 ? `💰 You banked ${got}` : "💥 BUST!",
+            correctText: rows.some((r) => r.correct)
+                ? bestOf(rows, (r) => (r.answer ? parseInt(r.answer.replace(/\D+/g, ""), 10) || 0 : undefined), String)
+                : "nobody, everyone went bust",
+            answerLabel: "Most banked this round",
+            rows,
+        });
         return false;
     };
     const nextRound = () => {
         if (props.pauseClock) props.pauseClock(false);
+        if (round + 1 >= BANK_ROUNDS) {
+            props.finish(total);
+            return;
+        }
         setBetween(null);
         setLast(null);
         setRound(round + 1);
@@ -162,21 +190,10 @@ function BankOrBust(props: CompProps) {
                 Round {round + 1} of {BANK_ROUNDS}, banked {total}
             </Title>
             <div style={{ fontSize: "4rem", margin: "8px 0" }}>{last === null ? "🎲" : ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"][last - 1]}</div>
-            {between ? (
+            {between && reveal ? (
                 <div>
-                    <p>
-                        {between === "bust" ? (
-                            <>
-                                <b>BUST!</b> You rolled a 1 and lost this round's pot.
-                            </>
-                        ) : (
-                            <>
-                                You banked <b>{banked}</b>.
-                            </>
-                        )}
-                    </p>
-                    <StageScores done={round + 1} />
-                    <BigButton onClick={nextRound}>Next round</BigButton>
+                    {between === "bust" && <Subtle>You rolled a 1 and lost this round's pot.</Subtle>}
+                    <AnswerReveal reveal={reveal} last={round + 1 >= BANK_ROUNDS} onNext={nextRound} nextLabel="Next round" />
                 </div>
             ) : (
                 <div>
@@ -192,7 +209,6 @@ function BankOrBust(props: CompProps) {
                         onClick={() => {
                             const t = total + pot;
                             setTotal(t);
-                            setBanked(pot);
                             if (!endRound(t, pot)) setBetween("banked");
                         }}
                     >

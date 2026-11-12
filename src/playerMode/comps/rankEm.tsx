@@ -3,7 +3,7 @@ import { Houseguest } from "../../model";
 import { BigButton, Face, Grid, Subtle, Title } from "../ui/common";
 import { GameState } from "../../model";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
-import { StageScores, sumSoFar } from "./compUi";
+import { AnswerReveal, bestOf, Reveal, revealRows, sumSoFar } from "./compUi";
 import { gaussian, pick, Rand, sample, seededRand, shuffled } from "./random";
 
 const ROUNDS = 3;
@@ -90,7 +90,8 @@ function RankEm(props: CompProps) {
     const [picked, setPicked] = React.useState<number | null>(null);
     const [scores, setScores] = React.useState<number[]>([]);
     const [start] = React.useState(Date.now());
-    const [between, setBetween] = React.useState(false); // the scores after a round
+    const [between, setBetween] = React.useState<Reveal | null>(null); // everyone's rankings after a round
+    const final = React.useRef(0);
     const pausedAt = React.useRef(0);
     const paused = React.useRef(0); // time spent on the scores between rounds doesn't count
 
@@ -112,36 +113,42 @@ function RankEm(props: CompProps) {
         if (props.recordAnswer) props.recordAnswer(round, score === 1, score);
         const pct = (newScores.reduce((a, b) => a + b, 0) / ROUNDS) * 100;
         props.report(pct);
-        if (round + 1 >= ROUNDS) {
-            const secs = (Date.now() - start - paused.current) / 1000;
-            props.finish(pct + Math.max(0, 1 - secs / 180) * 0.99);
-            return;
-        }
+        const secs = (Date.now() - start - paused.current) / 1000;
+        final.current = pct + Math.max(0, 1 - secs / 180) * 0.99;
         pausedAt.current = Date.now();
         if (props.pauseClock) props.pauseClock(true);
-        setBetween(true);
+        const { hgs, criterion } = rounds[round];
+        const right = [...hgs].sort((a, b) => (criterion.key(a) < criterion.key(b) ? -1 : criterion.key(a) > criterion.key(b) ? 1 : 0));
+        const pctOf = (x: number) => `${Math.round(x * 100)}% right`;
+        const rows = revealRows(props, round, { correct: score === 1, answer: pctOf(score) }, (_ok, pick) => pctOf(Number(pick)));
+        rows.forEach((r) => r.answer && r.correct === undefined && (r.correct = r.answer === pctOf(1) ? true : undefined));
+        setBetween({
+            index: round,
+            verdict: score === 1 ? "🎯 Perfect order!" : `${Math.round(score * 100)}% right`,
+            correctText: (
+                <>
+                    {right.map((hg, i) => `${i + 1}. ${hg.name}`).join(", ")}. Best: {bestOf(rows, (r) => (r.answer ? parseInt(r.answer, 10) : undefined), (v) => `${v}%`)}
+                </>
+            ),
+            answerLabel: "The right order",
+            rows,
+        });
     };
     const nextRound = () => {
         paused.current += Date.now() - pausedAt.current;
         if (props.pauseClock) props.pauseClock(false);
-        setBetween(false);
+        if (round + 1 >= ROUNDS) {
+            props.finish(final.current);
+            return;
+        }
+        setBetween(null);
         setRound(round + 1);
         setOrder(shuffled(props.rand, rounds[round + 1].hgs));
         setPicked(null);
     };
 
     if (between) {
-        return (
-            <div>
-                <Title>
-                    Round {round + 1} of {ROUNDS}: {Math.round(scores[scores.length - 1] * 100)}% right
-                </Title>
-                <StageScores done={round + 1} />
-                <BigButton kind="success" onClick={nextRound}>
-                    Next round
-                </BigButton>
-            </div>
-        );
+        return <AnswerReveal reveal={between} last={round + 1 >= ROUNDS} onNext={nextRound} nextLabel="Next round" />;
     }
     return (
         <div>

@@ -1,7 +1,7 @@
 import React from "react";
-import { BigButton, Subtle, Title } from "../ui/common";
+import { Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
-import { AnswerReveal, KnockoutPause, Keypad, Reveal, revealRows, sleep, rightSoFar, StageScores, sumSoFar, useQuizClock, useRivalsPlaying } from "./compUi";
+import { AnswerReveal, guessFrom, KnockoutPause, Keypad, Reveal, revealRows, sleep, rightSoFar, sumSoFar, useQuizClock, useRivalsPlaying } from "./compUi";
 import { chance, clamp, gaussian, pick, Rand, randInt, sample, seededRand, shuffled } from "./random";
 
 const EMOJIS = ["🍕", "🎸", "👑", "🔑", "🐍", "💎", "🎲", "🧸", "🍩", "🚀", "🌵", "🎩"];
@@ -356,6 +356,7 @@ function CountEm(props: CompProps) {
     const [phase, setPhase] = React.useState<"show" | "answer" | "feedback">("show");
     const [value, setValue] = React.useState("");
     const [errors, setErrors] = React.useState<number[]>([]);
+    const [reveal, setReveal] = React.useState<Reveal | null>(null);
 
     React.useEffect(() => {
         if (phase !== "show") return;
@@ -365,13 +366,29 @@ function CountEm(props: CompProps) {
 
     const r = rounds[round];
     const submit = () => {
-        const miss = Math.abs(parseInt(value, 10) - r.answer);
+        const said = parseInt(value, 10) || 0;
+        const miss = Math.abs(said - r.answer);
         const errs = [...errors, miss];
         setErrors(errs);
         if (props.recordAnswer) props.recordAnswer(round, miss === 0, miss);
         if (props.pauseClock) props.pauseClock(true);
         const total = errs.reduce((a, b) => a + b, 0);
         props.report(-(total + (COUNT_ROUNDS - errs.length) * 10));
+        // what everyone said: bots are known by how far off they were
+        const off = (m: number) => (m === 0 ? "spot on" : `${m} off`);
+        setReveal({
+            index: round,
+            verdict: miss === 0 ? "🎯 Spot on!" : `You were ${miss} off`,
+            correctText: (
+                <>
+                    <b>{r.answer}</b> <span style={{ fontSize: "1.4rem" }}>{r.target}</span>
+                </>
+            ),
+            rows: revealRows(props, round, { correct: miss === 0, answer: `${said} (${off(miss)})` }, (_ok, pick, id) => {
+                const m = Number(pick) || 0;
+                return `${guessFrom(r.answer, m, `count:${round}:${id}`)} (${off(m)})`;
+            }),
+        });
         setPhase("feedback");
     };
     const next = () => {
@@ -407,15 +424,7 @@ function CountEm(props: CompProps) {
                     <Keypad value={value} onChange={setValue} onSubmit={submit} maxLength={2} />
                 </div>
             )}
-            {phase === "feedback" && (
-                <div>
-                    <p>
-                        There were <b>{r.answer}</b>. You said {value}.
-                    </p>
-                    <StageScores done={round + 1} />
-                    <BigButton onClick={next}>{round + 1 >= COUNT_ROUNDS ? "Finish" : "Next round"}</BigButton>
-                </div>
-            )}
+            {phase === "feedback" && reveal && <AnswerReveal reveal={reveal} last={round + 1 >= COUNT_ROUNDS} onNext={next} nextLabel="Next round" />}
         </div>
     );
 }
