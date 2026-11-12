@@ -8,6 +8,9 @@ import { SocialScreen } from "./socialScreen";
 import { AllianceScreen } from "./allianceScreen";
 import { FaceEditor } from "./faceEditor";
 import { TutorialPage } from "../../components/tutorial/tutorialPage";
+import { cueFor } from "./playerModeScreen";
+import { bestScore, loadPref, recordScore, savePref } from "../../prefs/prefs";
+import { Scene } from "../../components/episode/scenes/scene";
 import { cartoonURL, lookFromURL, randomLook } from "../../cartoon/cartoon";
 import { HohRoomScreen, HohVisitScreen } from "./hohRoomScreen";
 import { openHohRoom } from "../social/hohRoom";
@@ -64,6 +67,29 @@ function controllerAtSocial(): PlayerModeController {
 }
 
 describe("player mode screens", () => {
+    it("sounds: nominations, evictions, your own comp win or loss, and the finale each have their own", () => {
+        const scene = (title: string) => ({ kind: "scene", scene: new Scene({ title }) } as Prompt);
+        expect(cueFor(scene("Nomination Ceremony"), [0])).toBe("nominate");
+        expect(cueFor(scene("Live Eviction"), [0])).toBe("evict");
+        expect(cueFor(scene("Eviction Speech"), [0])).toBeNull();
+        expect(cueFor(scene("Veto Winner"), [0])).toBe("reveal");
+        const results = (top: number) => ({ kind: "compResults", results: [{ id: top, score: 9 }, { id: 5, score: 3 }] } as any as Prompt);
+        expect(cueFor(results(0), [0])).toBe("win");
+        expect(cueFor(results(2), [0])).toBe("reveal"); // not in it
+        expect(cueFor({ kind: "compResults", results: [{ id: 2, score: 9 }, { id: 0, score: 3 }] } as any, [0])).toBe("lose");
+        expect(cueFor({ kind: "gameOver", content: <div /> }, [0])).toBe("fanfare");
+    });
+
+    it("remembers settings and best scores on this device", () => {
+        savePref("test.x", { a: 1 });
+        expect(loadPref("test.x", null)).toEqual({ a: 1 });
+        expect(loadPref("test.missing", 7)).toBe(7);
+        expect(recordScore("zz-comp", 5)).toBe(true);
+        expect(recordScore("zz-comp", 3)).toBe(false);
+        expect(recordScore("zz-comp", 8)).toBe(true);
+        expect(bestScore("zz-comp")).toBe(8);
+    });
+
     it("how to play: every section, with a contents link to each, and none of the old show names", () => {
         const c = mount(<TutorialPage />);
         const sections = c.querySelectorAll(".bbb-tutorial-section");

@@ -2469,3 +2469,65 @@ input[type="number"] {
         padding: 14px 14px;
     }
 }
+
+/* ---------- loading, sound, back to the game, bests ---------- */
+.bbb-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 32px 12px;
+    text-align: center;
+}
+.bbb-loading-eye {
+    font-size: 44px;
+    animation: bbb-loading-pulse 1.4s ease-in-out infinite;
+}
+.bbb-loading-text {
+    font-weight: 700;
+    color: var(--bbb-text);
+}
+.bbb-loading-detail {
+    color: var(--bbb-muted);
+    font-size: 0.9rem;
+    max-width: 420px;
+}
+@keyframes bbb-loading-pulse {
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 0.6;
+    }
+    50% {
+        transform: scale(1.15);
+        opacity: 1;
+    }
+}
+.bbb-icon-button {
+    background: none;
+    border: 1px solid var(--bbb-border);
+    border-radius: 999px;
+    color: var(--bbb-text);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 4px 8px;
+}
+.bbb-icon-button:hover {
+    border-color: var(--bbb-accent);
+}
+.bbb-back-to-game {
+    font-weight: 700;
+    color: var(--bbb-gold) !important;
+}
+.bbb-new-best {
+    text-align: center;
+    font-weight: 800;
+    color: var(--bbb-gold);
+    margin: 10px 0;
+}
+.bbb-test-best {
+    margin-left: 6px;
+    font-size: 0.75em;
+    opacity: 0.8;
+}

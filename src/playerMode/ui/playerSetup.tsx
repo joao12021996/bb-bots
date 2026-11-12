@@ -8,10 +8,12 @@ import { activatePlayerMode, Difficulty, migrateSave, newPlayerSave, PlayerModeC
 import { ALL_POWERS, PowerId, POWERS } from "../social/powers";
 import { clearSave, inlineBlobImages, readSave } from "../save/serialize";
 import { buildSeason } from "../setupGame";
-import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
+import { BigButton, Face, Grid, Loading, Panel, Subtle, Title } from "./common";
 import { cartoonFor } from "../../cartoon/cartoon";
 import { FaceEditor, Look } from "./faceEditor";
 import { PlayerModeScreen } from "./playerModeScreen";
+import { loadPref, savePref } from "../../prefs/prefs";
+import { statRoll } from "../../cartoon/cartoon";
 
 let launches = 0;
 
@@ -73,11 +75,16 @@ export function PlayerSetup() {
     // players' chosen names and faces, by pool index
     const [looks, setLooks] = React.useState<{ [i: number]: Look }>({});
     const [editing, setEditing] = React.useState<number | null>(null);
-    const [hideSkills, setHideSkills] = React.useState(false);
-    const [difficulty, setDifficulty] = React.useState<Difficulty>("normal");
+    // the last season's settings, remembered on this device
+    const [hideSkills, setHideSkills] = React.useState(() => loadPref("setup.hideSkills", false));
+    const [difficulty, setDifficulty] = React.useState<Difficulty>(() => loadPref<Difficulty>("setup.difficulty", "normal"));
     // secret powers: none, a surprise (picked at random, never shown), or hand-picked
-    const [powerMode, setPowerMode] = React.useState<"off" | "surprise" | "choose">("off");
-    const [chosenPowers, setChosenPowers] = React.useState<PowerId[]>([]);
+    const [powerMode, setPowerMode] = React.useState<"off" | "surprise" | "choose">(() => loadPref("setup.powerMode", "off"));
+    const [chosenPowers, setChosenPowers] = React.useState<PowerId[]>(() => loadPref<PowerId[]>("setup.powers", []).filter((p) => ALL_POWERS.includes(p)));
+    React.useEffect(() => savePref("setup.hideSkills", hideSkills), [hideSkills]);
+    React.useEffect(() => savePref("setup.difficulty", difficulty), [difficulty]);
+    React.useEffect(() => savePref("setup.powerMode", powerMode), [powerMode]);
+    React.useEffect(() => savePref("setup.powers", chosenPowers), [chosenPowers]);
 
     const basePool = [...cast, ...customs];
     const pool: PlayerProfile[] = basePool.map((hg, i) => (looks[i] && selected.includes(i) ? { ...hg, ...looks[i] } : hg));
@@ -130,7 +137,7 @@ export function PlayerSetup() {
         setStarting(true);
         clearSave();
         // skill randomizer: everyone gets secret, random Social and Comp scores
-        const roll = () => Math.round(1 + 9 * ((Math.random() + Math.random()) / 2));
+        const roll = () => statRoll(Math.random);
         const players = hideSkills ? pool.map((hg) => ({ ...hg, social: roll(), comp: roll() })) : pool;
         const setup = buildSeason(players, selected, bots, cast$.value.options || {}, hohPlaysVeto);
         // make uploaded portraits survive a reload
@@ -150,6 +157,12 @@ export function PlayerSetup() {
                 : `Tap a houseguest for each player, or join under your own names (${selected.length}/${playerCount}).`
             : "Ready! Bots are picked at random from the rest of the cast.";
 
+    if (starting)
+        return (
+            <Panel>
+                <Loading text="Moving everyone into the house…" detail="Packing suitcases, hiding cameras, assigning beds." />
+            </Panel>
+        );
     return (
         <Panel>
             <div className="bbb-hero small">

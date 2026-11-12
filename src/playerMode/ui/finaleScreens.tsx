@@ -1,3 +1,4 @@
+import { play } from "../../sound/sound";
 import React from "react";
 import { Houseguest } from "../../model";
 import { Answer, answerLabels, JuryQuestion, Move } from "../social/finale";
@@ -90,6 +91,11 @@ export function JuryReveal(props: {
     const winner = props.finalists.find((f) => count(f.id) >= majority);
     const juror = (id: number) => props.jurors.find((j) => j.id === id)!;
     const last = shown[shown.length - 1];
+    const won = !!winner;
+    React.useEffect(() => {
+        if (won) play("fanfare");
+        else if (read > 0) play("vote");
+    }, [read, won]);
     return (
         <Panel>
             <Title>🗳️ Finale night</Title>

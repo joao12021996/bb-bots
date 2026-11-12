@@ -9,7 +9,7 @@ import { watchForInspector } from "../net/inspectWatch";
 import { OnlineBar, WaitingFor, WaitingOnPlayers } from "./onlineLobby";
 import { ChatDock } from "./chatDock";
 import { ChoosePrompt } from "./choosePrompt";
-import { BigButton, Panel, Subtle, Title } from "./common";
+import { BigButton, Loading, Panel, Subtle, Title } from "./common";
 import { SocialScreen } from "./socialScreen";
 import { AllianceScreen } from "./allianceScreen";
 import { HohRoomScreen, HohVisitScreen } from "./hohRoomScreen";
@@ -22,6 +22,9 @@ import { HideTiebreakPlay, HideTiebreakResults } from "../comps/hideTiebreak";
 import { MemoryDuelBoard } from "../comps/memoryDuel";
 import { KnockoutBoard } from "../comps/knockout";
 import { WineDrink, WinePour } from "../comps/taintedWine";
+import { rankResults } from "../comps/compRunner";
+import { Cue, play } from "../../sound/sound";
+import { POWERS } from "../social/powers";
 
 interface Props {
     controller: PlayerModeController;
@@ -67,6 +70,32 @@ function Handoff(props: { name: string; imageURL: string; reason: string; onRead
     );
 }
 
+// The sound a new screen makes, if any. `mine`: the players on this device.
+export function cueFor(prompt: Prompt | null, mine: number[]): Cue | null {
+    if (!prompt) return null;
+    switch (prompt.kind) {
+        case "scene": {
+            const title = prompt.scene.title || "";
+            if (/Nomination Ceremony|Replacement Nominee/.test(title)) return "nominate";
+            if (/Eviction$|Live Eviction|Final Eviction/.test(title) && !/Speech/.test(title)) return "evict";
+            if (Object.values(POWERS).some((p) => title.includes(p.name))) return "power";
+            if (/Competition|Veto Winner|Veto Ceremony|Last Chance/.test(title)) return "reveal";
+            return null;
+        }
+        case "compResults": {
+            if (prompt.tiedIds && prompt.tiedIds.length > 1) return "reveal";
+            const top = rankResults(prompt.results)[0];
+            if (!top) return null;
+            if (mine.includes(top.id)) return "win";
+            return prompt.results.some((r) => mine.includes(r.id)) ? "lose" : "reveal";
+        }
+        case "gameOver":
+            return "fanfare";
+        default:
+            return null;
+    }
+}
+
 // The main player mode screen. Renders whatever the controller is currently asking for.
 export class PlayerModeScreen extends React.Component<Props, State> {
     private sub: Subscription | null = null;
@@ -85,8 +114,8 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         const session = sessionFor(controller);
         // online, another player's move can arrive while the season is mid-update: render after it's done
         const later = (update: () => void) => (session ? Promise.resolve().then(update) : update());
-        this.sub = controller.prompt$.subscribe((prompt) => later(() => this.setState({ prompt })));
-        this.personalSub = controller.personal$.subscribe((personal) => later(() => this.setState({ personal })));
+        this.sub = controller.prompt$.subscribe((prompt) => later(() => this.setState({ prompt }, () => this.cue())));
+        this.personalSub = controller.personal$.subscribe((personal) => later(() => this.setState({ personal }, () => this.cue())));
         // online: re-render when players come and go (who's waiting on whom)
         if (session) this.statusSub = session.status$.subscribe(() => this.forceUpdate());
         // online: opening the inspect tools gets a player expelled
@@ -123,6 +152,19 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         this.stopWatch && this.stopWatch();
     }
 
+    private cued: Prompt | null = null;
+    // a sound for each new screen this device shows
+    private cue() {
+        const { prompt } = this.pick();
+        if (!prompt || prompt === this.cued) return;
+        this.cued = prompt;
+        const { controller } = this.props;
+        const session = sessionFor(controller);
+        const mine = session ? (session.localPlayerId !== null ? [session.localPlayerId] : []) : controller.state.humanIds;
+        const cue = cueFor(prompt, mine);
+        if (cue) play(cue);
+    }
+
     // What this device shows: online, its player's own screen if they have one, otherwise the screen everyone
     // shares. (A player who isn't connected has a bot playing for them, after a while: see NetSession.checkAway.)
     private pick(): { prompt: Prompt | null; owner: number | null } {
@@ -147,7 +189,7 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         if (!prompt) {
             return (
                 <Panel>
-                    <Subtle>Loading…</Subtle>
+                    <Loading text="Opening the house…" />
                 </Panel>
             );
         }

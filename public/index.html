@@ -16,6 +16,15 @@
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
-        <div id="root"></div>
+        <div id="root">
+            <div style="min-height: 90vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #a9a3c7; font-family: system-ui, sans-serif">
+                <div style="font-size: 48px; animation: bbb-boot 1.4s ease-in-out infinite">👁️</div>
+                <div>Opening the house…</div>
+            </div>
+            <style>
+                html { background: #0c0a1a; }
+                @keyframes bbb-boot { 0%, 100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.15); opacity: 1; } }
+            </style>
+        </div>
     </body>
 </html>

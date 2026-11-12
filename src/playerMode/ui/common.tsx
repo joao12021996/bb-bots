@@ -163,3 +163,16 @@ export function whenDone<T>(value: T | Promise<T>, then: (result: T) => void) {
     if (value && typeof (value as any).then === "function") (value as Promise<T>).then(then);
     else then(value as T);
 }
+
+// Something's on its way: a spinning eye and what we're waiting for.
+export function Loading(props: { text?: string; detail?: React.ReactNode }) {
+    return (
+        <div className="bbb-loading" role="status" aria-live="polite">
+            <div className="bbb-loading-eye" aria-hidden="true">
+                👁️
+            </div>
+            <div className="bbb-loading-text">{props.text || "Loading…"}</div>
+            {props.detail && <div className="bbb-loading-detail">{props.detail}</div>}
+        </div>
+    );
+}

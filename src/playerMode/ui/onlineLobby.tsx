@@ -7,7 +7,7 @@ import { NetSession, NetStatus, SessionOptions, setActiveSession } from "../net/
 import { cleanRoomCode, joinLink, newRoomCode, openRoom, parseInvite } from "../net/room";
 import { buildOnlineSeason, defaultSetup, houseOf, maxHouse, minHouse } from "../net/lobby";
 import { inlineBlobImages, readOnlineSave } from "../save/serialize";
-import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
+import { BigButton, Face, Grid, Loading, Panel, Subtle, Title } from "./common";
 import { cartoonFor } from "../../cartoon/cartoon";
 import { FaceEditor } from "./faceEditor";
 import { castSource, launch, showSeasonSoFar, Stepper } from "./playerSetup";
@@ -421,7 +421,7 @@ function SeatPicker(props: { session: NetSession; status: NetStatus }) {
             </div>
             <RoomCode code={status.code} />
             {status.slots.length === 0 ? (
-                <Subtle>Connecting to the room… If nothing happens, check the code, and that the host has the game open.</Subtle>
+                <Loading text="Connecting to the room…" detail="If nothing happens, check the code, and that the host has the game open." />
             ) : (
                 <>
                     <Subtle>{mine === null ? "Which player are you? Tap yourself to jump back in." : "Loading the season…"}</Subtle>
@@ -493,8 +493,8 @@ export function JoinOnline(props: { initialCode?: string; autoJoin?: boolean }) 
                 <div className="bbb-hero small">
                     <div className="bbb-hero-kicker">Online season</div>
                     <Title>Joining the game…</Title>
-                    <Subtle>Connecting to your friends. This takes a few seconds.</Subtle>
                 </div>
+                <Loading text="Connecting to your friends…" detail="This takes a few seconds." />
             </Panel>
         );
     }

@@ -8,6 +8,8 @@ import { seededRand } from "../comps/random";
 import { botHide, HideTiebreakPlay, HideTiebreakResults, hideOutcome, tiebreakHouse, VetoHide } from "../comps/hideTiebreak";
 import { cartoonFor } from "../../cartoon/cartoon";
 import { BigButton, Panel, Subtle, Title } from "./common";
+import { bestScore, recordScore } from "../../prefs/prefs";
+import { play as playCue } from "../../sound/sound";
 
 // Test mode: play any single comp against a few bots, outside a season. Nothing is saved.
 
@@ -73,6 +75,7 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
     const [results, setResults] = React.useState<CompResult[] | null>(null);
     const [tiebreak, setTiebreak] = React.useState<Tiebreak | null>(null);
     const [wantBots, setBots] = React.useState(3);
+    const [newBest, setNewBest] = React.useState<number | null>(null);
     const season = React.useMemo(() => testSeason(props.cast, stage), [props.cast, stage]);
     const maxBots = nonEvictedHouseguests(season.gameState).length - 1;
     const bots = Math.max(1, Math.min(wantBots, maxBots));
@@ -148,6 +151,10 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
                     tiedIds={tie ? tiedIds : undefined}
                     onDone={() => (tie ? startTiebreak(game, tiedIds, 0) : done())}
                 />
+                {newBest !== null && <div className="bbb-new-best">⭐ New personal best: {game.comp.format(newBest)}</div>}
+                {newBest === null && bestScore(game.comp.id) !== undefined && (
+                    <Subtle>Your best: {game.comp.format(bestScore(game.comp.id)!)}</Subtle>
+                )}
                 <BigButton kind="info" onClick={() => play(game.comp)}>
                     🔁 Play {game.comp.name} again
                 </BigButton>
@@ -168,12 +175,15 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
                     seed={game.seed}
                     opponents={game.opponents}
                     moreToPlay={false}
-                    onScore={(score, answers, picks) =>
-                        setResults([
+                    onScore={(score, answers, picks) => {
+                        const all = [
                             { id: game.participants[0].id, score, answers, picks },
                             ...game.opponents.map((o) => ({ id: o.hg.id, score: o.score, answers: o.answers, picks: o.picks })),
-                        ])
-                    }
+                        ];
+                        setNewBest(recordScore(game.comp.id, score) ? score : null);
+                        playCue(Math.max(...all.map((r) => r.score)) === score ? "win" : "lose");
+                        setResults(all);
+                    }}
                 />
                 <BigButton kind="light" onClick={() => setGame(null)}>
                     ← Back to the list
@@ -185,7 +195,8 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
         <Panel className="bbb-test-mode">
             <Title>🧪 Test a comp</Title>
             <Subtle>
-                Play any competition on its own against bots. Nothing is saved. You play as {season.gameState.houseguests[0].name}.
+                Practise any competition on its own against bots. Your best score in each one is remembered on this device. You play as{" "}
+                {season.gameState.houseguests[0].name}.
             </Subtle>
             <div className="bbb-test-stage">
                 <button type="button" className={`button is-small ${stage === "early" ? "is-warning" : "is-light"}`} onClick={() => setStage("early")}>
@@ -226,6 +237,7 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
                                     >
                                         {c.emoji} {c.name}
                                         {!fits ? " *" : ""}
+                                        {bestScore(c.id) !== undefined && <span className="bbb-test-best">⭐ {c.format(bestScore(c.id)!)}</span>}
                                     </button>
                                 );
                             })}
