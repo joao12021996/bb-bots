@@ -5,7 +5,7 @@ import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { AnswerReveal, bestOf, Reveal, revealRows, rightSoFar, sumSoFar } from "./compUi";
 import { chance, gaussian, Rand, randInt, seededRand } from "./random";
 
-// Luck comps: like Big Brother's "Pandora's box" style comps, skill only matters a little.
+// Luck comps: like the classic "open the box" luck comps, skill only matters a little.
 
 function botRand() {
     return Math.abs(rng().randomFloat());

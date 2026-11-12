@@ -1,8 +1,8 @@
-## Big Brother Bots: A Big Brother (US) Simulator ## 
+## Houseguest Bots: A Reality Competition Simulator ##
 
 --> https://spaulmark.github.io/bb-bots/ <--
 
-Big Brother Bots is a simulator for the reality show Big Brother.
+Houseguest Bots is a simulator for a social strategy game in a house full of cartoon houseguests.
 
 Deal a cast of cartoon houseguests (or upload your own), then add twists and watch as everyone votes each other out until one winner remains! You can contact me on github or at `.prof.plum`.
 

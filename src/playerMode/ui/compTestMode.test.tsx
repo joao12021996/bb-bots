@@ -11,7 +11,7 @@ import { CompTestMode, testOpponents, testSeason } from "./compTestMode";
 const act = (syncAct as unknown) as (cb: () => void | Promise<void>) => Promise<void>;
 const cast: PlayerProfile[] = Array.from({ length: 8 }, (_, i) => ({ name: `Player${i}`, imageURL: "" } as PlayerProfile));
 
-describe("BB Comics", () => {
+describe("House Comics", () => {
     it("only comes up once there's a jury, and has a comic for every houseguest of the season", () => {
         const early = testSeason(cast, "early");
         const jury = testSeason(cast, "jury");

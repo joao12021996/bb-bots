@@ -7,6 +7,7 @@ import { createAlliance } from "../social/alliances";
 import { SocialScreen } from "./socialScreen";
 import { AllianceScreen } from "./allianceScreen";
 import { FaceEditor } from "./faceEditor";
+import { TutorialPage } from "../../components/tutorial/tutorialPage";
 import { cartoonURL, lookFromURL, randomLook } from "../../cartoon/cartoon";
 import { HohRoomScreen, HohVisitScreen } from "./hohRoomScreen";
 import { openHohRoom } from "../social/hohRoom";
@@ -63,6 +64,17 @@ function controllerAtSocial(): PlayerModeController {
 }
 
 describe("player mode screens", () => {
+    it("how to play: every section, with a contents link to each, and none of the old show names", () => {
+        const c = mount(<TutorialPage />);
+        const sections = c.querySelectorAll(".bbb-tutorial-section");
+        expect(sections.length).toBeGreaterThan(5);
+        const links = c.querySelectorAll(".bbb-tutorial-toc a");
+        expect(links.length).toBe(sections.length);
+        sections.forEach((sec) => expect(c.querySelector(`a[href="#${sec.id}"]`)).not.toBeNull());
+        expect(c.textContent).toContain("Head of House");
+        expect(c.textContent).not.toMatch(/Big Brother|BB /);
+    });
+
     it("social time: answers approaches, chats, and proposes an alliance", () => {
         const controller = controllerAtSocial();
         const c = mount(<SocialScreen controller={controller} blockName="Morning in the house" />);

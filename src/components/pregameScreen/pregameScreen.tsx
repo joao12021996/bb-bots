@@ -4,7 +4,7 @@ import { MemoryWall } from "../memoryWall";
 import { HasText } from "../layout/text";
 import { popularityMode } from "../../model/portraitDisplayMode";
 import { cast$, displayMode$, pushToMainContentStream, switchSceneRelative } from "../../subjects/subjects";
-import { Screens, TopbarLink } from "../topbar/topBar";
+import { Screens, showTutorial, TopbarLink } from "../topbar/topBar";
 import { SeasonEditorPage } from "../seasonEditor/seasonEditorPage";
 import { CastingScreen } from "../castingScreen/castingScreen";
 import { dealNewCast } from "../../cartoon/newCast";
@@ -69,6 +69,9 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                         Build a cast, add twists, and watch the bots scheme, compete and vote each other out, or move
                         into the house yourself and try to outlast them.
                     </p>
+                    <button className="button is-light bbb-hero-help" onClick={showTutorial}>
+                        📖 How to play
+                    </button>
                 </div>
                 <div className="bbb-modes">
                     <div className="bbb-mode-card">

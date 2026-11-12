@@ -7,6 +7,7 @@ import { Box } from "../layout/box";
 import { dealNewCast } from "../../cartoon/newCast";
 import { SeasonEditorPage } from "../seasonEditor/seasonEditorPage";
 import { BehaviorSubject, Subscription } from "rxjs";
+import { TutorialPage } from "../tutorial/tutorialPage";
 
 export enum Screens {
     Deck = 1,
@@ -14,6 +15,7 @@ export enum Screens {
     Season = 3,
     Ingame = 4,
     EditRelationships = 5,
+    Tutorial = 6,
 }
 
 // for topbar minty colors
@@ -58,6 +60,15 @@ export function EditSeasonLink(): JSX.Element {
     );
 }
 
+export function showTutorial() {
+    pushToMainContentStream(<TutorialPage />, Screens.Tutorial);
+}
+
+export function TutorialLink(): JSX.Element {
+    const LinkStyle = activeScreen$.value === Screens.Tutorial ? ActiveTopbarLink : TopbarLink;
+    return <LinkStyle onClick={showTutorial}>How to Play</LinkStyle>;
+}
+
 // A new cast of cartoon houseguests.
 export function ChooseCastLink(): JSX.Element {
     return <TopbarLink onClick={() => dealNewCast()}>New Cast</TopbarLink>;
@@ -88,6 +99,7 @@ export class Topbar extends React.Component<{ style?: any }, { tab: Screens }> {
                     <ChooseCastLink />
                     <CastingScreenLink />
                     <EditSeasonLink />
+                    <TutorialLink />
                 </nav>
             </Box>
         );

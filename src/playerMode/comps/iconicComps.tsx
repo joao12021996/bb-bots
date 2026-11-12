@@ -287,7 +287,7 @@ export const HideAndGoVetoComp: CompDefinition = {
     format: (s) => (s >= SPOT_NAMES.length ? "never found!" : `found ${s}${s === 1 ? "st" : s === 2 ? "nd" : s === 3 ? "rd" : "th"}`),
 };
 
-// ---------------- BB Comics ----------------
+// ---------------- House Comics ----------------
 
 const COMIC_FAKES = 1; // forgeries of each real cover: one real, one fake per houseguest
 const COMIC_LIMIT = 900; // seconds: 15 minutes. Time up: the most covers in the right place wins
@@ -343,7 +343,7 @@ const COMIC_SUITS = ["#dc2626", "#2563eb", "#16a34a", "#9333ea", "#ea580c", "#08
 const VILLAIN_SUITS = ["#111827", "#4c1d95", "#14532d", "#7f1d1d", "#1e1b4b", "#3f3f46", "#365314", "#701a75"];
 const COMIC_CAPES = ["none", "#991b1b", "#1e3a8a", "#facc15", "#4c1d95", "#f8fafc"];
 const COMIC_MASKS: Cover["mask"][] = ["none", "eyes", "cowl"];
-const COMIC_EMBLEMS = ["★", "⚡", "♥", "◆", "☾", "✚", "BB", "?"];
+const COMIC_EMBLEMS = ["★", "⚡", "♥", "◆", "☾", "✚", "H", "?"];
 const COMIC_SCENES: Cover["scene"][] = ["burst", "city", "space", "speed"];
 const COMIC_PRICES = ["10¢", "12¢", "25¢", "35¢", "50¢", "$1"];
 
@@ -428,7 +428,7 @@ function ComicHero(props: { cover: Cover; hg: Houseguest }) {
                 {limb("M37 81 L31 101")}
                 <path d="M34 110 L36 81 Q50 71 64 81 L66 110 Z" fill={cover.suit} stroke={INK} strokeWidth="1.5" />
                 <circle cx="50" cy="93" r="8" fill="#fde047" stroke={INK} strokeWidth="1.5" />
-                <text x="50" y={cover.emblem === "BB" ? 95.5 : 96.5} textAnchor="middle" fontSize={cover.emblem === "BB" ? 7 : 10} fontWeight="900" fill={INK}>
+                <text x="50" y="96.5" textAnchor="middle" fontSize="10" fontWeight="900" fill={INK}>
                     {cover.emblem}
                 </text>
                 <rect x="46" y="64" width="8" height="10" fill={skin} stroke={INK} strokeWidth="1.2" />
@@ -476,7 +476,7 @@ function ComicCover(props: { hg: Houseguest; rival?: Houseguest; cover: Cover; o
         <button type="button" className="bbb-comic" style={style} disabled={!props.onClick} onClick={props.onClick}>
             <div className="bbb-comic-mast">
                 <span>No. {cover.issue}</span>
-                <span className="bbb-comic-brand">BB COMICS</span>
+                <span className="bbb-comic-brand">HOUSE COMICS</span>
                 <span>{cover.price}</span>
             </div>
             <div className={"bbb-comic-title" + (cover.villain ? " is-villain" : "")}>
@@ -960,7 +960,7 @@ function simulateBBComics(ctx: SimContext, skill: number, noise: Rand): SimResul
 
 export const BBComicsComp: CompDefinition = {
     id: "bb-comics",
-    name: "BB Comics",
+    name: "House Comics",
     emoji: "🦸",
     kind: "memory",
     rules:

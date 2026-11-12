@@ -3,7 +3,7 @@ import { hashcode } from "../utils/utilities";
 
 // Cartoon houseguests: every character is drawn from a handful of attributes (skin, face, hair, eyes, glasses,
 // facial hair, hats and more), so nobody needs a photo. The look travels inside the picture itself (an SVG data
-// URL that carries its attributes), so it survives saves and online play, and BB Comics can draw the same face
+// URL that carries its attributes), so it survives saves and online play, and House Comics can draw the same face
 // as a superhero or a villain.
 
 export interface CartoonLook {

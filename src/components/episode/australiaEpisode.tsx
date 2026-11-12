@@ -6,7 +6,7 @@ export const BbAustralia: EpisodeType = {
     canPlayWith: (n: number) => n >= 4,
     eliminates: 1,
     emoji: "🇦🇺",
-    name: "BB Australia",
+    name: "Three on the Block",
     description:
         "3 nominees, and no veto. Nominees are able to vote. The previous HoH participates in the HoH comp.",
     generate,
