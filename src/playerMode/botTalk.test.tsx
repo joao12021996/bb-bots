@@ -1,7 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { newPlayerSave, PlayerModeController, Prompt, Step } from "./playerModeController";
-import { mentionsIn, readMessage, TALKS_PER_BLOCK, talkLine } from "./social/botTalk";
+import { mentionsIn, readMessage, TALKS_MIN, TALKS_PER_BLOCK, talkLine, talkPatience } from "./social/botTalk";
 import { answer, newGame } from "./testing";
 import { nonEvictedHouseguests } from "../model";
 import { BotTalkPanel } from "./ui/botTalkPanel";
@@ -44,6 +44,26 @@ describe("reading what players say to bots", () => {
         expect(read("what's your favourite colour?")).toEqual({ kind: "unknown", question: true });
     });
 
+    it("gives friends more time for you than enemies, between 2 and 12 messages, with some luck either way", () => {
+        const rolls = Array.from({ length: 50 }, (_, i) => i / 49);
+        const avg = (rel: number) => rolls.reduce((sum, r) => sum + talkPatience(rel, 1, r), 0) / rolls.length;
+        [-1, -0.5, 0, 0.5, 1].forEach((rel) =>
+            [0.7, 1, 1.6].forEach((chats) =>
+                rolls.forEach((r) => {
+                    const n = talkPatience(rel, chats, r);
+                    expect(n).toBeGreaterThanOrEqual(TALKS_MIN);
+                    expect(n).toBeLessThanOrEqual(TALKS_PER_BLOCK);
+                })
+            )
+        );
+        expect(avg(-1)).toBeLessThan(avg(0));
+        expect(avg(0)).toBeLessThan(avg(1));
+        expect(talkPatience(-1, 1, 0)).toBe(TALKS_MIN);
+        expect(talkPatience(1, 1, 1)).toBe(TALKS_PER_BLOCK);
+        // it varies: a busy friend can have less time than a curious enemy
+        expect(talkPatience(1, 1, 0)).toBeLessThan(talkPatience(-1, 1, 1));
+    });
+
     it("answers in the bot's own voice, the same way every time", () => {
         const a = talkLine("villain", "targetIs", "k1", "Sam");
         expect(a).toBe(talkLine("villain", "targetIs", "k1", "Sam"));
@@ -61,6 +81,7 @@ describe("talking to bots in a season", () => {
         let socialTurns = 0;
         let deals = 0;
         let outside = 0;
+        const maxes = new Set<number>();
         let guard = 0;
         while (guard++ < 6000) {
             const p = prompt as Prompt | null;
@@ -73,15 +94,22 @@ describe("talking to bots in a season", () => {
                 const before = controller.state.actionsLeft;
                 const hi = controller.talkToBot(bot.id, "hey, how are you?")!;
                 expect(hi.lines.map((l) => l.who)).toEqual(["me", "bot"]);
+                // how long they'll talk for: set when you start, between 2 and 12
+                const max = controller.state.talks![0][bot.id].max!;
+                expect(max).toBeGreaterThanOrEqual(TALKS_MIN);
+                expect(max).toBeLessThanOrEqual(TALKS_PER_BLOCK);
+                maxes.add(max);
                 controller.talkToBot(bot.id, "who are you targeting?");
                 const told = controller.state.talks![0][bot.id].target;
                 expect(told).not.toBe(0); // nobody names you as their target to your face
-                const again = controller.talkToBot(bot.id, "who are you targeting?")!;
-                expect(controller.state.talks![0][bot.id].target).toBe(told); // asked twice, same answer
-                if (told !== null && told !== undefined) expect(again.lines[1].text).toContain(controller.player(told).name);
-                expect(again.lines.length).toBe(2);
+                if (max >= 3) {
+                    const again = controller.talkToBot(bot.id, "who are you targeting?")!;
+                    expect(controller.state.talks![0][bot.id].target).toBe(told); // asked twice, same answer
+                    if (told !== null && told !== undefined) expect(again.lines[1].text).toContain(controller.player(told).name);
+                    expect(again.lines.length).toBe(2);
+                }
                 expect(controller.state.actionsLeft).toBe(before); // questions are free
-                if (before > 0 && bots.length >= 3) {
+                if (max >= 4 && before > 0 && bots.length >= 3) {
                     const offer = controller.talkToBot(bot.id, "final two, you and me?")!;
                     if (offer.outcome) {
                         deals++;
@@ -89,8 +117,9 @@ describe("talking to bots in a season", () => {
                         expect(offer.lines.map((l) => l.who)).toEqual(["me", "bot", "note"]);
                     }
                 }
-                // they only have so much time for you
-                for (let i = 0; i < TALKS_PER_BLOCK; i++) controller.talkToBot(bot.id, "lol");
+                // once they're out of time, they're out of time (it doesn't change mid-chat)
+                while (controller.state.talks![0][bot.id].n < max) controller.talkToBot(bot.id, "lol");
+                expect(controller.state.talks![0][bot.id].max).toBe(max);
                 const n = controller.state.actionsLeft;
                 const tired = controller.talkToBot(bot.id, "final two?")!;
                 expect(tired.outcome).toBeUndefined();
@@ -111,6 +140,7 @@ describe("talking to bots in a season", () => {
         expect(controller.state.step).toBe(Step.GameOver);
         expect(socialTurns).toBeGreaterThan(2);
         expect(deals).toBeGreaterThan(0);
+        expect(maxes.size).toBeGreaterThan(1); // not the same every time
         // what was said survives a save
         const saved = JSON.parse(JSON.stringify(controller.state));
         expect(Object.keys(saved.talks[0]).length).toBeGreaterThan(0);

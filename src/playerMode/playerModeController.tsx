@@ -131,7 +131,7 @@ import {
     settleNominationPledges,
     hasFinal2,
 } from "./social/promises";
-import { feelingReply, mentionsIn, opinionReply, readMessage, Reply, TALK_MAX_LENGTH, TALKS_PER_BLOCK, talkLine, TalkLine } from "./social/botTalk";
+import { feelingReply, mentionsIn, opinionReply, readMessage, Reply, TALK_MAX_LENGTH, TALKS_MIN, talkLine, talkPatience, TalkLine } from "./social/botTalk";
 import {
     acceptFinal2,
     answerVoteQuestion,
@@ -340,6 +340,7 @@ export interface BotTalk {
     key: string;
     n: number;
     warm?: boolean; // they've had a friendly word this block
+    max?: number; // how many messages they have time for this block (see talkPatience)
     target?: number | null; // what they said about their target this block (null: they wouldn't say)
 }
 
@@ -2696,6 +2697,9 @@ export class PlayerModeController {
             talk.n = 0;
             talk.warm = false;
             delete talk.target;
+            // how much time they have for you: decided when you start talking, so it doesn't move mid-chat
+            const traits = this.traitsOf(botId);
+            talk.max = talkPatience(bot.relationships[actor.id] ?? 0, traits ? traits.chats : 1, hash01(`${s.seed}:${block}:${actor.id}:${botId}:patience`));
         }
         const day = this.currentDay();
         const said: TalkLine[] = [];
@@ -2717,7 +2721,7 @@ export class PlayerModeController {
             return { lines: said, outcome };
         };
 
-        if (talk.n > TALKS_PER_BLOCK) {
+        if (talk.n > (talk.max ?? TALKS_MIN)) {
             botSays(line("tired"));
             return finish();
         }

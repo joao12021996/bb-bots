@@ -7,7 +7,18 @@ import { PitchReason } from "./pitch";
 // same answer on every device, so it works online too.
 
 export const TALK_MAX_LENGTH = 300;
-export const TALKS_PER_BLOCK = 12; // messages per houseguest per social block, before they have to go
+export const TALKS_PER_BLOCK = 12; // the most messages a houseguest will take in one social block
+export const TALKS_MIN = 2; // ...and the fewest: everyone gives you a couple of minutes
+
+// How many messages a houseguest has time for this block, from how they feel about you (-1 to 1), how chatty
+// they are (their personality's `chats`, 1 = usual) and a roll (0 to 1) for their mood. Mood counts a little
+// more than how they feel, so friends usually want to talk and enemies usually don't, but not always: a friend
+// can be busy, and someone who can't stand you might want to hear you out.
+export function talkPatience(relationship: number, chats: number, roll: number): number {
+    const liking = (Math.max(-1, Math.min(1, relationship)) + 1) / 2;
+    const want = Math.max(0, Math.min(1, (0.45 * liking + 0.55 * roll) * (0.8 + 0.2 * chats)));
+    return TALKS_MIN + Math.round(want * (TALKS_PER_BLOCK - TALKS_MIN));
+}
 
 export type TalkIntent =
     | { kind: "askTarget" }
