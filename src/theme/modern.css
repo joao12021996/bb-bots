@@ -1007,20 +1007,11 @@ input[type="number"] {
     background: radial-gradient(rgba(0, 0, 0, 0.28) 1px, transparent 1.6px) 0 0 / 5px 5px;
     mix-blend-mode: multiply;
 }
-.bbb-comic-hero {
+.bbb-comic-art {
     position: absolute;
-    left: 50%;
-    bottom: 0;
-    width: 104px;
-    height: 104px;
-    margin-left: -52px;
-    object-fit: cover;
-    border-radius: 50% 50% 8px 8px;
-    border: 3px solid #111;
-    filter: contrast(1.35) saturate(1.5) brightness(1.05);
-}
-.bbb-comic-hero.is-flipped {
-    transform: scaleX(-1);
+    inset: 0;
+    width: 100%;
+    height: 100%;
 }
 .bbb-comic-bubble {
     position: absolute;
@@ -1067,18 +1058,18 @@ input[type="number"] {
 .bbb-comic-rival {
     position: absolute;
     top: 6px;
-    right: 6px;
-    width: 40px;
+    right: 4px;
+    width: 46px;
     text-align: center;
     z-index: 1;
 }
-.bbb-comic-rival img {
+.bbb-comic-rival svg {
     width: 40px;
     height: 40px;
-    object-fit: cover;
+    margin: 0 auto;
     border-radius: 50%;
     border: 2px solid #111;
-    filter: grayscale(1) contrast(1.3);
+    filter: grayscale(1) contrast(1.2);
     display: block;
 }
 .bbb-comic-rival span {
@@ -1087,9 +1078,13 @@ input[type="number"] {
     padding: 0 3px;
     background: #111;
     color: #fde047;
-    font-size: 0.6rem;
+    font-size: 0.55rem;
     font-weight: 900;
     position: relative;
+    max-width: 46px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .bbb-morph {
     position: relative;

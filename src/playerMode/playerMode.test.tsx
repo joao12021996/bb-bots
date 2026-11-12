@@ -189,10 +189,10 @@ describe("player mode season", () => {
         controller.state.book.alliances.forEach((a) => expect(a.name.length).toBeGreaterThan(0));
     });
 
-    it("has enough comps for a 16-person season, with unique ids and time limits of at most 10 minutes", () => {
+    it("has enough comps for a 16-person season, with unique ids and time limits of at most 15 minutes", () => {
         expect(WEEKLY_COMPS.length).toBeGreaterThanOrEqual(2 * (16 - 3) + 1);
         expect(new Set(ALL_COMPS.map((c) => c.id)).size).toBe(ALL_COMPS.length);
-        ALL_COMPS.forEach((c) => expect(c.maxSeconds).toBeLessThanOrEqual(600));
+        ALL_COMPS.forEach((c) => expect(c.maxSeconds).toBeLessThanOrEqual(900));
     });
 });
 

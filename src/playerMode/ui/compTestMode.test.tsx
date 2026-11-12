@@ -100,7 +100,9 @@ describe("BB Comics", () => {
         expect(div.querySelector(".bbb-comic-wrong")).not.toBeNull();
         expect(div.querySelector(".bbb-comic-wrong")!.textContent).not.toMatch(/#\d|slot|cover \d/i); // not told what
         expect(finished).toEqual([]);
-        expect(reported).toEqual([n - 1]);
+        // the score so far is what's on the board, kept up to date: if time runs out, that's the score
+        expect(reported[reported.length - 1]).toBe(n - 1);
+        expect(BBComicsComp.format(n - 1)).toBe(`${n - 1} in the right place`);
 
         // the real one, piled on top of the fake in the first slot: the one on top is the answer, and that's right
         await tap(onTable(right[0]));

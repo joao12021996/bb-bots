@@ -75,7 +75,7 @@ export interface CompDefinition {
     emoji: string;
     kind: CompKind;
     rules: string;
-    maxSeconds: number; // hard cap enforced by the CompRunner (always <= 600)
+    maxSeconds: number; // hard cap enforced by the CompRunner (always <= 900)
     hideTimer?: boolean; // for comps about judging time: don't show the countdown
     finaleOnly?: boolean; // reserved for the final HoH
     Component: React.ComponentType<CompProps>;

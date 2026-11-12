@@ -2,9 +2,10 @@ import React from "react";
 import { defaultJurySize, GameState, Houseguest, nonEvictedHouseguests, PlayerProfile } from "../../model";
 import { WeekRecord } from "../history";
 import { ALL_COMPS } from "../comps";
-import { CompPlay, CompResult, CompResults } from "../comps/compRunner";
+import { CompPlay, CompResult, CompResults, tiedForFirst } from "../comps/compRunner";
 import { CompDefinition, Opponent } from "../comps/compTypes";
 import { seededRand } from "../comps/random";
+import { botGuess, closestGuesses, makeTiebreaker, TiebreakGuess, TiebreakPlay, TiebreakResults } from "../comps/tiebreaker";
 import { initialsAvatar } from "./avatar";
 import { BigButton, Panel, Subtle, Title } from "./common";
 
@@ -52,14 +53,17 @@ export function testSeason(cast: PlayerProfile[], stage: TestStage): { gameState
     return { gameState: gs, history };
 }
 
-// The bots, as they'd play this comp: a mix of skills, the same for the same seed.
+// A bot's skill in test mode: a mix, the same for the same seed.
+const testSkill = (seed: number, id: number) => 0.25 + 0.6 * seededRand(seed * 31 + id)();
+
+// The bots, as they'd play this comp.
 export function testOpponents(comp: CompDefinition, gs: GameState, history: WeekRecord[], participants: Houseguest[], seed: number): Opponent[] {
     const ctx = { seed, gameState: gs, history, participants };
-    return participants.slice(1).map((hg) => {
-        const skill = 0.25 + 0.6 * seededRand(seed * 31 + hg.id)();
-        return { hg, ...comp.simulate(ctx, skill, seededRand(seed * 7 + hg.id)) };
-    });
+    return participants.slice(1).map((hg) => ({ hg, ...comp.simulate(ctx, testSkill(seed, hg.id), seededRand(seed * 7 + hg.id)) }));
 }
+
+// A tie for first, as in a season: one closest-number question, again and again until someone wins it.
+type Tiebreak = { ids: number[]; round: number; guesses?: TiebreakGuess[] };
 
 type Game = { comp: CompDefinition; seed: number; gameState: GameState; history: WeekRecord[]; participants: Houseguest[]; opponents: Opponent[] };
 
@@ -67,6 +71,7 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
     const [stage, setStage] = React.useState<TestStage>("jury");
     const [game, setGame] = React.useState<Game | null>(null);
     const [results, setResults] = React.useState<CompResult[] | null>(null);
+    const [tiebreak, setTiebreak] = React.useState<Tiebreak | null>(null);
     const [wantBots, setBots] = React.useState(3);
     const season = React.useMemo(() => testSeason(props.cast, stage), [props.cast, stage]);
     const maxBots = nonEvictedHouseguests(season.gameState).length - 1;
@@ -77,10 +82,60 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
         const seed = Math.floor(Math.random() * 1e9);
         const participants = nonEvictedHouseguests(gameState).slice(0, bots + 1);
         setResults(null);
+        setTiebreak(null);
         setGame({ comp, seed, gameState, history, participants, opponents: testOpponents(comp, gameState, history, participants, seed) });
     };
 
+    const done = () => {
+        setResults(null);
+        setTiebreak(null);
+        setGame(null);
+    };
+    const question = (g: Game, round: number) => makeTiebreaker(g.seed * 13 + round);
+    const botGuesses = (g: Game, ids: number[], round: number): TiebreakGuess[] =>
+        ids
+            .filter((id) => id !== g.participants[0].id)
+            .map((id) => ({ id, guess: botGuess(question(g, round), testSkill(g.seed, id), seededRand(g.seed * 17 + round * 101 + id)) }));
+    // you're not in it: the bots answer straight away, and you see how it went
+    const startTiebreak = (g: Game, ids: number[], round: number) =>
+        setTiebreak({ ids, round, guesses: ids.includes(g.participants[0].id) ? undefined : botGuesses(g, ids, round) });
+    if (game && tiebreak) {
+        const me = game.participants[0];
+        const tied = tiebreak.ids.map((id) => game.participants.find((hg) => hg.id === id)!);
+        const q = question(game, tiebreak.round);
+        if (!tiebreak.guesses) {
+            return (
+                <div className="bbb-test-mode">
+                    <TiebreakPlay
+                        key={tiebreak.round}
+                        title="🧪 Test mode"
+                        player={me}
+                        tied={tied}
+                        question={q}
+                        moreToPlay={false}
+                        onGuess={(guess) => setTiebreak({ ...tiebreak, guesses: [{ id: me.id, guess }, ...botGuesses(game, tiebreak.ids, tiebreak.round)] })}
+                    />
+                </div>
+            );
+        }
+        const closest = closestGuesses(q.answer, tiebreak.guesses);
+        return (
+            <div className="bbb-test-mode">
+                <TiebreakResults
+                    title="🧪 Test mode"
+                    question={q}
+                    tied={tied}
+                    guesses={tiebreak.guesses}
+                    winnerId={closest.length === 1 ? closest[0] : undefined}
+                    humanIds={[me.id]}
+                    onDone={() => (closest.length > 1 ? startTiebreak(game, closest, tiebreak.round + 1) : done())}
+                />
+            </div>
+        );
+    }
     if (game && results) {
+        const tiedIds = tiedForFirst(game.comp, results);
+        const tie = tiedIds.length > 1;
         return (
             <div className="bbb-test-mode">
                 <CompResults
@@ -89,10 +144,8 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
                     participants={game.participants}
                     humanIds={[game.participants[0].id]}
                     results={results}
-                    onDone={() => {
-                        setResults(null);
-                        setGame(null);
-                    }}
+                    tiedIds={tie ? tiedIds : undefined}
+                    onDone={() => (tie ? startTiebreak(game, tiedIds, 0) : done())}
                 />
                 <BigButton kind="info" onClick={() => play(game.comp)}>
                     🔁 Play {game.comp.name} again
