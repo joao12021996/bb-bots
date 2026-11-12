@@ -1441,14 +1441,86 @@ input[type="number"] {
 }
 .bbb-comic-strip {
     display: flex;
-    gap: 14px;
+    flex-direction: column;
+    gap: 10px;
     width: max-content;
     animation-name: bbb-comic-pass;
     animation-timing-function: linear;
     animation-fill-mode: both;
 }
-.bbb-comic-strip .bbb-comic {
+.bbb-comic-strip-row {
+    display: flex;
+    gap: 14px;
+}
+.bbb-comic-strip-item {
     flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+.bbb-comic-strip-item .bbb-comic {
+    zoom: 0.8;
+}
+.bbb-comics-pool > .is-held .bbb-comic {
+    outline: 4px solid var(--bbb-gold);
+    outline-offset: 2px;
+    transform: translateY(-6px);
+}
+.bbb-comics-pool > .is-stack {
+    position: relative;
+}
+.bbb-comics-pool > .is-stack .bbb-comic {
+    box-shadow: 4px 4px 0 #111, 9px 9px 0 #ddd, 11px 11px 0 #111;
+}
+.bbb-comic-stack-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    z-index: 2;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--bbb-gold);
+    color: #111;
+    font-weight: 900;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.bbb-comics-pool > .is-under {
+    width: 94px;
+}
+.bbb-comic-slot.is-target .bbb-comic-empty {
+    border-color: var(--bbb-gold);
+    opacity: 1;
+    cursor: pointer;
+}
+.bbb-comic-empty {
+    background: transparent;
+    padding: 0;
+}
+.bbb-comic-held {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 8px 0;
+    font-weight: 600;
+}
+.bbb-comic-compare {
+    border: 2px solid var(--bbb-gold);
+    border-radius: 10px;
+    padding: 8px;
+    margin: 8px 0;
+}
+.bbb-comic-choice {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
 }
 /* in from the right, all the way across, out on the left */
 @keyframes bbb-comic-pass {

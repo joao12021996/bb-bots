@@ -64,15 +64,22 @@ describe("BB Comics", () => {
                 div
             );
         });
-        const pool = () => Array.from(div.querySelectorAll(".bbb-comics-pool .bbb-comic")) as HTMLButtonElement[];
-        const slots = () => Array.from(div.querySelectorAll(".bbb-comic-slot .bbb-comic")) as HTMLButtonElement[];
+        // the table, by cover: each keeps its place (a cover under a stack leaves an empty spot)
+        const spot = (c: number) => div.querySelectorAll(".bbb-comics-pool > div")[c] as HTMLElement;
+        const onTable = (c: number) => spot(c).querySelector(".bbb-comic") as HTMLButtonElement;
+        const slot = (i: number) => div.querySelectorAll(".bbb-comic-slot")[i].querySelector("button") as HTMLButtonElement;
         const button = (t: string) => Array.from(div.querySelectorAll("button")).find((b) => b.textContent!.includes(t))!;
-        expect(pool().length).toBe(n * 3);
+        const tap = (b: HTMLElement) => act(async () => b.click());
+        expect(div.querySelectorAll(".bbb-comics-pool .bbb-comic").length).toBe(n * 3);
 
-        // the review: the real covers, in order, in one strip that rolls across and is gone
+        // the review: the real covers, numbered, in two rows that roll across and are gone
         await act(async () => button("Review the comics").click());
         const strip = div.querySelector(".bbb-comic-strip")!;
         expect(strip.querySelectorAll(".bbb-comic").length).toBe(n);
+        const rows = strip.querySelectorAll(".bbb-comic-strip-row");
+        expect(rows.length).toBe(2);
+        expect(rows[0].querySelectorAll(".bbb-comic").length).toBe(Math.ceil(n / 2));
+        expect(Array.from(strip.querySelectorAll(".bbb-comic-strip-item > b")).map((b) => b.textContent)).toEqual(pile.cast.map((_, i) => `#${i + 1}`));
         expect(div.querySelector(".bbb-comics-pool")).toBeNull(); // the table's out of sight meanwhile
         await act(async () => {
             strip.dispatchEvent(new Event("animationend", { bubbles: true }));
@@ -84,7 +91,10 @@ describe("BB Comics", () => {
         const right = pile.cast.map((_, of) => pile.covers.findIndex((c) => c.real && c.of === of));
         const fake = pile.covers.findIndex((c) => !c.real && c.of === 0);
         const wrongOrder = [fake, ...right.slice(1)];
-        for (const c of wrongOrder) await act(async () => pool()[c].click());
+        for (let i = 0; i < n; i++) {
+            await tap(onTable(wrongOrder[i])); // pick it up
+            await tap(slot(i)); // put it in
+        }
         expect(button("Lock it in").disabled).toBe(false);
         await act(async () => button("Lock it in").click());
         expect(div.querySelector(".bbb-comic-wrong")).not.toBeNull();
@@ -92,14 +102,76 @@ describe("BB Comics", () => {
         expect(finished).toEqual([]);
         expect(reported).toEqual([n - 1]);
 
-        // take the first slot back, put the real one in: done
-        await act(async () => slots()[0].click());
+        // pick up the real one and put it in the first slot, over the fake (which goes back on the table): done
+        await tap(onTable(right[0]));
+        await tap(slot(0));
         expect(div.querySelector(".bbb-comic-wrong")).toBeNull();
-        await act(async () => pool()[right[0]].click());
+        expect(spot(fake).className).not.toContain("is-used");
         await act(async () => button("Lock it in").click());
         expect(finished.length).toBe(1);
         expect(finished[0]).toBeGreaterThan(1000);
         expect(BBComicsComp.format(finished[0])).toMatch(/^done in \d+s$/);
+        ReactDOM.unmountComponentAtNode(div);
+        div.remove();
+    });
+
+    it("stacks two covers of the same houseguest; tapping the stack shows both, and you keep one", async () => {
+        const { gameState, history } = testSeason(cast, "jury");
+        const participants = nonEvictedHouseguests(gameState).slice(0, 2);
+        const pile = comicPile(gameState, history, seededRand(12));
+        const div = document.createElement("div");
+        document.body.appendChild(div);
+        const Comp = BBComicsComp.Component;
+        await act(async () => {
+            ReactDOM.render(
+                <Comp
+                    participants={participants}
+                    human={participants[0]}
+                    gameState={gameState}
+                    history={history}
+                    rand={seededRand(12)}
+                    opponents={[]}
+                    report={() => undefined}
+                    finish={() => undefined}
+                />,
+                div
+            );
+        });
+        const spot = (c: number) => div.querySelectorAll(".bbb-comics-pool > div")[c] as HTMLElement;
+        const onTable = (c: number) => spot(c).querySelector(".bbb-comic") as HTMLButtonElement;
+        const button = (t: string) => Array.from(div.querySelectorAll("button")).find((b) => b.textContent!.includes(t))!;
+        const tap = (b: HTMLElement) => act(async () => b.click());
+        const real = pile.covers.findIndex((c) => c.real && c.of === 0);
+        const fake = pile.covers.findIndex((c) => !c.real && c.of === 0);
+        const stranger = pile.covers.findIndex((c) => c.of === 1);
+
+        // a different houseguest's cover doesn't stack: you just pick that one up instead
+        await tap(onTable(fake));
+        expect(spot(fake).className).toContain("is-held");
+        await tap(onTable(stranger));
+        expect(spot(stranger).className).toContain("is-held");
+        expect(div.querySelector(".is-stack")).toBeNull();
+
+        // the same houseguest's: the one in hand goes on top
+        await tap(onTable(fake));
+        await tap(onTable(real));
+        expect(spot(fake).className).toContain("is-stack");
+        expect(spot(real).querySelector(".bbb-comic")).toBeNull(); // it's underneath now
+        expect(div.querySelectorAll(".bbb-comics-pool .bbb-comic").length).toBe(pile.covers.length - 1);
+
+        // tap the stack: both, side by side, to choose from
+        await tap(onTable(fake));
+        expect(div.querySelectorAll(".bbb-comic-choice").length).toBe(2);
+        const keepButtons = Array.from(div.querySelectorAll(".bbb-comic-choice button.button")) as HTMLButtonElement[];
+        expect(keepButtons.length).toBe(2);
+        await tap(keepButtons[1]); // the one that was underneath
+        expect(div.querySelector(".bbb-comic-choice")).toBeNull();
+        expect(div.querySelector(".is-stack")).toBeNull();
+        expect(spot(real).className).toContain("is-held"); // kept: in your hand
+        expect(onTable(fake)).not.toBeNull(); // the other's back on the table
+        await tap(button("Put in #1"));
+        expect((div.querySelectorAll(".bbb-comic-slot")[0] as HTMLElement).querySelector(".bbb-comic")).not.toBeNull();
+        expect(spot(real).className).toContain("is-used");
         ReactDOM.unmountComponentAtNode(div);
         div.remove();
     });

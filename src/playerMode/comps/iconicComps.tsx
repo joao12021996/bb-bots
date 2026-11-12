@@ -289,7 +289,7 @@ export const HideAndGoVetoComp: CompDefinition = {
 
 const COMIC_FAKES = 2; // forgeries of each real cover
 const COMIC_LIMIT = 480; // seconds
-const COMIC_PASS = 1.6; // seconds each cover takes on its way across the screen
+const COMIC_PASS = 1.3; // seconds per column of covers (two rows) rolling across the screen
 const COMIC_ADJECTIVES = ["Amazing", "Incredible", "Uncanny", "Mighty", "Invincible", "Savage", "Sneaky", "Fearless"];
 const COMIC_PROPS = ["⚡", "🔥", "💎", "🛡️", "☄️", "🐍", "👁️", "🌪️", "🔑", "🏆"];
 const COMIC_COLORS = ["#b91c1c", "#1d4ed8", "#047857", "#7e22ce", "#c2410c", "#0f766e", "#be185d"];
@@ -412,28 +412,59 @@ function BBComics(props: CompProps) {
     const [pile] = React.useState(() => comicPile(props.gameState, props.history, props.rand));
     const n = pile.cast.length;
     const [slots, setSlots] = React.useState<(number | null)[]>(() => Array(n).fill(null));
+    const [held, setHeld] = React.useState<number | null>(null); // the cover picked up off the table
+    // two of the same houseguest's covers, one on top of the other: under[top] is the one underneath
+    const [under, setUnder] = React.useState<{ [top: number]: number }>({});
+    const [comparing, setComparing] = React.useState<number | null>(null); // a stack, spread out to choose from
     const [reviewing, setReviewing] = React.useState(false);
     const [wrong, setWrong] = React.useState(0); // tries that weren't right
     const [checked, setChecked] = React.useState(false); // the red cross, until something changes
     const [start] = React.useState(() => Date.now());
     const hgOf = (c: number) => pile.cast[pile.covers[c].of];
     const rivalOf = (cover: Cover) => props.gameState.houseguests.find((h) => h.id === cover.rivalId);
+    const cover = (c: number, onClick?: () => void) => <ComicCover hg={hgOf(c)} rival={rivalOf(pile.covers[c].cover)} cover={pile.covers[c].cover} onClick={onClick} />;
     const used = new Set(slots.filter((s): s is number => s !== null));
+    const hidden = new Set(Object.values(under)); // underneath a stack
+    const unstack = (top: number) => {
+        const next = { ...under };
+        delete next[top];
+        setUnder(next);
+    };
 
-    const place = (c: number) => {
-        const free = slots.indexOf(null);
-        if (free < 0 || used.has(c)) return;
+    const putIn = (i: number) => {
+        if (held === null) return;
         const next = [...slots];
-        next[free] = c;
+        next[i] = held; // whatever was there goes back on the table
         setSlots(next);
+        setHeld(null);
         setChecked(false);
     };
-    const takeBack = (i: number) => {
-        if (slots[i] === null) return;
-        const next = [...slots];
-        next[i] = null;
-        setSlots(next);
-        setChecked(false);
+    const tapTable = (c: number) => {
+        if (under[c] !== undefined) {
+            // a stack: spread it out and pick one
+            setHeld(null);
+            setComparing(c);
+        } else if (held === c) setHeld(null);
+        else if (held !== null && pile.covers[held].of === pile.covers[c].of) {
+            // another of the same houseguest's covers: put the one in hand on top of it
+            setUnder({ ...under, [held]: c });
+            setHeld(null);
+        } else setHeld(c);
+    };
+    const tapSlot = (i: number) => {
+        if (held !== null) putIn(i);
+        else if (slots[i] !== null) {
+            const next = [...slots];
+            next[i] = null;
+            setSlots(next);
+            setChecked(false);
+        }
+    };
+    const keep = (top: number, c: number) => {
+        // the one kept is in your hand; the other goes back to its place on the table
+        unstack(top);
+        setComparing(null);
+        setHeld(c);
     };
     const lockIn = () => {
         const right = comicsRight(pile, slots);
@@ -449,20 +480,26 @@ function BBComics(props: CompProps) {
     };
 
     if (reviewing) {
-        // the real covers, all in one strip, roll across the screen once and are gone
+        // the real covers, in two rows, roll across the screen once and are gone: the top row first, then the bottom
         const reals = pile.covers.filter((c) => c.real).sort((a, b) => a.of - b.of);
+        const half = Math.ceil(reals.length / 2);
+        const row = (list: typeof reals) => (
+            <div className="bbb-comic-strip-row">
+                {list.map((c) => (
+                    <div key={c.of} className="bbb-comic-strip-item">
+                        <b>#{c.of + 1}</b>
+                        <ComicCover hg={pile.cast[c.of]} rival={rivalOf(c.cover)} cover={c.cover} />
+                    </div>
+                ))}
+            </div>
+        );
         return (
             <div>
                 <Title>📚 Watch closely…</Title>
                 <div className="bbb-comics-review">
-                    <div
-                        className="bbb-comic-strip"
-                        style={{ animationDuration: `${4 + n * COMIC_PASS}s` }}
-                        onAnimationEnd={() => setReviewing(false)}
-                    >
-                        {reals.map((c) => (
-                            <ComicCover key={c.of} hg={pile.cast[c.of]} rival={rivalOf(c.cover)} cover={c.cover} />
-                        ))}
+                    <div className="bbb-comic-strip" style={{ animationDuration: `${3 + half * COMIC_PASS}s` }} onAnimationEnd={() => setReviewing(false)}>
+                        {row(reals.slice(0, half))}
+                        {row(reals.slice(half))}
                     </div>
                 </div>
                 <BigButton kind="light" onClick={() => setReviewing(false)}>
@@ -471,18 +508,22 @@ function BBComics(props: CompProps) {
             </div>
         );
     }
+    const nextFree = slots.indexOf(null);
     return (
         <div>
             <Title>Put the real covers in order</Title>
-            <Subtle>Tap covers to fill the slots, in the order they went by. Tap a slot to take a cover back. Every cover has forgeries on the table.</Subtle>
+            <Subtle>
+                Tap a cover to pick it up, then tap a slot (in the order they went by). Tap another cover of the same houseguest to stack them; tap a
+                stack to compare the two and keep one. Tap a filled slot to put its cover back.
+            </Subtle>
             <div className="bbb-comic-slots">
                 {slots.map((c, i) => (
-                    <div key={i} className="bbb-comic-slot">
+                    <div key={i} className={"bbb-comic-slot" + (held !== null ? " is-target" : "")}>
                         <span>#{i + 1}</span>
                         {c === null ? (
-                            <div className="bbb-comic-empty" />
+                            <button type="button" className="bbb-comic-empty" aria-label={`Slot ${i + 1}`} onClick={() => tapSlot(i)} />
                         ) : (
-                            <ComicCover hg={hgOf(c)} rival={rivalOf(pile.covers[c].cover)} cover={pile.covers[c].cover} onClick={() => takeBack(i)} />
+                            cover(c, () => tapSlot(i))
                         )}
                     </div>
                 ))}
@@ -492,17 +533,62 @@ function BBComics(props: CompProps) {
                     ❌ <span>Not right. Something's wrong.</span>
                 </div>
             )}
-            <div className="bbb-comics-pool">
-                {pile.covers.map((c, i) => (
-                    <div key={i} className={used.has(i) ? "is-used" : ""}>
-                        <ComicCover hg={hgOf(i)} rival={rivalOf(c.cover)} cover={c.cover} onClick={used.has(i) ? undefined : () => place(i)} />
+            {comparing !== null && under[comparing] !== undefined ? (
+                <div className="bbb-comic-compare">
+                    <Subtle>Which one do you keep? The other goes back on the table.</Subtle>
+                    <div className="bbb-comics">
+                        {[comparing, under[comparing]].map((c) => (
+                            <div key={c} className="bbb-comic-choice">
+                                {cover(c)}
+                                <BigButton kind="success" onClick={() => keep(comparing, c)}>
+                                    Keep this one
+                                </BigButton>
+                            </div>
+                        ))}
                     </div>
-                ))}
+                    <BigButton
+                        kind="light"
+                        onClick={() => {
+                            unstack(comparing);
+                            setComparing(null);
+                        }}
+                    >
+                        Put both back
+                    </BigButton>
+                </div>
+            ) : (
+                held !== null && (
+                    <div className="bbb-comic-held">
+                        <span>
+                            ✋ Holding {hgOf(held).name}'s cover: tap a slot, or another of {hgOf(held).name}'s covers to stack them.
+                        </span>
+                        {nextFree >= 0 && (
+                            <button type="button" className="button is-small is-warning" onClick={() => putIn(nextFree)}>
+                                Put in #{nextFree + 1}
+                            </button>
+                        )}
+                        <button type="button" className="button is-small is-light" onClick={() => setHeld(null)}>
+                            Put it down
+                        </button>
+                    </div>
+                )
+            )}
+            <div className="bbb-comics-pool">
+                {pile.covers.map((_, i) =>
+                    hidden.has(i) ? (
+                        <div key={i} className="is-under" />
+                    ) : (
+                        <div
+                            key={i}
+                            className={[used.has(i) ? "is-used" : "", held === i ? "is-held" : "", under[i] !== undefined ? "is-stack" : ""].join(" ").trim()}
+                        >
+                            {under[i] !== undefined && <div className="bbb-comic-stack-badge">2</div>}
+                            {cover(i, used.has(i) || comparing !== null ? undefined : () => tapTable(i))}
+                        </div>
+                    )
+                )}
             </div>
-            <BigButton
-                kind="info"
-                onClick={() => setReviewing(true)}
-            >
+            <BigButton kind="info" onClick={() => setReviewing(true)}>
                 📚 Review the comics
             </BigButton>
             <BigButton kind="success" disabled={used.size < n} onClick={lockIn}>
@@ -530,7 +616,8 @@ export const BBComicsComp: CompDefinition = {
     rules:
         "A jury-phase classic: every houseguest of the season stars in their own comic book. All the covers are on the table, but next to each real one are forgeries that change one detail: " +
         "the title, the speech bubble, the sound effect, the rival, the prop, which way the hero faces, the color or the issue number. " +
-        "Press Review and the real covers roll across the screen, in order, then they're gone. Review as often as you like (the clock keeps running), then put the real ones in that order. " +
+        "Press Review and the real covers roll across the screen in two rows, numbered in order, then they're gone. Review as often as you like (the clock keeps running), then put the real ones in that order. " +
+        "Stack two covers of the same houseguest to compare them and keep one. " +
         "When you lock it in, a red cross means something's wrong, but you won't be told what. Fastest to get it right wins.",
     maxSeconds: COMIC_LIMIT,
     available: (gs) => gs.houseguests.filter((hg) => hg.isJury).length >= 2,
