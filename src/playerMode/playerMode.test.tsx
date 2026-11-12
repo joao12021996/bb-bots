@@ -258,6 +258,47 @@ describe("week in review, and why they did it", () => {
     });
 });
 
+describe("career stats and achievements", () => {
+    const { loadCareer, recordSeason, resetCareer, totals, ACHIEVEMENTS } = require("../career/career");
+    const base = {
+        key: "s1:0", when: 1, name: "Pip", placement: 1, castSize: 12, won: true, hohWins: 0, vetoWins: 0, lastChanceWins: 0,
+        nominated: 0, survivedBlock: 0, juryVotesFor: 7, juryVotesTotal: 7, backstabs: 0, bigMoves: 0, brokePromises: 0,
+        keptPromises: 0, alliances: 1, showmance: false, cameBack: false, difficulty: "normal", online: false, players: 1,
+    };
+
+    beforeEach(() => resetCareer());
+
+    it("records each season once, and unlocks what it earned", () => {
+        const got = recordSeason(base).map((a: any) => a.id);
+        expect(got).toEqual(expect.arrayContaining(["first-win", "snake", "unanimous", "finalist", "floater"]));
+        expect(got).not.toContain("comp-beast");
+        expect(recordSeason(base)).toEqual([]); // the same season again: nothing
+        expect(loadCareer().seasons.length).toBe(1);
+        const second = recordSeason({ ...base, key: "s2:0", won: false, placement: 12, hohWins: 3, vetoWins: 2 }).map((a: any) => a.id);
+        expect(second).toEqual(expect.arrayContaining(["comp-beast", "hoh-3", "first-boot"]));
+        expect(second).not.toContain("first-win"); // already had it
+        const t = totals(loadCareer());
+        expect(t.seasons).toBe(2);
+        expect(t.wins).toBe(1);
+        expect(t.bestFinish).toBe(1);
+        expect(t.comps).toBe(5);
+        expect(new Set(ACHIEVEMENTS.map((a: any) => a.id)).size).toBe(ACHIEVEMENTS.length);
+    });
+
+    it("a finished season goes in the player's career, with a card to share", () => {
+        const { controller } = playSeason(8, [2], "random", "random");
+        const career = loadCareer();
+        expect(career.seasons.length).toBe(1);
+        const mine = career.seasons[0];
+        expect(mine.name).toBe(controller.player(2).name);
+        expect(mine.castSize).toBe(8);
+        expect(mine.placement).toBeGreaterThanOrEqual(1);
+        expect(mine.placement).toBeLessThanOrEqual(8);
+        const finalVotes = (controller as any).juryBook.finalVotes;
+        expect(Object.keys(finalVotes).length).toBeGreaterThan(0);
+    });
+});
+
 describe("bot mode", () => {
     it("still plays a full season without player mode", () => {
         const season = new Season();

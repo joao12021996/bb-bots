@@ -138,6 +138,9 @@ import {
     reputationLabel,
 } from "./social/promises";
 import { Standing, WeekReview, WhyTheyDidIt } from "./ui/weekReview";
+import { recordSeason, SeasonSummary } from "../career/career";
+import { SeasonCard } from "../career/seasonCard";
+import { play as playCue } from "../sound/sound";
 import { feelingReply, mentionsIn, opinionReply, readMessage, Reply, TALK_MAX_LENGTH, TALKS_MIN, talkLine, talkPatience, TalkLine } from "./social/botTalk";
 import {
     acceptFinal2,
@@ -596,6 +599,7 @@ export interface NetHooks {
     dropPersonal(owner: number): void;
     saved(state: PlayerSave): void;
     ended(): void;
+    localIds?: () => number[]; // the players on this device
 }
 
 export class PlayerModeController {
@@ -5032,6 +5036,7 @@ export class PlayerModeController {
                         reasons[j] = "The other finalist broke the rules.";
                     });
                 this.juryBook.reasons = reasons;
+                this.juryBook.finalVotes = all;
                 // finale night: the votes are read one at a time
                 const order = shuffled(seededRand(hashcode(`${s.seed}:reveal`)), jurorIds).map((j) => ({ jurorId: j, finalistId: all[j] }));
                 this.show({
@@ -5220,6 +5225,55 @@ export class PlayerModeController {
         );
     }
 
+    // The players on this device.
+    public devicePlayers(): number[] {
+        if (this.net) return this.net.localIds ? this.net.localIds() : [];
+        return this.state.humanIds;
+    }
+
+    // A player's season, for their career stats and achievements.
+    public summaryFor(id: number): SeasonSummary {
+        const s = this.state;
+        const gs = s.gameState;
+        const log = gs.log[gs.phase] && gs.log[gs.phase][0];
+        const winnerId = log ? log.winner : undefined;
+        const row = seasonStats(gs, s.history, winnerId).find((r) => r.id === id)!;
+        const finalVotes = (this.juryBook && this.juryBook.finalVotes) || {};
+        const juryTotal = Object.keys(finalVotes).length;
+        const finalist = !this.player(id).isEvicted;
+        const pledges = this.ledger.pledges.filter((p) => p.fromId === id);
+        const moves = (s.moves || []).filter((m) => m.actorId === id);
+        const best = [...moves].filter((m) => m.kind === "move").sort((a, b) => b.weight - a.weight)[0];
+        const hg = this.player(id);
+        return {
+            key: `${s.seed}:${id}`,
+            when: Date.now(),
+            name: hg.name,
+            imageURL: hg.imageURL,
+            placement: row.placement,
+            castSize: gs.houseguests.length,
+            won: winnerId === id,
+            hohWins: row.hohWins,
+            vetoWins: row.vetoWins,
+            lastChanceWins: row.lastChanceWins,
+            nominated: row.nominated,
+            survivedBlock: row.survived,
+            juryVotesFor: finalist ? Object.values(finalVotes).filter((v) => v === id).length : 0,
+            juryVotesTotal: finalist ? juryTotal : 0,
+            backstabs: moves.filter((m) => m.kind === "backstab").length,
+            bigMoves: moves.filter((m) => m.kind === "move").length,
+            brokePromises: pledges.filter((p) => p.status === "broken").length,
+            keptPromises: pledges.filter((p) => p.status === "kept").length,
+            alliances: s.book.alliances.filter((a) => a.memberIds.includes(id)).length,
+            showmance: (s.showmances || []).some((m) => m.a === id || m.b === id) || (s.feed || []).some((f) => /showmance/i.test(f.text) && f.text.includes(hg.name)),
+            cameBack: this.powers.slots.some((sl) => sl.id === "battleBack" && sl.used && sl.holderId === id),
+            difficulty: this.difficulty,
+            online: !!this.net,
+            players: s.humanIds.length,
+            highlight: best ? best.text : undefined,
+        };
+    }
+
     private gameOver() {
         const gs = this.state.gameState;
         const weekLabel = (week: number) => dayLabel(gs, week, DAY_PART.eviction);
@@ -5246,6 +5300,14 @@ export class PlayerModeController {
         ) : (
             table
         );
+        // the players on this device: their season goes in their career, and may unlock achievements
+        const cards = this.devicePlayers()
+            .filter((id) => !this.isRuleBreaker(id))
+            .map((id) => {
+                const summary = this.summaryFor(id);
+                return { summary, unlocked: recordSeason(summary) };
+            });
+        if (cards.some((c) => c.unlocked.length > 0)) setTimeout(() => playCue("achievement"), 2200);
         newEpisode(generateGameOver(new GameState(new MutableGameState(gs)), weekLabel));
         if (this.net) this.net.ended();
         else clearSave();
@@ -5254,6 +5316,13 @@ export class PlayerModeController {
             kind: "gameOver",
             content: (
                 <div>
+                    {cards.length > 0 && (
+                        <div className="bbb-season-cards">
+                            {cards.map((c) => (
+                                <SeasonCard key={c.summary.key} summary={c.summary} unlocked={c.unlocked} />
+                            ))}
+                        </div>
+                    )}
                     {content}
                     {this.seasonRecap()}
                     {this.whoTheyWere()}

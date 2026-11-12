@@ -9,6 +9,7 @@ import { dealNewCast } from "../../cartoon/newCast";
 import { SeasonEditorPage } from "../seasonEditor/seasonEditorPage";
 import { BehaviorSubject, Subscription } from "rxjs";
 import { TutorialPage } from "../tutorial/tutorialPage";
+import { StatsPage } from "../../career/statsPage";
 import { muted$, play } from "../../sound/sound";
 import { reduceMotion$ } from "../../prefs/motion";
 
@@ -19,6 +20,7 @@ export enum Screens {
     Ingame = 4,
     EditRelationships = 5,
     Tutorial = 6,
+    Stats = 7,
 }
 
 // for topbar minty colors
@@ -85,6 +87,11 @@ export function showTutorial() {
 export function TutorialLink(): JSX.Element {
     const LinkStyle: React.ComponentType<any> = activeScreen$.value === Screens.Tutorial ? ActiveTopbarLink : TopbarLink;
     return <LinkStyle onClick={showTutorial}>How to Play</LinkStyle>;
+}
+
+export function StatsLink(): JSX.Element {
+    const LinkStyle: React.ComponentType<any> = activeScreen$.value === Screens.Stats ? ActiveTopbarLink : TopbarLink;
+    return <LinkStyle onClick={() => pushToMainContentStream(<StatsPage />, Screens.Stats)}>My Stats</LinkStyle>;
 }
 
 // A new cast of cartoon houseguests.
@@ -207,6 +214,7 @@ export class Topbar extends React.Component<{ style?: any }, { tab: Screens }> {
                     <CastingScreenLink />
                     <EditSeasonLink />
                     <TutorialLink />
+                    <StatsLink />
                     <MuteButton />
                     <SettingsMenu />
                 </nav>

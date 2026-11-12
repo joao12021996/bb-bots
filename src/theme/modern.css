@@ -2677,3 +2677,158 @@ body.bbb-reduce-motion *::after {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
 }
+
+/* ---------- career: season cards, stats, achievements ---------- */
+.bbb-season-cards {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.bbb-season-card {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    padding: 16px;
+    border-radius: var(--bbb-radius);
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.22), rgba(236, 72, 153, 0.14)), var(--bbb-card);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    text-align: left;
+    margin: 8px 0;
+}
+.bbb-season-card.is-winner {
+    border-color: var(--bbb-gold);
+    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.3), 0 10px 40px rgba(251, 191, 36, 0.15);
+}
+.bbb-season-card > img {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--bbb-card-2);
+    flex-shrink: 0;
+}
+.bbb-season-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+.bbb-season-card-name {
+    font-family: var(--bbb-display);
+    font-weight: 800;
+    font-size: 1.4rem;
+}
+.bbb-season-card-place {
+    font-weight: 800;
+    color: #f9a8d4;
+}
+.is-winner .bbb-season-card-place {
+    color: var(--bbb-gold);
+}
+.bbb-season-card-stats,
+.bbb-season-card-quote {
+    color: var(--bbb-muted);
+    font-size: 0.9rem;
+}
+.bbb-season-card-quote {
+    font-style: italic;
+}
+.bbb-season-card-ach {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+.bbb-season-card .button {
+    align-self: flex-start;
+    margin-top: 6px;
+}
+@media (max-width: 520px) {
+    .bbb-season-card {
+        flex-direction: column;
+        text-align: center;
+    }
+    .bbb-season-card .button {
+        align-self: center;
+    }
+}
+.bbb-stats-page {
+    max-width: 820px;
+    margin: 0 auto;
+}
+.bbb-stat-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin: 16px 0;
+}
+.bbb-stat-tile {
+    background: var(--bbb-card);
+    border: 1px solid var(--bbb-border);
+    border-radius: 14px;
+    padding: 12px;
+    text-align: center;
+}
+.bbb-stat-value {
+    font-family: var(--bbb-display);
+    font-size: 1.8rem;
+    font-weight: 800;
+}
+.bbb-stat-label {
+    color: var(--bbb-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.bbb-ach-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 8px;
+}
+.bbb-ach {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid var(--bbb-border);
+    opacity: 0.55;
+}
+.bbb-ach.is-unlocked {
+    opacity: 1;
+    border-color: rgba(251, 191, 36, 0.5);
+    background: rgba(251, 191, 36, 0.06);
+}
+.bbb-ach-emoji {
+    font-size: 1.6rem;
+}
+.bbb-season-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    width: 100%;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--bbb-border);
+    color: var(--bbb-text);
+    padding: 8px 4px;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+}
+.bbb-season-row img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+}
+.bbb-season-row span {
+    flex: 1;
+}
+.bbb-best-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 4px 12px;
+}
+.bbb-subtle {
+    color: var(--bbb-muted);
+}

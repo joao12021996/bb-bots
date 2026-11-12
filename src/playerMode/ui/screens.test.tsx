@@ -90,6 +90,23 @@ describe("player mode screens", () => {
         expect(bestScore("zz-comp")).toBe(8);
     });
 
+    it("my stats: tiles, achievements (locked and unlocked), past seasons and best scores", () => {
+        const { recordSeason, resetCareer } = require("../../career/career");
+        const { StatsPage } = require("../../career/statsPage");
+        resetCareer();
+        recordSeason({
+            key: "x:1", when: Date.now(), name: "Juno", placement: 2, castSize: 10, won: false, hohWins: 1, vetoWins: 0, lastChanceWins: 0,
+            nominated: 2, survivedBlock: 2, juryVotesFor: 2, juryVotesTotal: 5, backstabs: 0, bigMoves: 0, brokePromises: 0,
+            keptPromises: 0, alliances: 1, showmance: false, cameBack: false, difficulty: "normal", online: false, players: 1,
+        });
+        const c = mount(<StatsPage />);
+        expect(c.textContent).toContain("Runner-up");
+        expect(c.querySelectorAll(".bbb-ach.is-unlocked").length).toBeGreaterThan(0);
+        expect(c.querySelectorAll(".bbb-ach:not(.is-unlocked)").length).toBeGreaterThan(5);
+        act(() => (c.querySelector(".bbb-season-row") as HTMLButtonElement).click());
+        expect(c.textContent).toContain("Share my season");
+    });
+
     it("how to play: every section, with a contents link to each, and none of the old show names", () => {
         const c = mount(<TutorialPage />);
         const sections = c.querySelectorAll(".bbb-tutorial-section");

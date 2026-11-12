@@ -21,6 +21,7 @@ export interface JuryBook {
     grudges: { [jurorId: number]: { [againstId: number]: Grudge } };
     sway: { [jurorId: number]: { [finalistId: number]: number } }; // talked into (or out of) a finalist
     reasons?: { [jurorId: number]: string }; // why each bot juror voted the way they did
+    finalVotes?: { [jurorId: number]: number }; // who each juror voted for to win
 }
 
 export function emptyJury(): JuryBook {

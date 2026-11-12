@@ -755,6 +755,7 @@ export class NetSession {
             },
             saved: (state) => this.saved(state),
             ended: () => clearOnlineSave(),
+            localIds: () => (this.localPlayerId !== null ? [this.localPlayerId] : []),
         };
         this.rawMethods = {};
         const c = controller as any;

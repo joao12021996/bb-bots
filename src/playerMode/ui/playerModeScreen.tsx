@@ -24,6 +24,7 @@ import { KnockoutBoard } from "../comps/knockout";
 import { WineDrink, WinePour } from "../comps/taintedWine";
 import { rankResults } from "../comps/compRunner";
 import { Cue, play } from "../../sound/sound";
+import { recordScore } from "../../prefs/prefs";
 import { POWERS } from "../social/powers";
 
 interface Props {
@@ -163,6 +164,9 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         const mine = session ? (session.localPlayerId !== null ? [session.localPlayerId] : []) : controller.state.humanIds;
         const cue = cueFor(prompt, mine);
         if (cue) play(cue);
+        // your best scores, in seasons too
+        if (prompt.kind === "compResults" && !prompt.sealed)
+            prompt.results.filter((r) => mine.includes(r.id) && !r.threw).forEach((r) => recordScore(prompt.comp.id, r.score));
     }
 
     // What this device shows: online, its player's own screen if they have one, otherwise the screen everyone
