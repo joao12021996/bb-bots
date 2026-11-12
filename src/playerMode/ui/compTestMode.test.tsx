@@ -4,7 +4,7 @@ import { act as syncAct } from "react-dom/test-utils";
 import { renderToStaticMarkup } from "react-dom/server";
 import { nonEvictedHouseguests, PlayerProfile } from "../../model";
 import { ALL_COMPS } from "../comps";
-import { BBComicsComp, comicJurors, comicPile, comicsRight } from "../comps/iconicComps";
+import { BBComicsComp, comicPile, comicsRight } from "../comps/iconicComps";
 import { seededRand } from "../comps/random";
 import { CompTestMode, testOpponents, testSeason } from "./compTestMode";
 
@@ -12,37 +12,38 @@ const act = (syncAct as unknown) as (cb: () => void | Promise<void>) => Promise<
 const cast: PlayerProfile[] = Array.from({ length: 8 }, (_, i) => ({ name: `Player${i}`, imageURL: "" } as PlayerProfile));
 
 describe("BB Comics", () => {
-    it("only comes up once there's a jury, and is about the jurors, in the order they left", () => {
+    it("only comes up once there's a jury, and has a comic for every houseguest of the season", () => {
         const early = testSeason(cast, "early");
         const jury = testSeason(cast, "jury");
         expect(BBComicsComp.available!(early.gameState, early.history)).toBe(false);
         expect(BBComicsComp.available!(jury.gameState, jury.history)).toBe(true);
-        const jurors = comicJurors(jury.gameState, jury.history);
-        const evictedOrder = jury.history.map((w) => w.evictedIds[0]).filter((id) => jury.gameState.houseguests[id].isJury);
-        expect(jurors.map((j) => j.id)).toEqual(evictedOrder);
-        expect(jurors.length).toBeGreaterThanOrEqual(2);
+        const pile = comicPile(jury.gameState, jury.history, seededRand(9));
+        // evicted or not, everyone's in it, in a mixed-up order
+        expect(pile.cast.map((hg) => hg.id).sort((a, b) => a - b)).toEqual(jury.gameState.houseguests.map((hg) => hg.id));
+        expect(pile.cast.some((hg) => hg.isEvicted)).toBe(true);
+        expect(pile.cast.some((hg) => !hg.isEvicted)).toBe(true);
     });
 
     it("puts every juror's real cover and its forgeries on the table, the same for everyone", () => {
         const { gameState, history } = testSeason(cast, "jury");
         const pile = comicPile(gameState, history, seededRand(5));
         expect(JSON.stringify(comicPile(gameState, history, seededRand(5)))).toBe(JSON.stringify(pile));
-        pile.jurors.forEach((_, of) => {
+        pile.cast.forEach((_, of) => {
             const mine = pile.covers.filter((c) => c.of === of);
             expect(mine.filter((c) => c.real).length).toBe(1);
             expect(mine.length).toBe(3);
             expect(new Set(mine.map((c) => JSON.stringify(c.cover))).size).toBe(3); // the fakes really differ
         });
-        const right = pile.jurors.map((_, of) => pile.covers.findIndex((c) => c.real && c.of === of));
-        expect(comicsRight(pile, right)).toBe(pile.jurors.length);
-        expect(comicsRight(pile, [...right].reverse())).toBeLessThan(pile.jurors.length);
+        const right = pile.cast.map((_, of) => pile.covers.findIndex((c) => c.real && c.of === of));
+        expect(comicsRight(pile, right)).toBe(pile.cast.length);
+        expect(comicsRight(pile, [...right].reverse())).toBeLessThan(pile.cast.length);
     });
 
     it("a wrong order gets a red cross without saying what's wrong; the right one finishes", async () => {
         const { gameState, history } = testSeason(cast, "jury");
         const participants = nonEvictedHouseguests(gameState).slice(0, 4);
         const pile = comicPile(gameState, history, seededRand(77));
-        const n = pile.jurors.length;
+        const n = pile.cast.length;
         const finished: number[] = [];
         const reported: number[] = [];
         const div = document.createElement("div");
@@ -68,13 +69,19 @@ describe("BB Comics", () => {
         const button = (t: string) => Array.from(div.querySelectorAll("button")).find((b) => b.textContent!.includes(t))!;
         expect(pool().length).toBe(n * 3);
 
-        // the review: the real covers, in order, sliding in
+        // the review: the real covers, in order, in one strip that rolls across and is gone
         await act(async () => button("Review the comics").click());
-        expect(div.querySelectorAll(".bbb-comic-slide").length).toBe(n);
-        await act(async () => button("Back to the table").click());
+        const strip = div.querySelector(".bbb-comic-strip")!;
+        expect(strip.querySelectorAll(".bbb-comic").length).toBe(n);
+        expect(div.querySelector(".bbb-comics-pool")).toBeNull(); // the table's out of sight meanwhile
+        await act(async () => {
+            strip.dispatchEvent(new Event("animationend", { bubbles: true }));
+        });
+        expect(div.querySelector(".bbb-comic-strip")).toBeNull();
+        expect(div.querySelector(".bbb-comics-pool")).not.toBeNull();
 
         // wrong: a forgery in the first slot
-        const right = pile.jurors.map((_, of) => pile.covers.findIndex((c) => c.real && c.of === of));
+        const right = pile.cast.map((_, of) => pile.covers.findIndex((c) => c.real && c.of === of));
         const fake = pile.covers.findIndex((c) => !c.real && c.of === 0);
         const wrongOrder = [fake, ...right.slice(1)];
         for (const c of wrongOrder) await act(async () => pool()[c].click());
@@ -114,6 +121,28 @@ describe("test mode", () => {
         const html = renderToStaticMarkup(<CompTestMode cast={cast} />);
         ALL_COMPS.forEach((c) => expect(html).toContain(c.name.replace(/'/g, "&#x27;")));
         expect(html).toContain("Jury phase");
+        expect(html).toContain("Bots:");
+    });
+
+    it("plays against as many bots as you pick", async () => {
+        const div = document.createElement("div");
+        document.body.appendChild(div);
+        await act(async () => {
+            ReactDOM.render(<CompTestMode cast={cast} />, div);
+        });
+        const button = (t: string) => Array.from(div.querySelectorAll("button")).find((b) => (b.getAttribute("aria-label") || b.textContent!).includes(t))!;
+        await act(async () => button("Fewer bots").click());
+        await act(async () => button("Fewer bots").click());
+        expect(button("Fewer bots").disabled).toBe(true); // one at least
+        await act(async () => button("Stop the Clock").click());
+        // the rules screen shows who's playing: you and the one bot
+        expect(div.querySelectorAll("img[alt]").length).toBe(2);
+        expect(div.textContent).toContain("I'm ready");
+        ReactDOM.unmountComponentAtNode(div);
+        div.remove();
+        // and up to everyone still in the house
+        const { gameState } = testSeason(cast, "early");
+        expect(nonEvictedHouseguests(gameState).length - 1).toBeGreaterThanOrEqual(6);
     });
 
     it("every comp can be set up with bots, early or at the jury stage", () => {

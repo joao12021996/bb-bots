@@ -24,7 +24,7 @@ const KINDS: { kind: CompDefinition["kind"]; label: string }[] = [
 // A made-up season to play a comp in: a few weeks gone, and (at the jury stage) a few jurors.
 export function testSeason(cast: PlayerProfile[], stage: TestStage): { gameState: GameState; history: WeekRecord[] } {
     const players: PlayerProfile[] = [...cast];
-    for (let i = players.length; i < 10; i++) {
+    for (let i = players.length; i < 12; i++) {
         const name = `Houseguest ${i + 1}`;
         players.push({ name, imageURL: initialsAvatar(name) } as PlayerProfile);
     }
@@ -67,12 +67,15 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
     const [stage, setStage] = React.useState<TestStage>("jury");
     const [game, setGame] = React.useState<Game | null>(null);
     const [results, setResults] = React.useState<CompResult[] | null>(null);
+    const [wantBots, setBots] = React.useState(3);
     const season = React.useMemo(() => testSeason(props.cast, stage), [props.cast, stage]);
+    const maxBots = nonEvictedHouseguests(season.gameState).length - 1;
+    const bots = Math.max(1, Math.min(wantBots, maxBots));
 
     const play = (comp: CompDefinition) => {
         const { gameState, history } = testSeason(props.cast, stage);
         const seed = Math.floor(Math.random() * 1e9);
-        const participants = nonEvictedHouseguests(gameState).slice(0, 4);
+        const participants = nonEvictedHouseguests(gameState).slice(0, bots + 1);
         setResults(null);
         setGame({ comp, seed, gameState, history, participants, opponents: testOpponents(comp, gameState, history, participants, seed) });
     };
@@ -128,7 +131,7 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
         <Panel className="bbb-test-mode">
             <Title>🧪 Test a comp</Title>
             <Subtle>
-                Play any competition on its own against three bots. Nothing is saved. You play as {season.gameState.houseguests[0].name}.
+                Play any competition on its own against bots. Nothing is saved. You play as {season.gameState.houseguests[0].name}.
             </Subtle>
             <div className="bbb-test-stage">
                 <button type="button" className={`button is-small ${stage === "early" ? "is-warning" : "is-light"}`} onClick={() => setStage("early")}>
@@ -136,6 +139,18 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
                 </button>
                 <button type="button" className={`button is-small ${stage === "jury" ? "is-warning" : "is-light"}`} onClick={() => setStage("jury")}>
                     Jury phase
+                </button>
+            </div>
+            <div className="bbb-test-stage">
+                <span>🤖 Bots:</span>
+                <button type="button" className="button is-small is-light" aria-label="Fewer bots" disabled={bots <= 1} onClick={() => setBots(bots - 1)}>
+                    −
+                </button>
+                <b aria-live="polite">
+                    {bots}
+                </b>
+                <button type="button" className="button is-small is-light" aria-label="More bots" disabled={bots >= maxBots} onClick={() => setBots(bots + 1)}>
+                    +
                 </button>
             </div>
             {KINDS.map(({ kind, label }) => {

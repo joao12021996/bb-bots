@@ -1435,17 +1435,25 @@ input[type="number"] {
     75% { transform: translateX(8px); }
 }
 .bbb-comics-review {
-    overflow-x: hidden;
+    overflow: hidden;
+    margin: 12px 0;
+    min-height: 260px;
 }
-.bbb-comic-slide {
-    animation: bbb-comic-slide-in 0.6s ease-out both;
+.bbb-comic-strip {
+    display: flex;
+    gap: 14px;
+    width: max-content;
+    animation-name: bbb-comic-pass;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
 }
-@keyframes bbb-comic-slide-in {
-    from { transform: translateX(110vw); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
+.bbb-comic-strip .bbb-comic {
+    flex: none;
 }
-@media (prefers-reduced-motion: reduce) {
-    .bbb-comic-slide { animation-duration: 0.01s; }
+/* in from the right, all the way across, out on the left */
+@keyframes bbb-comic-pass {
+    from { transform: translateX(100vw); }
+    to { transform: translateX(-100%); }
 }
 .bbb-comic-real .bbb-comic {
     outline: 3px solid var(--bbb-gold);
@@ -2049,6 +2057,7 @@ input[type="number"] {
 /* ---------- comp test mode ---------- */
 .bbb-test-stage {
     display: flex;
+    align-items: center;
     gap: 8px;
     justify-content: center;
     margin: 8px 0 12px;
