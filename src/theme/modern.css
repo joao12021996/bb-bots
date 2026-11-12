@@ -1375,6 +1375,78 @@ input[type="number"] {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+/* BB Comics: the table (two rows), the slots, and the real covers sliding in */
+.bbb-comics-pool {
+    display: grid;
+    grid-template-rows: repeat(2, auto);
+    grid-auto-flow: column;
+    justify-content: start;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 6px 4px 10px;
+    margin: 10px 0;
+    -webkit-overflow-scrolling: touch;
+}
+.bbb-comics-pool .bbb-comic,
+.bbb-comic-slot .bbb-comic {
+    zoom: 0.6;
+}
+.bbb-comics-pool .is-used {
+    opacity: 0.2;
+}
+.bbb-comic-slots {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin: 10px 0;
+}
+.bbb-comic-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-weight: 700;
+    color: var(--bbb-muted);
+}
+.bbb-comic-empty {
+    width: 94px;
+    height: 160px;
+    border: 2px dashed var(--bbb-muted);
+    border-radius: 6px;
+    opacity: 0.6;
+}
+.bbb-comic-wrong {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 2.4rem;
+    color: #ef4444;
+    animation: bbb-comic-shake 0.4s;
+}
+.bbb-comic-wrong span {
+    font-size: 1rem;
+    font-weight: 700;
+}
+@keyframes bbb-comic-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
+}
+.bbb-comics-review {
+    overflow-x: hidden;
+}
+.bbb-comic-slide {
+    animation: bbb-comic-slide-in 0.6s ease-out both;
+}
+@keyframes bbb-comic-slide-in {
+    from { transform: translateX(110vw); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .bbb-comic-slide { animation-duration: 0.01s; }
+}
 .bbb-comic-real .bbb-comic {
     outline: 3px solid var(--bbb-gold);
     outline-offset: 3px;
@@ -1972,4 +2044,24 @@ input[type="number"] {
     flex-wrap: wrap;
     gap: 6px;
     padding: 0 8px 4px;
+}
+
+/* ---------- comp test mode ---------- */
+.bbb-test-stage {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin: 8px 0 12px;
+}
+.bbb-test-group h4 {
+    margin: 12px 0 6px;
+    font-weight: 700;
+}
+.bbb-test-comps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.bbb-test-mode > .button {
+    margin-top: 10px;
 }

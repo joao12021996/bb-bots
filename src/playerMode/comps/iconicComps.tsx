@@ -4,7 +4,7 @@ import { WeekRecord } from "../history";
 import { DAY_PART, dayLabel, dayOf } from "../days";
 import { BigButton, Face, Grid, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
-import { AnswerReveal, Keypad, Reveal, revealRows, rightSoFar, sumSoFar, useQuizClock, wrongOption } from "./compUi";
+import { AnswerReveal, Keypad, Reveal, revealRows, rightSoFar, sumSoFar, useQuizClock } from "./compUi";
 import { answerQuestion, chance, clamp, gaussian, pick, Rand, randInt, sample, seededRand, shuffled } from "./random";
 
 // Comps in the style of the show's best-known formats: the oracle that sends you hunting for answers,
@@ -287,8 +287,10 @@ export const HideAndGoVetoComp: CompDefinition = {
 
 // ---------------- BB Comics ----------------
 
-const COMIC_ROUNDS = 5;
-const COMIC_STUDY = 6; // seconds
+const COMIC_FAKES = 2; // forgeries of each real cover
+const COMIC_MAX = 9; // covers to put in order, at most
+const COMIC_LIMIT = 300; // seconds
+const COMIC_SLIDE = 0.8; // seconds between covers sliding in
 const COMIC_ADJECTIVES = ["Amazing", "Incredible", "Uncanny", "Mighty", "Invincible", "Savage", "Sneaky", "Fearless"];
 const COMIC_PROPS = ["⚡", "🔥", "💎", "🛡️", "☄️", "🐍", "👁️", "🌪️", "🔑", "🏆"];
 const COMIC_COLORS = ["#b91c1c", "#1d4ed8", "#047857", "#7e22ce", "#c2410c", "#0f766e", "#be185d"];
@@ -317,13 +319,6 @@ interface Cover {
     flipped: boolean;
 }
 
-interface ComicRound {
-    hg: Houseguest;
-    real: Cover;
-    options: Cover[];
-    answer: number;
-}
-
 function sameCover(a: Cover, b: Cover): boolean {
     return (Object.keys(a) as (keyof Cover)[]).every((k) => a[k] === b[k]);
 }
@@ -344,29 +339,6 @@ function forgery(rand: Rand, real: Cover, rivals: number[]): Cover {
     if (detail === "flipped") return { ...real, flipped: !real.flipped };
     if (detail === "rivalId") return { ...real, rivalId: otherThan(rand, rivals, real.rivalId) };
     return { ...real, issue: real.issue + pick(rand, [-2, -1, 1, 2]) };
-}
-
-function comicRounds(gs: GameState, rand: Rand): ComicRound[] {
-    return sample(rand, gs.houseguests, COMIC_ROUNDS).map((hg) => {
-        const rivals = gs.houseguests.filter((h) => h.id !== hg.id).map((h) => h.id);
-        const real: Cover = {
-            adjective: pick(rand, COMIC_ADJECTIVES),
-            prop: pick(rand, COMIC_PROPS),
-            color: pick(rand, COMIC_COLORS),
-            issue: randInt(rand, 3, 98),
-            sfx: pick(rand, COMIC_SFX),
-            quote: pick(rand, COMIC_QUOTES),
-            rivalId: rivals.length > 0 ? pick(rand, rivals) : hg.id,
-            flipped: rand() < 0.5,
-        };
-        const fakes: Cover[] = [];
-        for (let guard = 0; fakes.length < 2 && guard < 30; guard++) {
-            const fake = forgery(rand, real, rivals);
-            if (!fakes.some((f) => sameCover(f, fake))) fakes.push(fake);
-        }
-        const options = shuffled(rand, [real, ...fakes]);
-        return { hg, real, options, answer: options.findIndex((o) => sameCover(o, real)) };
-    });
 }
 
 function ComicCover(props: { hg: Houseguest; rival?: Houseguest; cover: Cover; onClick?: () => void }) {
@@ -398,95 +370,188 @@ function ComicCover(props: { hg: Houseguest; rival?: Houseguest; cover: Cover; o
     );
 }
 
-function BBComics(props: CompProps) {
-    const [rounds] = React.useState(() => comicRounds(props.gameState, props.rand));
-    const [index, setIndex] = React.useState(0);
-    const [studying, setStudying] = React.useState(true);
-    const [correct, setCorrect] = React.useState(0);
-    const [reveal, setReveal] = React.useState<Reveal | null>(null);
-    const clock = useQuizClock(props.pauseClock);
-    const [start] = React.useState(() => clock.now());
-    const { finish, report, recordAnswer } = props;
+// The comics are about the jury: one real cover per juror, in the order they were evicted. Outside a jury
+// (only in test mode) it falls back to whoever's been evicted, or a few houseguests.
+export function comicJurors(gs: GameState, history: WeekRecord[]): Houseguest[] {
+    const order = history.reduce<number[]>((all, w) => all.concat(w.evictedIds || []), []);
+    const rank = (hg: Houseguest) => (order.includes(hg.id) ? order.indexOf(hg.id) : order.length + hg.id);
+    const byEviction = (list: Houseguest[]) => [...list].sort((a, b) => rank(a) - rank(b));
+    const jurors = gs.houseguests.filter((hg) => hg.isJury);
+    if (jurors.length >= 2) return byEviction(jurors).slice(0, COMIC_MAX);
+    const evicted = gs.houseguests.filter((hg) => hg.isEvicted);
+    if (evicted.length >= 2) return byEviction(evicted).slice(-COMIC_MAX);
+    return gs.houseguests.slice(0, 3);
+}
 
-    React.useEffect(() => {
-        if (!studying) return;
-        const t = setTimeout(() => setStudying(false), COMIC_STUDY * 1000);
-        return () => clearTimeout(t);
-    }, [studying, index]);
+export interface ComicPile {
+    jurors: Houseguest[];
+    // every cover on the table, real ones and forgeries, mixed up: `of` is the juror (index in eviction order)
+    covers: { of: number; real: boolean; cover: Cover }[];
+}
 
-    if (rounds.length === 0) return <Subtle>No comics today.</Subtle>;
-    const round = rounds[index];
-    const rivalOf = (cover: Cover) => props.gameState.houseguests.find((h) => h.id === cover.rivalId);
-    const labels = round.options.map((_, i) => `Cover ${i + 1}`);
-    const answer = (i: number) => {
-        if (reveal) return;
-        const right = i === round.answer;
-        const c = correct + (right ? 1 : 0);
-        setCorrect(c);
-        report(c * 100);
-        if (recordAnswer) recordAnswer(index, right, labels[i]);
-        clock.pause();
-        setReveal({
-            index,
-            verdict: right ? "✅ The real one!" : "❌ That's a forgery!",
-            correctText: labels[round.answer],
-            rows: revealRows(props, index, { correct: right, answer: labels[i] }, (ok, pick, id) =>
-                ok ? labels[round.answer] : typeof pick === "string" ? pick : wrongOption(labels, labels[round.answer], `${id}:${index}`)
-            ),
-        });
-    };
-    const next = () => {
-        setReveal(null);
-        clock.resume();
-        if (index + 1 >= rounds.length) finish(quizScore(correct, (clock.now() - start) / 1000, 0.9));
-        else {
-            setIndex(index + 1);
-            setStudying(true);
+// The covers: the same for every player and bot.
+export function comicPile(gs: GameState, history: WeekRecord[], rand: Rand): ComicPile {
+    const jurors = comicJurors(gs, history);
+    const covers: ComicPile["covers"] = [];
+    jurors.forEach((hg, of) => {
+        const rivals = gs.houseguests.filter((h) => h.id !== hg.id).map((h) => h.id);
+        const real: Cover = {
+            adjective: pick(rand, COMIC_ADJECTIVES),
+            prop: pick(rand, COMIC_PROPS),
+            color: pick(rand, COMIC_COLORS),
+            issue: randInt(rand, 3, 98),
+            sfx: pick(rand, COMIC_SFX),
+            quote: pick(rand, COMIC_QUOTES),
+            rivalId: rivals.length > 0 ? pick(rand, rivals) : hg.id,
+            flipped: rand() < 0.5,
+        };
+        covers.push({ of, real: true, cover: real });
+        const fakes: Cover[] = [];
+        for (let guard = 0; fakes.length < COMIC_FAKES && guard < 30; guard++) {
+            const fake = forgery(rand, real, rivals);
+            if (!sameCover(fake, real) && !fakes.some((f) => sameCover(f, fake))) fakes.push(fake);
         }
+        fakes.forEach((cover) => covers.push({ of, real: false, cover }));
+    });
+    return { jurors, covers: shuffled(rand, covers) };
+}
+
+// How many slots are right: slot i must hold juror i's real cover.
+export function comicsRight(pile: ComicPile, slots: (number | null)[]): number {
+    return slots.filter((c, i) => c !== null && pile.covers[c].real && pile.covers[c].of === i).length;
+}
+
+function BBComics(props: CompProps) {
+    const [pile] = React.useState(() => comicPile(props.gameState, props.history, props.rand));
+    const n = pile.jurors.length;
+    const [slots, setSlots] = React.useState<(number | null)[]>(() => Array(n).fill(null));
+    const [reviewing, setReviewing] = React.useState(false);
+    const [reviews, setReviews] = React.useState(0); // replays the slide-in each time
+    const [wrong, setWrong] = React.useState(0); // tries that weren't right
+    const [checked, setChecked] = React.useState(false); // the red cross, until something changes
+    const [start] = React.useState(() => Date.now());
+    const hgOf = (c: number) => pile.jurors[pile.covers[c].of];
+    const rivalOf = (cover: Cover) => props.gameState.houseguests.find((h) => h.id === cover.rivalId);
+    const used = new Set(slots.filter((s): s is number => s !== null));
+
+    const place = (c: number) => {
+        const free = slots.indexOf(null);
+        if (free < 0 || used.has(c)) return;
+        const next = [...slots];
+        next[free] = c;
+        setSlots(next);
+        setChecked(false);
     };
+    const takeBack = (i: number) => {
+        if (slots[i] === null) return;
+        const next = [...slots];
+        next[i] = null;
+        setSlots(next);
+        setChecked(false);
+    };
+    const lockIn = () => {
+        const right = comicsRight(pile, slots);
+        if (right === n) {
+            const secs = (Date.now() - start) / 1000;
+            props.finish(1000 + Math.max(0, COMIC_LIMIT - secs));
+            return;
+        }
+        // wrong: they're told so, but not what
+        props.report(right);
+        setWrong(wrong + 1);
+        setChecked(true);
+    };
+
+    if (reviewing) {
+        const reals = pile.covers.map((c, i) => ({ ...c, i })).filter((c) => c.real);
+        reals.sort((a, b) => a.of - b.of);
+        return (
+            <div>
+                <Title>📚 The real covers, in the order they left</Title>
+                <div className="bbb-comics bbb-comics-review" key={reviews}>
+                    {reals.map((c) => (
+                        <div key={c.i} className="bbb-comic-slide" style={{ animationDelay: `${c.of * COMIC_SLIDE}s` }}>
+                            <Subtle>#{c.of + 1}</Subtle>
+                            <ComicCover hg={pile.jurors[c.of]} rival={rivalOf(c.cover)} cover={c.cover} />
+                        </div>
+                    ))}
+                </div>
+                <BigButton kind="success" onClick={() => setReviewing(false)}>
+                    Back to the table
+                </BigButton>
+            </div>
+        );
+    }
     return (
         <div>
-            <Title>
-                Cover {index + 1} of {rounds.length} · {correct} right
-            </Title>
-            <Subtle>
-                {studying ? "Study the cover. Every detail matters." : reveal ? "The real cover is glowing." : "Which one is the real cover? The other two are forgeries."}
-            </Subtle>
-            <div className="bbb-comics">
-                {studying ? (
-                    <ComicCover hg={round.hg} rival={rivalOf(round.real)} cover={round.real} />
-                ) : (
-                    round.options.map((cover, i) => (
-                        <div key={i} className={reveal && i === round.answer ? "bbb-comic-real" : ""}>
-                            <ComicCover hg={round.hg} rival={rivalOf(cover)} cover={cover} onClick={reveal ? undefined : () => answer(i)} />
-                            <Subtle>{labels[i]}</Subtle>
-                        </div>
-                    ))
-                )}
+            <Title>Put the real covers in order</Title>
+            <Subtle>Tap covers to fill the slots, first evicted first. Tap a slot to take a cover back. Every juror has forgeries on the table.</Subtle>
+            <div className="bbb-comic-slots">
+                {slots.map((c, i) => (
+                    <div key={i} className="bbb-comic-slot">
+                        <span>#{i + 1}</span>
+                        {c === null ? (
+                            <div className="bbb-comic-empty" />
+                        ) : (
+                            <ComicCover hg={hgOf(c)} rival={rivalOf(pile.covers[c].cover)} cover={pile.covers[c].cover} onClick={() => takeBack(i)} />
+                        )}
+                    </div>
+                ))}
             </div>
-            {reveal && <AnswerReveal reveal={reveal} last={index + 1 >= rounds.length} onNext={next} />}
+            {checked && (
+                <div className="bbb-comic-wrong" role="alert">
+                    ❌ <span>Not right. Something's wrong.</span>
+                </div>
+            )}
+            <div className="bbb-comics-pool">
+                {pile.covers.map((c, i) => (
+                    <div key={i} className={used.has(i) ? "is-used" : ""}>
+                        <ComicCover hg={hgOf(i)} rival={rivalOf(c.cover)} cover={c.cover} onClick={used.has(i) ? undefined : () => place(i)} />
+                    </div>
+                ))}
+            </div>
+            <BigButton
+                kind="info"
+                onClick={() => {
+                    setReviews(reviews + 1);
+                    setReviewing(true);
+                }}
+            >
+                📚 Review the comics
+            </BigButton>
+            <BigButton kind="success" disabled={used.size < n} onClick={lockIn}>
+                Lock it in{wrong > 0 ? ` (try ${wrong + 1})` : ""}
+            </BigButton>
         </div>
     );
 }
 
 function simulateBBComics(ctx: SimContext, skill: number, noise: Rand): SimResult {
-    const rounds = comicRounds(ctx.gameState, seededRand(ctx.seed));
-    const answers = rounds.map(() => answerQuestion(noise, 0.25 + 0.7 * skill, 3));
-    return { score: quizScore(answers.filter(Boolean).length, rounds.length * (COMIC_STUDY + 2 + (1 - skill) * 5), 0.9), answers };
+    const n = comicPile(ctx.gameState, ctx.history, seededRand(ctx.seed)).jurors.length;
+    // a look at the comics, then a cover at a time, with the odd wrong try
+    const perCover = 8 + (1 - skill) * 22;
+    const tries = Math.max(0, Math.round((1 - skill) * 2.5 + gaussian(noise)));
+    const secs = 10 + n * perCover * (0.75 + 0.5 * noise()) + tries * (6 + 4 * noise());
+    if (secs < COMIC_LIMIT) return { score: 1000 + (COMIC_LIMIT - secs) };
+    return { score: clamp(Math.round(n * (0.3 + 0.6 * skill) + gaussian(noise)), 0, n - 1) };
 }
 
 export const BBComicsComp: CompDefinition = {
     id: "bb-comics",
-    name: "Comic Covers",
+    name: "BB Comics",
     emoji: "🦸",
     kind: "memory",
-    rules: `Every houseguest stars in their own comic book. Study a cover for ${COMIC_STUDY} seconds, then pick it out from two forgeries that each change one detail: the title, the speech bubble, the sound effect, the rival, the prop, which way the hero faces, the color or the issue number. ${COMIC_ROUNDS} covers. Most right wins; ties go to a tiebreaker.`,
-    maxSeconds: COMIC_ROUNDS * (COMIC_STUDY + 14),
+    rules:
+        "Every juror stars in their own comic book. All their covers are on the table, but next to each real one are forgeries that change one detail: " +
+        "the title, the speech bubble, the sound effect, the rival, the prop, which way the hero faces, the color or the issue number. " +
+        "Review the real covers as often as you like (the clock keeps running), then put the real ones in the order the jurors were evicted. " +
+        "When you lock it in, a red cross means something's wrong, but you won't be told what. Fastest to get it right wins.",
+    maxSeconds: COMIC_LIMIT,
+    available: (gs) => gs.houseguests.filter((hg) => hg.isJury).length >= 2,
     Component: BBComics,
     simulate: simulateBBComics,
-    botScore: (p) => quizScore(Math.round(COMIC_ROUNDS * (0.3 + 0.65 * p)), COMIC_ROUNDS * (COMIC_STUDY + 2 + (1 - p) * 5), 0.9),
-    format: formatQuiz,
-    progress: (r, n) => rightSoFar(r, n) * 100,
+    botScore: (p) => (p > 0.35 ? 1000 + Math.round(COMIC_LIMIT * 0.6 * p) : Math.round(4 * p)),
+    format: (s) => (s >= 1000 ? `done in ${Math.round(COMIC_LIMIT - (s - 1000))}s` : `${Math.round(s)} in the right place`),
 };
 
 // ---------------- Over or Under (counting) ----------------

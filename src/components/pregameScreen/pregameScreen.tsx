@@ -12,6 +12,7 @@ import { EditRelationshipsScreen, getProfiles } from "../editRelationshipsScreen
 import { Tribe } from "../../model/tribe";
 import { selectPlayer } from "../playerPortrait/selectedPortrait";
 import { PlayerSetup, resumeSavedSeason } from "../../playerMode/ui/playerSetup";
+import { CompTestMode } from "../../playerMode/ui/compTestMode";
 import { hasSave, readOnlineSave } from "../../playerMode/save/serialize";
 import { HostOnlineButton, joinCodeFromUrl, showJoinScreen } from "../../playerMode/ui/onlineLobby";
 
@@ -113,6 +114,12 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                                     ▶ Resume saved season
                                 </button>
                             )}
+                            <button
+                                className="button is-light"
+                                onClick={() => pushToMainContentStream(<CompTestMode cast={props.cast} />, Screens.Ingame)}
+                            >
+                                🧪 Test a comp
+                            </button>
                         </div>
                     </div>
                     <div className="bbb-mode-card is-featured">
