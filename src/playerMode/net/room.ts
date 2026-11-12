@@ -1,5 +1,5 @@
-// A room of devices playing the same online season. In the browser it's a Trystero room: devices connect to
-// each other directly (WebRTC), using free public Nostr relays only to find each other. There is no server.
+// A room of devices playing the same online season. In the browser, every device keeps a WebSocket open to our
+// relay (server/relay.js), which forwards messages between devices in the same room.
 
 export interface NetRoom {
     readonly selfId: string;
@@ -13,10 +13,6 @@ export interface NetRoom {
 }
 
 const APP_ID = "bb-bots-online-1";
-
-// Where devices find each other: big, well-run public Nostr relays. Trystero's own pick of 5 from its built-in
-// list included dead ones. Every device must use the same list to meet, so change it with care.
-const RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://nostr.mom", "wss://offchain.pub"];
 
 // Room codes: easy to read out loud (no 0/O, 1/I/L).
 const CODE_LETTERS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -47,37 +43,106 @@ export function joinLink(code: string): string {
     return `${origin}${pathname}?join=${code}`;
 }
 
-export async function openRoom(code: string): Promise<NetRoom> {
-    // loaded on demand: only online games need it
-    // @ts-ignore: typed loosely, so the build doesn't depend on its type definitions
-    const trystero: any = await import("trystero");
-    const room = trystero.joinRoom({ appId: APP_ID, relayConfig: { urls: RELAYS } }, `room-${code}`, {
-        onJoinError: (e: any) => console.error("Online: couldn't connect to a device", e),
-    });
-    // Trystero 0.25: actions are objects ({ send, onMessage }), and room events are properties to assign
-    const action = room.makeAction("msg");
+// Where devices meet: our relay on the DigitalOcean droplet (see server/README.md).
+// REACT_APP_RELAY_URL overrides it, e.g. ws://localhost:8787 when running the relay locally.
+const RELAY_URL = process.env.REACT_APP_RELAY_URL || "wss://api.spotlegame.co.uk/bb-relay";
+const CONNECT_TIMEOUT_MS = 10000;
+
+// this device's id for the whole page load (kept across reconnects)
+const selfId = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+
+export function openRoom(code: string): Promise<NetRoom> {
+    const roomName = `${APP_ID}:room-${code}`;
     const handlers: ((type: string, data: any, from: string) => void)[] = [];
     const joinHandlers: ((id: string) => void)[] = [];
     const leaveHandlers: ((id: string) => void)[] = [];
-    action.onMessage = (msg: { t: string; d: any }, context: { peerId: string }) =>
-        handlers.forEach((h) => h(msg.t, msg.d, context.peerId));
-    room.onPeerJoin = (id: string) => joinHandlers.forEach((h) => h(id));
-    room.onPeerLeave = (id: string) => leaveHandlers.forEach((h) => h(id));
-    return {
-        selfId: trystero.selfId,
+    const peers = new Set<string>();
+    let ws: WebSocket | null = null;
+    let left = false;
+    let retry = 0;
+    let retryTimer: any = null;
+
+    const peerJoined = (id: string) => {
+        if (id === selfId || peers.has(id)) return;
+        peers.add(id);
+        joinHandlers.forEach((h) => h(id));
+    };
+    const peerLeft = (id: string) => {
+        if (!peers.delete(id)) return;
+        leaveHandlers.forEach((h) => h(id));
+    };
+
+    const room: NetRoom = {
+        selfId,
         send: (type, data, to) => {
             // JSON only: drop undefined fields the way JSON.stringify would
-            const payload = { t: type, d: data === undefined ? null : JSON.parse(JSON.stringify(data)) };
-            action.send(payload, to ? { target: to } : undefined).catch((e: any) => console.error("Online: send failed", e));
+            const d = data === undefined ? null : JSON.parse(JSON.stringify(data));
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                console.error("Online: not connected, message dropped", type);
+                return;
+            }
+            ws.send(JSON.stringify(to ? { op: "msg", to, t: type, d } : { op: "msg", t: type, d }));
         },
         onMessage: (h) => handlers.push(h),
         onPeerJoin: (h) => joinHandlers.push(h),
         onPeerLeave: (h) => leaveHandlers.push(h),
-        peers: () => Object.keys(room.getPeers()),
+        peers: () => Array.from(peers),
         leave: () => {
-            room.leave();
+            left = true;
+            clearTimeout(retryTimer);
+            if (ws) ws.close();
         },
     };
+
+    return new Promise<NetRoom>((resolve, reject) => {
+        let opened = false;
+
+        const connect = () => {
+            const socket = new WebSocket(RELAY_URL);
+            ws = socket;
+            const timeout = setTimeout(() => socket.close(), CONNECT_TIMEOUT_MS);
+            socket.onopen = () => socket.send(JSON.stringify({ op: "join", room: roomName, id: selfId }));
+            socket.onmessage = (event) => {
+                let msg: any;
+                try {
+                    msg = JSON.parse(event.data);
+                } catch (e) {
+                    return;
+                }
+                if (msg.op === "welcome") {
+                    clearTimeout(timeout);
+                    retry = 0;
+                    if (!opened) {
+                        opened = true;
+                        resolve(room);
+                    }
+                    // after the room has its handlers: announce who is already here, like a fresh join
+                    setTimeout(() => (msg.peers as string[]).forEach(peerJoined), 0);
+                } else if (msg.op === "join") peerJoined(msg.id);
+                else if (msg.op === "leave") peerLeft(msg.id);
+                else if (msg.op === "msg") handlers.forEach((h) => h(msg.t, msg.d, msg.from));
+                else if (msg.op === "error") console.error("Online: relay refused", msg.reason);
+            };
+            socket.onclose = () => {
+                clearTimeout(timeout);
+                if (ws !== socket) return;
+                ws = null;
+                if (!opened) {
+                    left = true;
+                    reject(new Error("Online: couldn't reach the relay"));
+                    return;
+                }
+                if (left) return;
+                // lost the relay: everyone is gone until we're back
+                Array.from(peers).forEach(peerLeft);
+                const delay = Math.min(1000 * Math.pow(2, retry++), 15000);
+                console.warn(`Online: connection lost, retrying in ${delay}ms`);
+                retryTimer = setTimeout(() => !left && connect(), delay);
+            };
+        };
+
+        connect();
+    });
 }
 
 // For tests: rooms wired together in memory. Messages queue up until flush(), like a real network.
