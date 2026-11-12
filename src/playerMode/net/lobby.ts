@@ -19,6 +19,7 @@ export interface LobbySetup {
     size: number; // houseguests in the house, players and bots together
     difficulty: Difficulty;
     powers: "off" | "surprise";
+    battleBack?: boolean; // evicted houseguests compete to come back, right before the jury starts
     hideSkills: boolean;
     seats: LobbySeat[]; // the players, in the order they joined
     botOrder: number[]; // cast indexes, in the order bots are picked
@@ -41,6 +42,7 @@ export function defaultSetup(castCount: number): LobbySetup {
         size: Math.max(MIN_HOUSE, Math.min(12, castCount)),
         difficulty: "normal",
         powers: "off",
+        battleBack: true,
         hideSkills: false,
         seats: [],
         botOrder: order,
@@ -104,6 +106,7 @@ export function buildOnlineSeason(
     const save = newPlayerSave(season.gameState, season.humanIds, season.castOptions as CastOptionsOverride, setup.hideSkills, {
         difficulty: setup.difficulty,
         powers: setup.powers === "surprise" ? "surprise" : [],
+        battleBack: !!setup.battleBack,
     });
     const claims: { [playerId: number]: string } = {};
     season.humanIds.forEach((id, i) => (claims[id] = setup.seats[i].peerId));

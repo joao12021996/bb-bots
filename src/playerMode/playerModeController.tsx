@@ -176,10 +176,14 @@ import { PawnTalk as PawnTalkRecord } from "./social/pawnTalk";
 import { Answer, answer as answerJuror, botAnswer, botOwns, giveSpeech, JuryQuestion, juryQuestions, Move, movesFor } from "./social/finale";
 import { shuffled } from "./comps/random";
 import { feelingLabel } from "./social/socialActions";
+import { DiaryEntry, diaryEntries, recapText } from "./social/diary";
+import { battleBackCandidates, battleBackDue, haveNotCount } from "./social/twists";
+import { DiaryRoom } from "./ui/diaryRoom";
 
 export type Difficulty = "easy" | "normal" | "hard";
 
 export enum Step {
+    BattleBack = "BattleBack", // evicted houseguests compete to come back, before the week starts
     WeekStart = "WeekStart",
     SocialMorning = "SocialMorning",
     Hoh = "Hoh",
@@ -273,6 +277,7 @@ interface WeekProgress {
     locks?: { [key: string]: any };
     evictionIntro?: boolean;
     finaleIntro?: boolean;
+    haveNots?: number[]; // the worst scorers in this week's HoH comp: one social action per block until the eviction
 }
 
 // Everything needed to resume a season. Must stay JSON-serializable (see save/serialize.ts).
@@ -315,6 +320,12 @@ export interface PlayerSave {
     feed?: FeedLine[]; // the live feed: what the house has been up to
     // custom relationships / teams for this season's houseguests (remapped when playing with part of the cast)
     castOptions?: CastOptionsOverride;
+    // online: players whose device is away, so a bot plays for them until they're back
+    autopilot?: number[];
+    // the diary room: what houseguests said about each week, revealed when the season ends
+    diary?: DiaryEntry[];
+    // everything that happened in the jury house, for the jury's chat
+    juryLog?: { week: number; text: string }[];
 }
 
 export type Prompt =
@@ -743,6 +754,7 @@ export class PlayerModeController {
     // screen, while the shared screen says who's still deciding. On one device, they take turns (passing it).
     // Each answer is saved as it comes in (as `${key}:${id}`), so after a reload only those who haven't answered
     // are asked. `done` gets everyone's answers once they're all in, whatever order they came in.
+    // `bot` answers for a player a bot takes over from in the middle of it (online: their device went away).
     private gather<T>(
         key: string,
         players: Houseguest[],
@@ -750,10 +762,12 @@ export class PlayerModeController {
         reason: (player: Houseguest) => string,
         ask: (player: Houseguest, moreToPlay: boolean, answer: (value: T) => void) => Prompt,
         done: (answers: { [playerId: number]: T }) => void,
+        bot: (player: Houseguest) => T,
         waitingComp?: LiveComp
     ) {
         const keyOf = (id: number) => `${key}:${id}`;
         const finish = () => {
+            this.gatherBot = null;
             const answers: { [playerId: number]: T } = {};
             players.forEach((p) => (answers[p.id] = this.locked<T>(keyOf(p.id)) as T));
             done(answers);
@@ -777,22 +791,25 @@ export class PlayerModeController {
         }
         const left = pending.map((p) => p.id);
         const showWaiting = () => this.show({ kind: "waiting", title: waitingTitle, waitingOn: [...left], comp: waitingComp });
+        const answerFor = (player: Houseguest) => (value: T) => {
+            const at = left.indexOf(player.id);
+            if (at < 0) return; // answered already
+            left.splice(at, 1);
+            this.clearPersonal(player.id);
+            this.lock(keyOf(player.id), value);
+            if (left.length === 0) finish();
+            else showWaiting();
+        };
+        this.gatherBot = (id) => {
+            const player = pending.find((p) => p.id === id);
+            if (player && left.includes(id)) answerFor(player)(bot(player));
+        };
         showWaiting();
-        pending.forEach((player) =>
-            this.showPersonal(
-                player.id,
-                ask(player, false, (value) => {
-                    const at = left.indexOf(player.id);
-                    if (at < 0) return; // answered already
-                    left.splice(at, 1);
-                    this.clearPersonal(player.id);
-                    this.lock(keyOf(player.id), value);
-                    if (left.length === 0) finish();
-                    else showWaiting();
-                })
-            )
-        );
+        pending.forEach((player) => this.showPersonal(player.id, ask(player, false, answerFor(player))));
     }
+
+    // While players answer at the same time (see gather): answers for one of them with what a bot would do.
+    private gatherBot: ((playerId: number) => void) | null = null;
 
     private showScene(scene: Scene, next: Step) {
         this.weekScenes.push(scene);
@@ -1213,6 +1230,8 @@ export class PlayerModeController {
         // the host has something to say first
         if (this.state.announce && this.state.announce.length > 0) return this.showAnnouncement();
         switch (this.state.step) {
+            case Step.BattleBack:
+                return this.battleBack();
             case Step.WeekStart:
                 return this.weekStart();
             case Step.SocialMorning:
@@ -1350,12 +1369,51 @@ export class PlayerModeController {
         this.run();
     }
 
+    // A player making their own decisions: not expelled, and (online) not away with a bot playing for them.
     public isHuman(hg: { id: number } | undefined) {
-        return !!hg && this.state.humanIds.includes(hg.id) && !this.isRuleBreaker(hg.id);
+        return !!hg && this.state.humanIds.includes(hg.id) && !this.isRuleBreaker(hg.id) && !this.isAutopilot(hg.id);
     }
 
+    public isAutopilot(id: number): boolean {
+        return (this.state.autopilot || []).includes(id);
+    }
+
+    // The players among `hgs` who make their own decisions (evicted ones too: the battle back is for them).
     private playingHumans(hgs: { id: number }[]): Houseguest[] {
-        return this.alivePlayers.filter((p) => hgs.some((hg) => hg.id === p.id));
+        return this.players.filter((p) => this.isHuman(p) && hgs.some((hg) => hg.id === p.id));
+    }
+
+    // Online: a player's device has been away a while (on), or is back (off). Sent by the host, so every device
+    // makes the switch at the same point. While it's on, bots make the player's decisions, the same way they
+    // make their own; a decision the player was in the middle of is made for them.
+    public autopilot(id: number, on: boolean) {
+        const s = this.state;
+        if (!s.humanIds.includes(id) || this.isRuleBreaker(id) || s.step === Step.GameOver) return;
+        if (on === this.isAutopilot(id)) return;
+        const list = s.autopilot || [];
+        s.autopilot = on ? [...list, id] : list.filter((x) => x !== id);
+        const name = this.player(id).name;
+        this.feedPush(on ? `🤖 ${name} lost connection. A bot is playing for them until they're back.` : `🎮 ${name} is back in control.`);
+        this.save();
+        if (!on) return;
+        const shared = this.prompt$.value;
+        if (id in this.personal$.value && this.gatherBot) {
+            this.gatherBot(id);
+        } else if (shared && actorOf(shared) === id) {
+            // their decision on the screen everyone shares: the step starts again, with a bot deciding for them
+            this.clearAllPersonal();
+            this.run();
+        }
+    }
+
+    // The current social or alliance turn goes to a player a bot is playing for: they sit it out.
+    private skipTurn() {
+        const s = this.state;
+        s.socialTurn++;
+        s.socialStage = "social";
+        s.actionsLeft = ACTIONS_PER_BLOCK;
+        this.save();
+        this.run();
     }
 
     // Bots play the exact same comp instance as the players (same seed: same questions, dice, maze...),
@@ -1417,7 +1475,7 @@ export class PlayerModeController {
         title: string,
         comp: CompDefinition,
         participants: Houseguest[],
-        onWinner: (id: number) => void,
+        onWinner: (id: number, worstFirst: number[]) => void,
         role: CompRole = "other"
     ) {
         const seed = hashcode(`${this.state.seed}:${this.gameState.phase}:${this.state.step}:${comp.id}`);
@@ -1428,13 +1486,17 @@ export class PlayerModeController {
             if (dropped !== undefined) b.score = dropped;
         });
         const humans = this.playingHumans(participants);
+        let worstFirst: number[] = [];
+        const rank = (results: CompResult[]) =>
+            (worstFirst = [...results].sort((a, b) => a.score - b.score || a.id - b.id).map((r) => r.id));
         const done = (winnerId: number) => {
             this.noteComp(comp);
-            onWinner(winnerId);
+            onWinner(winnerId, worstFirst.filter((id) => id !== winnerId));
         };
         if (humans.length === 0) {
             // nobody's playing, but everyone can watch: the results come in from last place up.
             // A tie for first goes to the tiebreaker, like any other.
+            rank(bots);
             const tiedIds = tiedForFirst(comp, bots);
             const tie = tiedIds.length > 1;
             this.show({
@@ -1455,6 +1517,7 @@ export class PlayerModeController {
         const showResults = () => {
             // any tie for first goes to a tiebreaker question
             const results = [...bots, ...humanResults];
+            rank(results);
             const tiedIds = tiedForFirst(comp, results);
             const tiebreak = tiedIds.length > 1;
             this.show({
@@ -1517,6 +1580,17 @@ export class PlayerModeController {
                 (answers) => {
                     humans.forEach((p) => humanResults.push(answers[p.id]));
                     showResults();
+                },
+                (player) => {
+                    // a bot finishes their turn: no better than the score they had when they left
+                    const sofar = this.locked<{ score: number | null }>(`compStart:${seed}:${player.id}`);
+                    const sim = comp.simulate(
+                        { seed, gameState: this.gameState, history: this.state.history, participants },
+                        this.botSkill(player),
+                        seededRand(hashcode(`${seed}:bot:${player.id}`))
+                    );
+                    const score = sofar && sofar.score !== null ? sofar.score : sim.score;
+                    return { id: player.id, score, answers: sofar && sofar.score !== null ? undefined : sim.answers, picks: sofar && sofar.score !== null ? undefined : sim.picks };
                 },
                 sealed ? undefined : { comp, seed, participants, bots, humanIds }
             );
@@ -1604,7 +1678,7 @@ export class PlayerModeController {
 
     // Knockout: duels on a closest-number question. The loser is out, and the winner picks the next two.
     // Picking someone for a duel is a public shot at them, so it costs the picker with whoever they pick.
-    private runKnockout(title: string, participants: Houseguest[], onWinner: (id: number) => void) {
+    private runKnockout(title: string, participants: Houseguest[], onWinner: (id: number, worstFirst: number[]) => void) {
         const s = this.state;
         const seed = hashcode(`${s.seed}:${this.gameState.phase}:${s.step}:${KNOCKOUT_ID}`);
         const noise = seededRand(seed);
@@ -1636,7 +1710,7 @@ export class PlayerModeController {
             this.mutate((gs) => picks.forEach((p) => p.ids.forEach((id) => shiftRelationship(gs, p.pickerId, id, -0.05))));
             picks.forEach((p) => p.ids.forEach((id) => this.tell([id], `⚔️ ${name(p.pickerId)} picked you to duel in the knockout.`)));
             s.usedComps = [...s.usedComps, KNOCKOUT_ID];
-            board(() => onWinner(winnerId), winnerId);
+            board(() => onWinner(winnerId, [...out]), winnerId);
         };
 
         const duel = (pickerId: number | null, a: number, b: number) => {
@@ -1693,7 +1767,8 @@ export class PlayerModeController {
                     (answers) => {
                         humans.forEach((h) => guesses.push({ id: h.id, guess: answers[h.id] }));
                         settle();
-                    }
+                    },
+                    (player) => botGuess(question, this.botSkill(player), seededRand(hashcode(`${duelSeed}:${player.id}`)))
                 );
             // the board first, unless every guess is already in (resuming)
             if (humans.every((h) => this.locked(`${key}:${h.id}`) !== undefined)) guessAll();
@@ -1765,7 +1840,7 @@ export class PlayerModeController {
     // bluff; the houseguest drinks or trades. Two tainted sips and you're out; whoever drank the tainted glass pours
     // next. Every player decision is saved as it's made, and the bots' choices come from the comp's seed, so a
     // reload replays the comp exactly up to where it was.
-    private runTaintedWine(title: string, participants: Houseguest[], onWinner: (id: number) => void) {
+    private runTaintedWine(title: string, participants: Houseguest[], onWinner: (id: number, worstFirst: number[]) => void) {
         const s = this.state;
         const seed = hashcode(`${s.seed}:${this.gameState.phase}:${s.step}:${TAINTED_WINE_ID}`);
         const noise = seededRand(seed);
@@ -1807,7 +1882,7 @@ export class PlayerModeController {
             // handing someone the glass is a shot at them
             this.mutate((gs) => offered.forEach((o) => shiftRelationship(gs, o.targetId, o.pourerId, -0.03)));
             s.usedComps = [...s.usedComps, TAINTED_WINE_ID];
-            board(() => onWinner(winnerId), winnerId);
+            board(() => onWinner(winnerId, [...out]), winnerId);
         };
 
         const drink = (pourerId: number, targetId: number, pour: Pour, swap: boolean) => {
@@ -1942,7 +2017,8 @@ export class PlayerModeController {
                     sealed: this.sealed(),
                     onDone: () => (again ? this.tiebreak(title, closest, seed, done, round + 1) : done(closest[0])),
                 });
-            }
+            },
+            (player) => botGuess(question, this.botSkill(player), seededRand(hashcode(`${seed}:tiebreak:${round}:${player.id}`)))
         );
     }
 
@@ -1980,7 +2056,8 @@ export class PlayerModeController {
         key: string,
         voters: Houseguest[],
         makePrompt: (voter: Houseguest, record: (id: number) => void) => Prompt,
-        onDone: (votes: { [voterId: number]: number }) => void
+        onDone: (votes: { [voterId: number]: number }) => void,
+        bot: (voter: Houseguest) => number
     ) {
         this.gather<number>(
             key,
@@ -1988,7 +2065,8 @@ export class PlayerModeController {
             "Voting",
             (voter) => `${voter.name}, it's time to vote`,
             (voter, _more, record) => makePrompt(voter, record),
-            onDone
+            onDone,
+            bot
         );
     }
 
@@ -2070,6 +2148,7 @@ export class PlayerModeController {
         if (s.socialTurn >= alive.length) return this.finishSocialBlock();
         const actor = alive[s.socialTurn];
         const blockName = SOCIAL_BLOCK_NAMES[s.step];
+        if (!this.isHuman(actor)) return this.skipTurn();
         if (s.socialStage === "alliance") {
             // at the final three there's nobody left to target: no alliance time
             if (this.alliancesOf(actor.id).length === 0 || !this.allianceTimeOpen()) return this.endAlliance();
@@ -2082,6 +2161,8 @@ export class PlayerModeController {
         const key = `${s.gameState.phase}:${s.step}`;
         if (s.approachKey[actor.id] !== key) {
             s.approachKey[actor.id] = key;
+            // the start of their turn: a Have-Not only has the energy for one action
+            if (this.isHaveNot(actor.id)) s.actionsLeft = Math.min(s.actionsLeft, 1);
             this.reseed(`approach:${actor.id}`);
             const fresh = this.mutate((gs) => botApproaches(gs, s.book, actor.id, s.humanIds)).map((a) =>
                 a.kind === "chat" && this.personalities[a.fromId]
@@ -2659,6 +2740,7 @@ export class PlayerModeController {
                 .forEach((c) => addGrudge(jury, e, c.fromId, -0.25, "lied to my face"));
             const lines = newcomerTalks(gs, jury, e, this.jurorIds());
             s.week.juryHouse = [...(s.week.juryHouse || []), ...lines];
+            s.juryLog = [...(s.juryLog || []), ...lines.map((text) => ({ week: gs.phase, text }))];
             // players who put them there can send a goodbye message
             if (hohId !== undefined && votes[hohId] === undefined && Object.keys(votes).length === 0) return;
             this.alivePlayers
@@ -2694,8 +2776,8 @@ export class PlayerModeController {
     // depends on the juror: objective jurors respect a game move, bitter ones want an apology.
     private goodbyes() {
         const s = this.state;
-        const list = (s.week.goodbyes || []).filter((g) => !this.player(g.playerId).isEvicted);
-        if (list.length === 0) return this.goTo(Step.WeekStart);
+        const list = (s.week.goodbyes || []).filter((g) => !this.player(g.playerId).isEvicted && this.isHuman({ id: g.playerId }));
+        if (list.length === 0) return this.goTo(this.battleBackDue() ? Step.BattleBack : Step.WeekStart);
         const { playerId, evictedId } = list[0];
         const done = () => {
             s.week.goodbyes = list.slice(1);
@@ -2897,7 +2979,7 @@ export class PlayerModeController {
     private fallout() {
         const s = this.state;
         const list = s.week.hinky || [];
-        const next = list.find((h) => !this.player(h.voterId).isEvicted && !this.player(h.targetId).isEvicted);
+        const next = list.find((h) => !this.player(h.voterId).isEvicted && !this.player(h.targetId).isEvicted && this.isHuman({ id: h.voterId }));
         if (!next) return this.goodbyes();
         const voter = this.player(next.voterId);
         const target = this.player(next.targetId);
@@ -3089,7 +3171,11 @@ export class PlayerModeController {
                 if (this.isHuman({ id: fight.bId })) this.tell([fight.bId], `💥 ${a} blew up at you in front of everyone. ${sides}`);
                 this.askOthersToPickSides(fight.aId, fight.bId, `💥 ${a} and ${getById(gs, fight.bId).name} blew up at each other. ${sides}`);
             }
-            botSocialTime(gs, s.humanIds, (id) => this.traitsOf(id) || { chats: 1, scheming: 1 });
+            botSocialTime(gs, s.humanIds, (id) => {
+                const traits = this.traitsOf(id) || { chats: 1, scheming: 1 };
+                // Have-Nots don't get around the house much
+                return this.isHaveNot(id) ? { ...traits, chats: traits.chats * 0.4 } : traits;
+            });
             this.wildcardSwings(gs);
             botShowmances(gs, this.showmances, s.humanIds).forEach((sm) => {
                 this.showmances.push(sm);
@@ -3137,10 +3223,11 @@ export class PlayerModeController {
         const s = this.state;
         const competitors = exclude(nonEvictedHouseguests(s.gameState), s.gameState.previousHOH || []);
         const title = "Head of House Competition";
-        const onWinner = (winnerId: number) => {
+        const onWinner = (winnerId: number, worstFirst: number[]) => {
             const [gs, scene, hohs] = generateHohCompScene(s.gameState, { forcedWinners: [getById(s.gameState, winnerId)] });
             s.gameState = gs;
             s.week.hohId = hohs[0].id;
+            this.pickHaveNots(worstFirst);
             if (!s.week.secretHoh) {
                 this.feedPush(`👑 ${hohs[0].name} is the new ${HOH}.`);
                 return this.showScene(scene, Step.AllianceHoh);
@@ -3161,6 +3248,145 @@ export class PlayerModeController {
         this.runComp(title, compById(choice), competitors, onWinner, "hoh");
     }
 
+    // ---------- Have-Nots ----------
+
+    // The worst scorers in the HoH comp are this week's Have-Nots: slop, cold showers, and too tired to do much.
+    // Until the eviction, they get one social action per block.
+    private pickHaveNots(worstFirst: number[]) {
+        const s = this.state;
+        const ids = worstFirst.slice(0, haveNotCount(nonEvictedHouseguests(s.gameState).length));
+        s.week.haveNots = ids;
+        if (ids.length === 0) return;
+        const names = listNames(ids.map((id) => this.player(id).name));
+        this.feedPush(`🥫 ${names} ${ids.length === 1 ? "is" : "are"} this week's Have-Not${ids.length === 1 ? "" : "s"}.`);
+        this.tell(ids, "🥫 You scored among the worst in the HoH comp, so you're a Have-Not this week: one social action per block until the eviction.");
+        this.announce("🥫 The Have-Nots", [
+            `The worst scores in the ${HOH} competition: ${names}.`,
+            `Until the eviction, ${ids.length === 1 ? "they eat" : "they all eat"} slop, take cold showers, and only have the energy for one social action at a time.`,
+        ]);
+    }
+
+    public isHaveNot(id: number): boolean {
+        return (this.state.week.haveNots || []).includes(id);
+    }
+
+    // ---------- the Battle Back ----------
+
+    get battleBackSlot(): PowerSlot | undefined {
+        return this.powers.slots.find((sl) => sl.id === "battleBack");
+    }
+
+    // Once a season, when the twist is on: right before the jury starts, the evicted houseguests compete to come back.
+    private battleBackDue(): boolean {
+        const slot = this.battleBackSlot;
+        return !!slot && !slot.used && battleBackDue(this.gameState, this.candidatesForBattleBack().length);
+    }
+
+    private candidatesForBattleBack(): Houseguest[] {
+        return battleBackCandidates(this.gameState).filter((hg) => !this.isRuleBreaker(hg.id));
+    }
+
+    private battleBack() {
+        const s = this.state;
+        const slot = this.battleBackSlot;
+        const candidates = this.candidatesForBattleBack();
+        if (!slot || slot.used || candidates.length < 2) return this.goTo(Step.WeekStart);
+        if (!this.locked("battleBackIntro")) {
+            this.lock("battleBackIntro", true);
+            this.announce("🔙 Battle Back", [
+                "Before the next week begins, a twist: the evicted houseguests are coming back to the house…",
+                `…for one competition. ${listNames(candidates.map((hg) => hg.name))} will battle it out, and the winner returns to the game.`,
+            ]);
+            return this.run();
+        }
+        const comp = compById(this.compChoice(() => pickQuickComp(s.gameState, s.history, s.usedComps).id));
+        this.runComp("🔙 Battle Back Competition", comp, candidates, (winnerId) => {
+            const back = this.player(winnerId);
+            const wasJuror = back.isJury;
+            this.mutate((gs) => {
+                const hg = getById(gs, winnerId);
+                hg.isEvicted = false;
+                hg.isJury = false;
+                gs.nonEvictedHouseguests.add(winnerId);
+                gs.remainingPlayers++;
+            });
+            slot.used = true;
+            slot.holderId = winnerId;
+            slot.week = s.gameState.phase + 1;
+            this.feedPush(`🔙 ${back.name} won the Battle Back and is back in the house!`);
+            this.logMove("move", winnerId, undefined, `${back.name} won the Battle Back and came back from eviction`, 3);
+            this.addDiary(s.gameState.phase, winnerId, ["I got a second chance. I'm not wasting it."]);
+            this.tell(
+                this.state.humanIds.filter((id) => id !== winnerId),
+                `🔙 ${back.name} won the Battle Back. They're back in the house, and they remember everything.`
+            );
+            this.tell([winnerId], "🔙 You won the Battle Back! You're back in the game. Everyone knows who sent you out.");
+            this.showScene(
+                this.textScene("🔙 Battle Back", [
+                    `${back.name} has won the Battle Back!`,
+                    `${back.name} walks back through the front door and rejoins the game${wasJuror ? ", giving up their seat on the jury" : ""}.`,
+                    candidates.length > 2
+                        ? `${listNames(candidates.filter((c) => c.id !== winnerId).map((c) => c.name))} stay evicted.`
+                        : `${candidates.find((c) => c.id !== winnerId)!.name} stays evicted.`,
+                ]),
+                Step.WeekStart
+            );
+        });
+    }
+
+    // ---------- the diary room ----------
+
+    private addDiary(week: number, id: number, lines: string[]) {
+        const s = this.state;
+        s.diary = [...(s.diary || []), { week, id, lines }];
+    }
+
+    // What houseguests said in the diary room about the week that just ended.
+    private writeDiary(week: number, votes: { [voterId: number]: number }, evictedIds: number[]) {
+        const s = this.state;
+        const record = s.history.find((w) => w.week === week);
+        const entries = diaryEntries({
+            seed: s.seed,
+            week,
+            gameState: s.gameState,
+            record,
+            votes,
+            evictedIds,
+            playerIds: s.humanIds.filter((id) => !this.isRuleBreaker(id)),
+            initialNoms: s.week.initialNoms || [],
+            secretHoh: !!s.week.secretHoh,
+            haveNots: s.week.haveNots || [],
+            pledges: this.ledger.pledges,
+            moves: (s.moves || []).filter((m) => m.week === week),
+            hohRoomSafe: s.week.room ? s.week.room.promised || [] : [],
+        });
+        s.diary = [...(s.diary || []), ...entries];
+    }
+
+    public diaryOf(week?: number): DiaryEntry[] {
+        return (this.state.diary || []).filter((e) => week === undefined || e.week === week);
+    }
+
+    // The whole season as text, to copy and share.
+    public seasonRecapText(): string {
+        const s = this.state;
+        const gs = s.gameState;
+        const log = gs.log[gs.phase] && gs.log[gs.phase][0];
+        return recapText({
+            gameState: gs,
+            history: s.history,
+            diary: s.diary || [],
+            winnerId: log ? log.winner : undefined,
+            battleBack: this.battleBackSlot && this.battleBackSlot.used ? { id: this.battleBackSlot.holderId!, week: this.battleBackSlot.week } : undefined,
+        });
+    }
+
+    // ---------- the jury house ----------
+
+    public juryHouseLog(): { week: number; text: string }[] {
+        return this.state.juryLog || [];
+    }
+
     // ---------- alliances convene before nominations ----------
 
     // Who can't be the alliance's target right now: the new HoH can't be nominated (unless it's a secret).
@@ -3176,7 +3402,8 @@ export class PlayerModeController {
         const s = this.state;
         const alive = this.turnOrder;
         if (this.allianceTimeOpen()) {
-            while (s.socialTurn < alive.length && this.alliancesOf(alive[s.socialTurn].id).length === 0) s.socialTurn++;
+            while (s.socialTurn < alive.length && (this.alliancesOf(alive[s.socialTurn].id).length === 0 || !this.isHuman(alive[s.socialTurn])))
+                s.socialTurn++;
             if (s.socialTurn < alive.length) {
                 const actor = alive[s.socialTurn];
                 s.socialStage = "alliance";
@@ -3253,7 +3480,7 @@ export class PlayerModeController {
         }
         const room = s.week.room;
         const hoh = this.player(hohId);
-        const waiting = this.alivePlayers.find((p) => p.id !== hohId && !room.asked.includes(p.id));
+        const waiting = this.alivePlayers.find((p) => p.id !== hohId && !room.asked.includes(p.id) && this.isHuman(p));
         if (waiting) {
             return this.privately(waiting.id, `${waiting.name}, the HoH room is open`, () =>
                 this.show({ kind: "hohVisit", actorId: waiting.id })
@@ -3608,7 +3835,7 @@ export class PlayerModeController {
         }
         const nomIds = s.week.nomineeIds || [];
         const spoke = s.week.spoke || [];
-        const speaker = this.alivePlayers.find((p) => nomIds.includes(p.id) && !spoke.includes(p.id));
+        const speaker = this.alivePlayers.find((p) => nomIds.includes(p.id) && !spoke.includes(p.id) && this.isHuman(p));
         if (!speaker) return this.goTo(Step.Eviction);
         const everyone = nonEvictedHouseguests(s.gameState);
         const voters = everyone.filter((hg) => hg.id !== s.week.hohId && !nomIds.includes(hg.id));
@@ -3935,6 +4162,7 @@ export class PlayerModeController {
                 }
                 this.feedPush(`🚪 ${out} has been evicted.`);
             });
+            this.writeDiary(gsAtStart.phase, votes, evictedIds);
             pruneAlliances(s.gameState, s.book).forEach((a) => this.tellAlliance(a, `💔 ${a.name} is no more.`));
             this.weekScenes.push(scene);
             this.pushJuryHouse();
@@ -3983,7 +4211,8 @@ export class PlayerModeController {
             (humanVotes) => {
                 Object.assign(votes, humanVotes);
                 this.votePowers(noms, votes, adjust, adjustNotes, afterVotes);
-            }
+            },
+            (voter) => this.intendedVote(gsAtStart, voter, noms).id
         );
     }
 
@@ -4125,6 +4354,11 @@ export class PlayerModeController {
                 this.endShowmances([evicted.id]);
                 this.recordEvictionGrudges([evicted.id], hoh.id, {}, [], "cut me at the final three");
                 this.pushJuryHouse();
+                const kept = others.find((o) => o.id !== evicted.id);
+                this.addDiary(gs.phase, hoh.id, [
+                    `I won the final Head of House, and I had to cut ${evicted.name}.${kept ? ` I'm sitting next to ${kept.name}. I think I can beat them.` : ""}`,
+                ]);
+                this.addDiary(gs.phase, evicted.id, [`So close. Final three, and ${hoh.name} cut me. I'll have my say on the jury.`]);
             }
             this.showScene(scene, Step.FinalTwo);
         };
@@ -4161,7 +4395,7 @@ export class PlayerModeController {
         const jurorIds = this.jurorIds();
         const finalists = nonEvictedHouseguests(gs);
         const finalistIds = finalists.map((f) => f.id);
-        const playerJurors = this.players.filter((p) => p.isJury && p.isEvicted);
+        const playerJurors = this.players.filter((p) => p.isJury && p.isEvicted && this.isHuman(p));
         const botJurors = jurorIds.filter((id) => !this.isHuman({ id }));
         const types: { [id: number]: JurorType } = {};
         jurorIds.forEach((id) => (types[id] = this.jurorTypeOf(id)));
@@ -4218,7 +4452,8 @@ export class PlayerModeController {
                     this.weekScenes.push(scene);
                     this.save();
                     this.show({ kind: "scene", scene });
-                }
+                },
+                () => -1 // a juror a bot took over from stays quiet
             );
             return;
         }
@@ -4266,7 +4501,8 @@ export class PlayerModeController {
                         this.run();
                     },
                 });
-            }
+            },
+            (juror) => botJuryVote(gs, s.history, this.juryBook, juror.id, finalistIds, types[juror.id], jurorIds).vote
         );
     }
 
@@ -4357,6 +4593,10 @@ export class PlayerModeController {
                 return `${info.emoji} ${info.name}: week ${sl.week}${week && week.hohId !== undefined ? `, and it was ${name(week.hohId)}` : ""}.`;
             }
             if (sl.id === "audience") return `${info.emoji} ${info.name}: the audience handed out the powers, and named a nominee in week ${sl.week}.`;
+            if (sl.id === "battleBack")
+                return sl.used && sl.holderId !== undefined
+                    ? `${info.emoji} ${info.name}: ${name(sl.holderId)} won it and came back into the house in week ${sl.week}.`
+                    : `${info.emoji} ${info.name}: it never happened.`;
             if (sl.holderId === undefined) return `${info.emoji} ${info.name}: never handed out.`;
             return `${info.emoji} ${info.name}: given to ${name(sl.holderId)} in week ${sl.week}${sl.used ? ", and used" : ", never used"}.`;
         });
@@ -4471,6 +4711,7 @@ export class PlayerModeController {
                     {this.seasonRecap()}
                     {this.whoTheyWere()}
                     {this.whyTheJuryVoted()}
+                    <DiaryRoom entries={this.diaryOf()} houseguest={(id) => this.player(id)} recap={this.seasonRecapText()} />
                 </div>
             ),
         });
@@ -4497,11 +4738,12 @@ export function newPlayerSave(
     humanIds: number[],
     castOptions?: CastOptionsOverride,
     statsHidden?: boolean,
-    extras: { difficulty?: Difficulty; powers?: PowerId[] | "surprise" } = {}
+    extras: { difficulty?: Difficulty; powers?: PowerId[] | "surprise"; battleBack?: boolean } = {}
 ): PlayerSave {
     const seed = Date.now() % 1000000007;
     const rand = seededRand(hashcode(`${seed}:powers`));
     const chosen = extras.powers === "surprise" ? surprisePowers(rand) : (extras.powers || []).filter((p) => ALL_POWERS.includes(p));
+    if (extras.battleBack && !chosen.includes("battleBack")) chosen.push("battleBack");
     const powers = schedulePowers(chosen, totalWeeks(gameState), rand);
     const social: { [id: number]: SocialMemory } = {};
     humanIds.forEach((id) => (social[id] = { chatsThisWeek: {} }));

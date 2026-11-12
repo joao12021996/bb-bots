@@ -13,7 +13,7 @@ export interface NetRoom {
 }
 
 // bumped when devices on different versions can't play together, so they never meet in a room
-const APP_ID = "bb-bots-online-2";
+const APP_ID = "bb-bots-online-3";
 
 // Room codes: easy to read out loud (no 0/O, 1/I/L).
 const CODE_LETTERS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -162,9 +162,25 @@ export class FakeHub {
         return room;
     }
 
+    private dropped: { [id: string]: FakeRoom } = {};
+
     drop(id: string) {
+        if (this.rooms[id]) this.dropped[id] = this.rooms[id];
         delete this.rooms[id];
         Object.keys(this.rooms).forEach((other) => this.queue.push(() => this.rooms[other] && this.rooms[other].left(id)));
+    }
+
+    // a dropped device's connection comes back: the same device, with the same id (like the relay reconnecting)
+    restore(id: string) {
+        const room = this.dropped[id];
+        if (!room) return;
+        delete this.dropped[id];
+        const others = Object.keys(this.rooms);
+        this.rooms[id] = room;
+        others.forEach((other) => {
+            this.queue.push(() => this.rooms[other] && this.rooms[other].joined(id));
+            this.queue.push(() => this.rooms[id] && this.rooms[id].joined(other));
+        });
     }
 
     // instant: messages arrive the moment they're sent (a player's move goes to the host and back within the

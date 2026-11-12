@@ -14,7 +14,8 @@ export function HouseWall(props: { controller: PlayerModeController }) {
     const hohId = week.finalHoh !== undefined ? week.finalHoh : controller.publicHohId(viewer);
     const nominees = week.nomineeIds || [];
     const evictedOn = (id: number) => {
-        const w = controller.state.history.find((h) => h.evictedIds.includes(id));
+        // the last time: someone who came back (the Battle Back) can be evicted twice
+        const w = [...controller.state.history].reverse().find((h) => h.evictedIds.includes(id));
         return w ? dayLabel(gs, w.week, DAY_PART.eviction) : "";
     };
     return (

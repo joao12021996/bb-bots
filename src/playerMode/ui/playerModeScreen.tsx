@@ -7,6 +7,7 @@ import { actorOf, PlayerModeController, Prompt } from "../playerModeController";
 import { sessionFor } from "../net/netSession";
 import { watchForInspector } from "../net/inspectWatch";
 import { OnlineBar, WaitingFor, WaitingOnPlayers } from "./onlineLobby";
+import { ChatDock } from "./chatDock";
 import { ChoosePrompt } from "./choosePrompt";
 import { BigButton, Panel, Subtle, Title } from "./common";
 import { SocialScreen } from "./socialScreen";
@@ -120,18 +121,14 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         this.stopWatch && this.stopWatch();
     }
 
-    // What this device shows: online, its player's own screen if they have one (or, for the host, the screen of a
-    // player who isn't connected), otherwise the screen everyone shares.
+    // What this device shows: online, its player's own screen if they have one, otherwise the screen everyone
+    // shares. (A player who isn't connected has a bot playing for them, after a while: see NetSession.checkAway.)
     private pick(): { prompt: Prompt | null; owner: number | null } {
         const session = sessionFor(this.props.controller);
         const personal = this.state.personal;
         if (session) {
             const mine = session.localPlayerId;
-            const ids = Object.keys(personal)
-                .map(Number)
-                .filter((id) => session.mayActFor(id))
-                .sort((a, b) => (a === mine ? -1 : b === mine ? 1 : a - b));
-            if (ids.length > 0) return { prompt: personal[ids[0]], owner: ids[0] };
+            if (mine !== null && personal[mine] && session.mayActFor(mine)) return { prompt: personal[mine], owner: mine };
         }
         return { prompt: this.state.prompt, owner: null };
     }
@@ -156,7 +153,7 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         const session = sessionFor(controller);
         if (session) session.focus(owner);
         const actor = actorOf(prompt);
-        const waiting = !!session && actor !== null && !session.mayActFor(actor);
+        const waiting = !!session && actor !== null && (actor !== session.localPlayerId || !session.mayActFor(actor));
         const chrome = waiting ? "waiting" : prompt.kind;
         let body: JSX.Element;
         if (waiting) body = <WaitingFor session={session!} controller={controller} prompt={prompt} />;
@@ -427,13 +424,11 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                         🚨 You were expelled for breaking the rules: no inspect tools during an online game. You can keep watching.
                     </div>
                 )}
-                {session && owner !== null && owner !== session.localPlayerId && (
-                    <div className="bbb-playing-for">🎮 Playing for {controller.player(owner).name}, who isn't connected</div>
-                )}
                 {session && owner === null && actor === null && !session.amHost && !session.everyoneContinues && prompt.kind !== "gameOver" && prompt.kind !== "waiting" && (
                     <div className="bbb-online-note">⏩ The host moves the show along from here.</div>
                 )}
                 {body}
+                {session && <ChatDock session={session} controller={controller} />}
             </div>
         );
     }

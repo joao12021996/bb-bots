@@ -17,4 +17,5 @@ export const POWER_NAMES = {
     nullifier: "Vote Nullifier",
     audience: "Audience Vote",
     secretHoh: "Secret Head of House",
+    battleBack: "Battle Back",
 };

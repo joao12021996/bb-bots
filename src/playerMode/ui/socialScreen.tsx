@@ -8,6 +8,7 @@ import { Approach, SocialAction, SocialOutcome } from "../social/socialActions";
 import { suggestAllianceName } from "../social/alliances";
 import { PITCH_REASONS, reasonLine } from "../social/pitch";
 import { BigButton, Face, Grid, Panel, Subtle, Title, whenDone } from "./common";
+import { HOH } from "../terms";
 
 interface SocialScreenProps {
     controller: PlayerModeController;
@@ -238,6 +239,9 @@ export function SocialScreen(props: SocialScreenProps) {
     if (mode.kind === "pickBot") {
         body = (
             <div>
+                {controller.isHaveNot(human.id) && (
+                    <Subtle>🥫 You're a Have-Not this week (bottom of the {HOH} comp): slop, cold showers, and only one social action per block.</Subtle>
+                )}
                 <Subtle>
                     {actionsLeft > 0
                         ? `Who do you want to talk to? (${actionsLeft} action${actionsLeft === 1 ? "" : "s"} left)`

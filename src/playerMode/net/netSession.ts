@@ -1,7 +1,7 @@
 import { BehaviorSubject } from "rxjs";
 import { continueWaiting$ } from "../../subjects/subjects";
 import { getById } from "../../model";
-import { actorOf, migrateSave, PlayerModeController, PlayerSave, Prompt } from "../playerModeController";
+import { actorOf, migrateSave, PlayerModeController, PlayerSave, Prompt, Step } from "../playerModeController";
 import { clearOnlineSave, deserialize, serialize, writeOnlineSave } from "../save/serialize";
 import { seedRng } from "../seeding";
 import { NetRoom } from "./room";
@@ -96,6 +96,44 @@ export interface SessionOptions {
     hostWaitMs?: number;
     // how often the host sends its hash (debounced)
     hashDelayMs?: number;
+    // how long a player's device can be gone before a bot plays for them
+    awayMs?: number;
+}
+
+// Chat between players, outside the season itself (it never changes the game, so it doesn't go through the
+// inputs): private messages between houseguests still in the house, and the jury house, for evicted players.
+// The host checks every message and passes it on only to the devices that may read it.
+export interface ChatMessage {
+    id: string;
+    from: number;
+    to: number | "jury";
+    text: string;
+    at: number;
+}
+
+export const CHAT_MAX_LENGTH = 300;
+const CHAT_KEEP = 500;
+
+function chatKey(code: string): string {
+    return `bbb-online-chat:${code}`;
+}
+
+function loadChat(code: string): ChatMessage[] {
+    try {
+        const json = localStorage.getItem(chatKey(code));
+        const list = json ? JSON.parse(json) : [];
+        return Array.isArray(list) ? list : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function storeChat(code: string, list: ChatMessage[]) {
+    try {
+        localStorage.setItem(chatKey(code), JSON.stringify(list));
+    } catch (e) {
+        // no storage: the chat only lasts as long as the tab
+    }
 }
 
 interface Snapshot {
@@ -199,6 +237,7 @@ export class NetSession {
     public readonly status$: BehaviorSubject<NetStatus>;
     public controller: PlayerModeController | null = null;
     public resyncs = 0; // times this device found itself out of sync with the host
+    public readonly chat$ = new BehaviorSubject<ChatMessage[]>([]); // the messages this device's player may read
 
     private isHost: boolean;
     private hostId: string | null;
@@ -245,11 +284,20 @@ export class NetSession {
     private lastResyncAt = 0;
     private lastHardResyncAt = 0;
     private lastHard: Snapshot | null = null; // the snapshot everyone last reloaded from together
+    // the host: since when each player's device has been gone (a bot plays for them after a while)
+    private awaySince: { [playerId: number]: number } = {};
+    private awayTimer: any = null;
+    // chat: every message this device has (the host: all of them), and the evicted players the host has sent
+    // the jury house to so far
+    private allChat: ChatMessage[] = [];
+    private chatSeq = 0;
+    private juryChatSent = new Set<number>();
 
     private constructor(private room: NetRoom, public readonly code: string, private opts: SessionOptions, isHost: boolean) {
         this.isHost = isHost;
         this.hostId = isHost ? room.selfId : null;
         this.status$ = new BehaviorSubject<NetStatus>(this.status());
+        this.allChat = loadChat(code);
         room.onMessage((type, data, from) => this.onMessage(type, data, from));
         room.onPeerJoin((id) => this.onPeerJoin(id));
         room.onPeerLeave((id) => this.onPeerLeave(id));
@@ -333,7 +381,11 @@ export class NetSession {
     private emit() {
         this.status$.next(this.status());
         this.updateWaiting();
-        if (this.isHost) this.checkReady();
+        this.refreshChat();
+        if (this.isHost) {
+            this.checkReady();
+            this.checkAway();
+        }
     }
 
     // ---------- lobby ----------
@@ -426,6 +478,7 @@ export class NetSession {
         clearTimeout(this.gapTimer);
         clearTimeout(this.reportTimer);
         clearTimeout(this.hostWaitTimer);
+        clearTimeout(this.awayTimer);
         continueWaiting$.next(null);
         if (this.controller) this.controller.net = null;
         this.room.leave();
@@ -442,7 +495,10 @@ export class NetSession {
         });
         this.claims[playerId] = peerId;
         // the season first, so the new device has it by the time the lobby says it's playing
-        if (this.started && peerId !== this.room.selfId) this.sendSnapshot(peerId);
+        if (this.started && peerId !== this.room.selfId) {
+            this.sendSnapshot(peerId);
+            this.sendChatLog(playerId, peerId);
+        }
         this.broadcastLobby();
     }
 
@@ -553,6 +609,12 @@ export class NetSession {
                 if (!this.isHost || !this.started) return;
                 if (data && data.hard) return this.hardResync();
                 return this.sendSnapshot(from);
+            case "chatSend":
+                return this.receiveChat(data as ChatMessage, from);
+            case "chat":
+            case "chatLog":
+                if (from === this.hostId && Array.isArray(data)) this.addChat(data);
+                return;
             case "snap":
                 if (from === this.hostId) {
                     const snap = data as Snapshot;
@@ -575,6 +637,9 @@ export class NetSession {
             this.isHost = false;
         }
         clearTimeout(this.hostWaitTimer);
+        // the seat this device had: after a dropped connection the host may have let it go, so claim it back
+        const had = this.localPlayerId;
+        if (had !== null && this.started) this.wantPlayerId = had;
         this.hostId = from;
         this.slots = data.slots;
         this.claims = { ...data.claims };
@@ -702,6 +767,8 @@ export class NetSession {
         });
         // sent by the session itself, for this device's own player (see reportRuleBreak)
         this.rawMethods.ruleBreak = c.ruleBreak.bind(controller);
+        // sent by the host itself, when a player's device has been gone a while, or is back (see checkAway)
+        this.rawMethods.autopilot = c.autopilot.bind(controller);
     }
 
     // owner: a player's own screen (undefined: the screen everyone shares)
@@ -760,6 +827,7 @@ export class NetSession {
 
     // Whether an input can be applied now: sent by a device allowed to, for a screen that's still showing.
     private valid(p: Proposal, from: string): boolean {
+        if (p.kind === "method" && p.name === "autopilot") return false; // only ever the host's own doing
         if (!this.allowed(p.owner, from)) return false;
         if (p.kind === "method" && p.name === "ruleBreak") {
             // only ever about the sender's own player
@@ -997,6 +1065,8 @@ export class NetSession {
         if (lost) this.outOfSync();
         else if (this.isHost) this.scheduleHash();
         else this.checkHash();
+        if (this.isHost) this.syncJuryChat();
+        this.refreshChat();
         return result;
     }
 
@@ -1059,6 +1129,125 @@ export class NetSession {
         }
     }
 
+    // ---------- away players ----------
+
+    // The host: a player whose device has been gone a while gets a bot playing for them, so the season never
+    // waits on someone who isn't there; once they're back, they're in control again. Sent as an input, so every
+    // device makes the switch at the same point.
+    private checkAway() {
+        clearTimeout(this.awayTimer);
+        const c = this.controller;
+        if (!this.isHost || !this.started || !c || c.state.step === Step.GameOver) return;
+        if (this.depth > 0) {
+            Promise.resolve().then(() => this.checkAway());
+            return;
+        }
+        const now = Date.now();
+        const wait = this.opts.awayMs ?? 15000;
+        let next = Infinity;
+        c.state.humanIds.forEach((id) => {
+            if (c.isRuleBreaker(id)) return;
+            if (this.connected(this.claims[id])) {
+                delete this.awaySince[id];
+                if (c.isAutopilot(id)) this.sequence({ kind: "method", name: "autopilot", args: [id, false], owner: null }, this.room.selfId);
+                return;
+            }
+            if (c.isAutopilot(id)) return;
+            if (this.awaySince[id] === undefined) this.awaySince[id] = now;
+            const due = this.awaySince[id] + wait;
+            if (due <= now) this.sequence({ kind: "method", name: "autopilot", args: [id, true], owner: null }, this.room.selfId);
+            else next = Math.min(next, due);
+        });
+        if (next < Infinity) this.awayTimer = setTimeout(() => this.checkAway(), next - now + 20);
+    }
+
+    // ---------- chat ----------
+
+    // Who may send a message to whom: houseguests in the house message each other; evicted ones, the jury house.
+    public mayChat(from: number | null, to: number | "jury"): boolean {
+        const c = this.controller;
+        if (!c || !this.started || from === null || !c.state.humanIds.includes(from) || c.isRuleBreaker(from)) return false;
+        const sender = getById(c.gameState, from);
+        if (!sender) return false;
+        if (to === "jury") return sender.isEvicted;
+        const other = getById(c.gameState, to);
+        return to !== from && !sender.isEvicted && !!other && !other.isEvicted && c.state.humanIds.includes(to) && !c.isRuleBreaker(to);
+    }
+
+    // Whether a player may read a message: their own private messages, and the jury house once they're in it.
+    private mayRead(m: ChatMessage, playerId: number | null): boolean {
+        if (playerId === null) return false;
+        if (m.to === "jury") {
+            const hg = this.controller && getById(this.controller.gameState, playerId);
+            return !!hg && hg.isEvicted;
+        }
+        return m.from === playerId || m.to === playerId;
+    }
+
+    public sendChat(to: number | "jury", text: string) {
+        const from = this.localPlayerId;
+        const clean = String(text || "").trim().slice(0, CHAT_MAX_LENGTH);
+        if (!clean || from === null || !this.mayChat(from, to)) return;
+        const message: ChatMessage = { id: `${this.room.selfId}:${Date.now()}:${++this.chatSeq}`, from, to, text: clean, at: Date.now() };
+        if (this.isHost) this.receiveChat(message, this.room.selfId);
+        else if (this.hostId) this.room.send("chatSend", message, this.hostId);
+    }
+
+    // The host: a message from a device. Checked, then passed on to whoever may read it.
+    private receiveChat(m: ChatMessage, from: string) {
+        if (!this.isHost || !m || typeof m.text !== "string") return;
+        const to = m.to === "jury" ? "jury" : Number(m.to);
+        const sender = Number(m.from);
+        if (this.claims[sender] !== from || !this.mayChat(sender, to)) return;
+        const message: ChatMessage = { id: String(m.id).slice(0, 80), from: sender, to, text: m.text.trim().slice(0, CHAT_MAX_LENGTH), at: Date.now() };
+        if (!message.text || this.allChat.some((x) => x.id === message.id)) return;
+        this.addChat([message]);
+        Object.keys(this.claims)
+            .map(Number)
+            .filter((id) => this.mayRead(message, id))
+            .forEach((id) => {
+                const peer = this.claims[id];
+                if (peer !== this.room.selfId && this.connected(peer)) this.room.send("chat", [message], peer);
+            });
+    }
+
+    // The host: everything a player may read, for their device (joining, or back).
+    private sendChatLog(playerId: number, peerId: string) {
+        const mine = this.allChat.filter((m) => this.mayRead(m, playerId));
+        if (mine.length > 0) this.room.send("chatLog", mine, peerId);
+    }
+
+    // The host: a player just got evicted and moves into the jury house: they get its chat so far.
+    private syncJuryChat() {
+        const c = this.controller;
+        if (!c) return;
+        c.state.humanIds.forEach((id) => {
+            const hg = getById(c.gameState, id);
+            if (!hg || !hg.isEvicted || this.juryChatSent.has(id)) return;
+            this.juryChatSent.add(id);
+            const peer = this.claims[id];
+            if (peer && peer !== this.room.selfId && this.connected(peer)) this.sendChatLog(id, peer);
+        });
+    }
+
+    private addChat(list: ChatMessage[]) {
+        const known = new Set(this.allChat.map((m) => m.id));
+        const fresh = list.filter(
+            (m) => m && typeof m.id === "string" && typeof m.text === "string" && !known.has(m.id) && (m.to === "jury" || typeof m.to === "number")
+        );
+        if (fresh.length === 0) return;
+        this.allChat = [...this.allChat, ...fresh].sort((a, b) => a.at - b.at).slice(-CHAT_KEEP);
+        storeChat(this.code, this.allChat);
+        this.refreshChat();
+    }
+
+    private refreshChat() {
+        const me = this.localPlayerId;
+        const visible = this.allChat.filter((m) => this.mayRead(m, me));
+        const current = this.chat$.value;
+        if (visible.length !== current.length || visible.some((m, i) => m !== current[i])) this.chat$.next(visible);
+    }
+
     // ---------- for the screens ----------
 
     public playerName(id: number): string {
@@ -1070,6 +1259,11 @@ export class NetSession {
     // for tests
     public get appliedInputs(): number {
         return this.applied;
+    }
+
+    // for tests: look for away players now
+    public checkAwayNow() {
+        this.checkAway();
     }
 }
 

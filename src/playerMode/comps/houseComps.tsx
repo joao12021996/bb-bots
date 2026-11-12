@@ -172,7 +172,8 @@ export function makeFacts(gs: GameState, rand: Rand, history: WeekRecord[] = [])
     const former = gs.houseguests.filter((hg) => hg.isEvicted);
     if (former.length < 2) return [];
     // eviction order, from the season's history
-    const order = (id: number) => history.findIndex((w) => w.evictedIds.includes(id));
+    // (the last time: someone who came back in the Battle Back can be evicted twice)
+    const order = (id: number) => history.reduce((at, w, i) => (w.evictedIds.includes(id) ? i : at), -1);
     const gens: (() => Fact | null)[] = [
         () => {
             const a = pick(rand, former);

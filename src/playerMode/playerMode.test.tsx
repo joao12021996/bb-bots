@@ -2623,8 +2623,10 @@ describe("secret powers", () => {
                 answer(controller, p, "random", "random");
             }
             expect((prompt as unknown as Prompt).kind).toBe("gameOver");
-            expect(controller.state.history.length).toBe(12 - 3);
             const slots = controller.state.powers!.slots;
+            // the Battle Back brings someone back: one more eviction
+            const back = slots.some((sl) => sl.id === "battleBack" && sl.used);
+            expect(controller.state.history.length).toBe(12 - 3 + (back ? 1 : 0));
             handedOut += slots.filter((sl) => sl.holderId !== undefined).length;
             used += slots.filter((sl) => sl.used).length;
         }

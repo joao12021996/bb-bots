@@ -34,8 +34,10 @@ export interface Award {
 
 // Final placements: the winner, the runner-up, then everyone else in reverse order of eviction.
 export function placements(gs: GameState, history: WeekRecord[], winnerId?: number): { [id: number]: number } {
-    const order: number[] = [];
-    history.forEach((w) => w.evictedIds.forEach((id) => order.push(id)));
+    let order: number[] = [];
+    // a houseguest who came back (the Battle Back) counts from their last eviction, if they were evicted again
+    history.forEach((w) => w.evictedIds.forEach((id) => (order = [...order.filter((x) => x !== id), id])));
+    order = order.filter((id) => gs.houseguests.some((hg) => hg.id === id && hg.isEvicted));
     // evicted at the final eviction (not in the weekly history)
     gs.houseguests.filter((hg) => hg.isEvicted && !order.includes(hg.id)).forEach((hg) => order.push(hg.id));
     const finalists = gs.houseguests.filter((hg) => !order.includes(hg.id)).map((hg) => hg.id);

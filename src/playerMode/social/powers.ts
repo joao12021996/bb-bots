@@ -18,11 +18,12 @@ import { Rand, shuffled } from "../comps/random";
 // Season twists:
 //   audience   - the audience hands out the powers (to its favorite), and one week it names a nominee itself
 //   secretHoh  - one week, nobody knows who the Head of House is
+//   battleBack - right before the jury starts, the evicted houseguests compete to come back (see twists.ts)
 
-export type PowerId = "overthrow" | "immunity" | "ghostSwap" | "extraVote" | "nullifier" | "audience" | "secretHoh";
+export type PowerId = "overthrow" | "immunity" | "ghostSwap" | "extraVote" | "nullifier" | "audience" | "secretHoh" | "battleBack";
 
 export const HOLDABLE: PowerId[] = ["overthrow", "immunity", "ghostSwap", "extraVote", "nullifier"];
-export const ALL_POWERS: PowerId[] = [...HOLDABLE, "audience", "secretHoh"];
+export const ALL_POWERS: PowerId[] = [...HOLDABLE, "audience", "secretHoh", "battleBack"];
 
 export interface PowerInfo {
     id: PowerId;
@@ -80,6 +81,13 @@ export const POWERS: { [id in PowerId]: PowerInfo } = {
         name: POWER_NAMES.secretHoh,
         emoji: "🕶️",
         blurb: "One week, nobody knows who the Head of House is, or who nominated them.",
+        howTo: "",
+    },
+    battleBack: {
+        id: "battleBack",
+        name: POWER_NAMES.battleBack,
+        emoji: "🔙",
+        blurb: "Right before the jury starts, every evicted houseguest plays one comp. The winner comes back into the house.",
         howTo: "",
     },
 };

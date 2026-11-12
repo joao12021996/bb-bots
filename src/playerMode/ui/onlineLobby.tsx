@@ -300,6 +300,7 @@ function LobbyRoom(props: { session: NetSession; status: NetStatus }) {
                 <Subtle>
                     <b>{house.length}</b> houseguests · {setup.difficulty} difficulty
                     {setup.powers === "surprise" && " · secret powers"}
+                    {setup.battleBack && " · battle back"}
                     {setup.hideSkills && " · skill randomizer"}
                 </Subtle>
             )}
@@ -383,6 +384,12 @@ function HostSettings(props: { session: NetSession; status: NetStatus }) {
                     ))}
                 </div>
             </div>
+            <label className="bbb-toggle">
+                <input type="checkbox" checked={!!setup.battleBack} onChange={(e) => session.updateSetup({ battleBack: e.target.checked })} />
+                <span>
+                    🔙 <b>Battle Back</b>: right before the jury starts, everyone who's been evicted plays one comp, and the winner comes back.
+                </span>
+            </label>
             <label className="bbb-toggle">
                 <input type="checkbox" checked={setup.hideSkills} onChange={(e) => session.updateSetup({ hideSkills: e.target.checked })} />
                 <span>
@@ -540,10 +547,13 @@ export function OnlineBar(props: { session: NetSession; controller: PlayerModeCo
             <span className="bbb-online-players">
                 {status.slots.map((slot) => {
                     const on = props.session.isConnected(slot.id);
+                    const bot = props.controller.isAutopilot(slot.id);
+                    const title = on ? `${slot.name} is connected` : bot ? `${slot.name} isn't connected: a bot is playing for them` : `${slot.name} isn't connected`;
                     return (
-                        <span key={slot.id} className={on ? "is-on" : ""} title={on ? `${slot.name} is connected` : `${slot.name} isn't connected`}>
+                        <span key={slot.id} className={on ? "is-on" : ""} title={title}>
                             <img src={getById(props.controller.gameState, slot.id).imageURL} alt="" />
                             {slot.id === me ? "You" : slot.name}
+                            {bot && " 🤖"}
                         </span>
                     );
                 })}
@@ -603,7 +613,7 @@ export function WaitingOnPlayers(props: {
                         const hg = getById(props.controller.gameState, id);
                         const away = !props.session.isConnected(id);
                         return (
-                            <span key={id} title={away ? `${hg.name} isn't connected, so the host is playing for them` : undefined}>
+                            <span key={id} title={away ? `${hg.name} isn't connected: if they don't come back soon, a bot plays for them` : undefined}>
                                 <img src={hg.imageURL} alt="" />
                                 {id === me ? "You" : hg.name}
                                 {away && " (away)"}
@@ -631,7 +641,7 @@ export function WaitingFor(props: { session: NetSession; controller: PlayerModeC
                 <img src={hg.imageURL} alt="" />
                 <Title>{hg.name}</Title>
                 <Subtle>{activity(props.prompt)}…</Subtle>
-                {away && <Subtle>{hg.name} isn't connected right now, so the host is playing for them.</Subtle>}
+                {away && <Subtle>{hg.name} isn't connected right now. If they don't come back soon, a bot 🤖 takes over for them.</Subtle>}
             </div>
         </Panel>
     );

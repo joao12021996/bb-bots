@@ -42,9 +42,14 @@ function step(hub: FakeHub, sessions: NetSession[]): boolean {
 function moveOn(live: NetSession[]) {
     const p = prompt(live[0]);
     if (actorOf(p) === null && live.some((s) => s.everyoneContinues)) {
-        const pressers = live.filter((s) => s.localPlayerId !== null);
+        // (an expelled player only watches: their Continue isn't waited for)
+        const pressers = live.filter((s) => s.localPlayerId !== null && !s.controller!.isRuleBreaker(s.localPlayerId));
         const host = pressers.filter((s) => s.amHost);
-        [...pressers.filter((s) => !s.amHost), ...host].forEach((s) => answer(s.controller!, prompt(s), "random", "random"));
+        [...pressers.filter((s) => !s.amHost), ...host].forEach((s) => {
+            // the others' presses may have moved the screen on already
+            const mine = prompt(s);
+            if (actorOf(mine) === null && mine.kind === p.kind) answer(s.controller!, mine, "random", "random");
+        });
         return;
     }
     const mover = live.find((s) => s.mayActFor(actorOf(prompt(s))));
@@ -604,5 +609,117 @@ describe("online play", () => {
         expect(setup.seats.length).toBe(5);
         expect(setup.size).toBe(5);
         expect(houseOf(setup, cards).every((s) => s.kind === "player")).toBe(true);
+    });
+
+    it("a bot plays for a player who's been gone a while, until they're back", () => {
+        const { hub, host, clients } = setup(10, [0, 3, 6], 31);
+        let all = [host, ...clients];
+        for (let i = 0; i < 40; i++) step(hub, all);
+        clients[1].leave();
+        hub.flush();
+        all = [host, clients[0]];
+        jest.advanceTimersByTime(5000);
+        hub.flush();
+        expect(host.controller!.isAutopilot(6)).toBe(false); // not yet: they might be right back
+        jest.advanceTimersByTime(11000);
+        hub.flush();
+        expect(host.controller!.isAutopilot(6)).toBe(true);
+        expect(clients[0].controller!.isAutopilot(6)).toBe(true);
+        // nothing waits on them any more: no screen of theirs comes up
+        for (let i = 0; i < 80 && step(hub, all); i++) {
+            expect(actorOf(prompt(host))).not.toBe(6);
+            expect(host.controller!.personal$.value[6]).toBeUndefined();
+        }
+        settle(hub, host);
+        expectInSync(all);
+        // they come back, and they're in control again
+        const back = NetSession.join(hub.join("c9"), "TEST", opts, { playerId: 6, json: "{}" });
+        hub.flush();
+        all = [host, clients[0], back];
+        expect(back.localPlayerId).toBe(6);
+        expect(host.controller!.isAutopilot(6)).toBe(false);
+        settle(hub, host);
+        expectInSync(all);
+        let guard = 0;
+        while (guard++ < 5000 && step(hub, all)) {
+            if (guard % 25 === 0) {
+                settle(hub, host);
+                expectInSync(all);
+            }
+        }
+        settle(hub, host);
+        expectInSync(all);
+        expect(prompt(back).kind).toBe("gameOver");
+    });
+
+    it("a bot takes over a comp the player had up when they went away, and the others keep playing", () => {
+        const { hub, host, clients } = setup(8, [0, 3, 5], 19);
+        const all = [host, ...clients];
+        expect(untilOwnScreens(hub, all, 3)).toBe(true);
+        clients[1].leave();
+        hub.flush();
+        jest.advanceTimersByTime(16000);
+        hub.flush();
+        expect(host.controller!.isAutopilot(5)).toBe(true);
+        expect(host.controller!.personal$.value[5]).toBeUndefined();
+        // the other two still have theirs
+        expect(host.controller!.personal$.value[0]).toBeDefined();
+        expect(host.controller!.personal$.value[3]).toBeDefined();
+        let guard = 0;
+        while (guard++ < 5000 && step(hub, [host, clients[0]])) if (guard % 25 === 0) settle(hub, host);
+        settle(hub, host);
+        expectInSync([host, clients[0]]);
+        expect(prompt(host).kind).toBe("gameOver");
+    });
+
+    it("a device whose connection drops and comes back gets its seat back", () => {
+        const { hub, host, clients, all } = setup(8, [0, 3], 5);
+        for (let i = 0; i < 20; i++) step(hub, all);
+        hub.drop("c0");
+        hub.flush();
+        expect(host.status$.value.claims[3]).toBeUndefined();
+        hub.restore("c0");
+        hub.flush();
+        expect(clients[0].localPlayerId).toBe(3);
+        expect(host.status$.value.claims[3]).toBe("c0");
+        settle(hub, host);
+        expectInSync(all);
+    });
+
+    it("private messages reach only the two players; evicted players talk in the jury house", () => {
+        localStorage.clear();
+        const { hub, host, clients, all } = setup(8, [0, 3, 5, 6], 13);
+        const of = (id: number) => all.find((s) => s.localPlayerId === id)!;
+        const texts = (s: NetSession) => s.chat$.value.map((m) => m.text);
+        of(0).sendChat(3, "hi 3");
+        of(3).sendChat(0, "hey 0");
+        hub.flush();
+        expect(texts(of(3))).toEqual(["hi 3", "hey 0"]);
+        expect(texts(of(0))).toEqual(["hi 3", "hey 0"]);
+        expect(texts(of(5))).toEqual([]);
+        // nobody can pretend to be someone else, or write to the jury house from inside the house
+        (of(5) as any).room.send("chatSend", { id: "fake", from: 0, to: 3, text: "fake", at: 0 }, "h");
+        of(5).sendChat("jury", "hello jury");
+        hub.flush();
+        expect(texts(of(3))).toEqual(["hi 3", "hey 0"]);
+        expect(texts(of(5))).toEqual([]);
+        const evicted = () => [0, 3, 5, 6].filter((id) => getById(host.controller!.gameState, id).isEvicted);
+        let guard = 0;
+        while (guard++ < 5000 && evicted().length < 1 && step(hub, all)) {}
+        const [first] = evicted();
+        const alive = [0, 3, 5, 6].filter((id) => !evicted().includes(id));
+        of(first).sendChat("jury", "the jury is in session");
+        of(first).sendChat(alive[0], "can I still talk to you?"); // no: evicted players only have the jury house
+        hub.flush();
+        expect(texts(of(first))).toContain("the jury is in session");
+        expect(texts(of(first))).not.toContain("can I still talk to you?");
+        alive.forEach((id) => expect(texts(of(id))).not.toContain("the jury is in session"));
+        while (guard++ < 5000 && evicted().length < 2 && step(hub, all)) {}
+        const second = evicted().find((id) => id !== first)!;
+        // the new juror gets what's been said in the jury house so far
+        expect(texts(of(second))).toContain("the jury is in session");
+        of(second).sendChat("jury", "hi everyone");
+        hub.flush();
+        expect(texts(of(first))).toContain("hi everyone");
     });
 });
