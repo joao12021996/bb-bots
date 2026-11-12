@@ -289,7 +289,7 @@ export const HideAndGoVetoComp: CompDefinition = {
 
 const COMIC_FAKES = 2; // forgeries of each real cover
 const COMIC_LIMIT = 480; // seconds
-const COMIC_PASS = 1.3; // seconds per column of covers (two rows) rolling across the screen
+const COMIC_PASS = 1.6; // seconds per column of covers (two rows) rolling across the screen
 const COMIC_ADJECTIVES = ["Amazing", "Incredible", "Uncanny", "Mighty", "Invincible", "Savage", "Sneaky", "Fearless"];
 const COMIC_PROPS = ["⚡", "🔥", "💎", "🛡️", "☄️", "🐍", "👁️", "🌪️", "🔑", "🏆"];
 const COMIC_COLORS = ["#b91c1c", "#1d4ed8", "#047857", "#7e22ce", "#c2410c", "#0f766e", "#be185d"];
@@ -404,22 +404,38 @@ export function comicPile(gs: GameState, _history: WeekRecord[], rand: Rand): Co
 }
 
 // How many slots are right: slot i must hold the real cover of the i-th comic that went by.
-export function comicsRight(pile: ComicPile, slots: (number | null)[]): number {
-    return slots.filter((c, i) => c !== null && pile.covers[c].real && pile.covers[c].of === i).length;
+export function comicsRight(pile: ComicPile, slots: (number | null | undefined)[]): number {
+    return slots.filter((c, i) => c !== null && c !== undefined && pile.covers[c].real && pile.covers[c].of === i).length;
 }
 
 type ComicSource = { from: "table"; c: number } | { from: "slot"; i: number; c: number };
+type ComicStack = { at: "table"; top: number } | { at: "slot"; i: number };
 
 const DRAG_START = 8; // px the pointer moves before a press becomes a drag
+
+// A pile of covers, solitaire style: the ones underneath peek out above the one on top.
+function ComicPileView(props: { below: React.ReactNode[]; top: React.ReactNode }) {
+    return (
+        <div className="bbb-comic-pile">
+            {props.below.map((b, k) => (
+                <div key={k} className="bbb-comic-peek">
+                    {b}
+                </div>
+            ))}
+            {props.top}
+        </div>
+    );
+}
 
 function BBComics(props: CompProps) {
     const [pile] = React.useState(() => comicPile(props.gameState, props.history, props.rand));
     const n = pile.cast.length;
-    const [slots, setSlots] = React.useState<(number | null)[]>(() => Array(n).fill(null));
+    // each slot holds a pile of covers: the last one is on top, and it's the one that counts
+    const [slots, setSlots] = React.useState<number[][]>(() => Array.from({ length: n }, () => []));
     const [held, setHeld] = React.useState<number | null>(null); // the cover picked up off the table
-    // two of the same houseguest's covers, one on top of the other: under[top] is the one underneath
+    // on the table, two of the same houseguest's covers, one on top of the other: under[top] is the one underneath
     const [under, setUnder] = React.useState<{ [top: number]: number }>({});
-    const [comparing, setComparing] = React.useState<number | null>(null); // a stack, spread out to choose from
+    const [comparing, setComparing] = React.useState<ComicStack | null>(null); // a pile, spread out to choose from
     const [drag, setDrag] = React.useState<{ src: ComicSource; x: number; y: number; over: string } | null>(null);
     const [reviewing, setReviewing] = React.useState(false);
     const [wrong, setWrong] = React.useState(0); // tries that weren't right
@@ -427,83 +443,110 @@ function BBComics(props: CompProps) {
     const [start] = React.useState(() => Date.now());
     const justDragged = React.useRef(false); // the click that ends a drag isn't a tap
     const endDrag = React.useRef<(() => void) | null>(null);
-    React.useEffect(() => () => {
-        if (endDrag.current) endDrag.current();
-    }, []);
+    React.useEffect(
+        () => () => {
+            if (endDrag.current) endDrag.current();
+        },
+        []
+    );
     const hgOf = (c: number) => pile.cast[pile.covers[c].of];
     const rivalOf = (cover: Cover) => props.gameState.houseguests.find((h) => h.id === cover.rivalId);
     const cover = (c: number, onClick?: () => void) => <ComicCover hg={hgOf(c)} rival={rivalOf(pile.covers[c].cover)} cover={pile.covers[c].cover} onClick={onClick} />;
-    const used = new Set(slots.filter((s): s is number => s !== null));
-    const hidden = new Set(Object.values(under)); // underneath a stack
+    const top = (i: number): number | null => (slots[i].length ? slots[i][slots[i].length - 1] : null);
+    const twins = (a: number, b: number) => pile.covers[a].of === pile.covers[b].of;
+    const used = new Set(([] as number[]).concat(...slots));
+    const hidden = new Set(Object.values(under)); // underneath a stack on the table
     const tapped = (f: () => void) => () => {
         if (!justDragged.current) f();
     };
-    const unstack = (top: number) => {
+    const unstack = (t: number) => {
         const next = { ...under };
-        delete next[top];
+        delete next[t];
         setUnder(next);
     };
-
-    const putIn = (i: number) => {
-        if (held === null) return;
-        const next = [...slots];
-        next[i] = held; // whatever was there goes back on the table
-        setSlots(next);
+    const changed = () => {
         setHeld(null);
         setChecked(false);
     };
+
+    // a cover onto slot j: a duplicate of what's on top goes on the pile; anything else replaces the pile
+    // (which goes back on the table). From another slot: only its top cover moves, and if that was all it held,
+    // the two slots swap.
+    const onto = (next: number[][], c: number, j: number, fromSlot?: number) => {
+        const t = next[j].length ? next[j][next[j].length - 1] : null;
+        if (fromSlot !== undefined) next[fromSlot] = next[fromSlot].slice(0, -1);
+        if (t !== null && twins(t, c)) next[j] = [...next[j], c];
+        else {
+            if (fromSlot !== undefined && next[fromSlot].length === 0) next[fromSlot] = next[j];
+            next[j] = [c];
+        }
+        return next;
+    };
+    const putIn = (j: number) => {
+        if (held === null) return;
+        setSlots(onto([...slots], held, j));
+        changed();
+    };
     const tapTable = (c: number) => {
         if (under[c] !== undefined) {
-            // a stack: spread it out and pick one
             setHeld(null);
-            setComparing(c);
+            setComparing({ at: "table", top: c });
         } else if (held === c) setHeld(null);
-        else if (held !== null && pile.covers[held].of === pile.covers[c].of) {
-            // another of the same houseguest's covers: put the one in hand on top of it
+        else if (held !== null && twins(held, c)) {
             setUnder({ ...under, [held]: c });
             setHeld(null);
         } else setHeld(c);
     };
     const tapSlot = (i: number) => {
         if (held !== null) putIn(i);
-        else if (slots[i] !== null) {
+        else if (slots[i].length > 1) setComparing({ at: "slot", i });
+        else if (slots[i].length === 1) {
             const next = [...slots];
-            next[i] = null;
+            next[i] = [];
             setSlots(next);
-            setChecked(false);
+            changed();
         }
     };
-    const keep = (top: number, c: number) => {
-        // the one kept is in your hand; the other goes back to its place on the table
-        unstack(top);
-        setComparing(null);
-        setHeld(c);
+    const keep = (c: number) => {
+        if (!comparing) return;
+        if (comparing.at === "table") {
+            // the one kept is in your hand; the other goes back to its place on the table
+            unstack(comparing.top);
+            setComparing(null);
+            setHeld(c);
+        } else {
+            // the one kept stays in the slot; the rest go back on the table
+            const next = [...slots];
+            next[comparing.i] = [c];
+            setSlots(next);
+            setComparing(null);
+            changed();
+        }
     };
+    const compareList = (s: ComicStack): number[] => (s.at === "table" ? (under[s.top] !== undefined ? [s.top, under[s.top]] : []) : [...slots[s.i]].reverse());
 
-    // dropping a dragged cover: on a slot (a cover from another slot swaps places with what's there), on another of
-    // the same houseguest's covers (they stack), or anywhere on the table (back it goes)
+    // dropping a dragged cover: on a slot, on another of the same houseguest's covers on the table (they stack),
+    // or anywhere else on the table (back it goes)
     const drop = (src: ComicSource, target: string) => {
         const [kind, arg] = target.split(":");
-        const next = [...slots];
-        setHeld(null);
-        setChecked(false);
         if (kind === "slot") {
             const j = Number(arg);
-            if (src.from === "slot") {
-                next[src.i] = next[j];
-                next[j] = src.c;
-            } else next[j] = src.c;
-            setSlots(next);
+            if (src.from === "slot" && src.i === j) return;
+            setSlots(onto([...slots], src.c, j, src.from === "slot" ? src.i : undefined));
+            changed();
             return;
         }
-        if (src.from === "slot" && kind === "table") {
-            next[src.i] = null;
+        if (kind !== "table") return;
+        if (src.from === "slot") {
+            const next = [...slots];
+            next[src.i] = next[src.i].slice(0, -1);
             setSlots(next);
         }
-        if (kind === "table" && arg !== undefined) {
-            const onto = Number(arg);
-            if (onto !== src.c && pile.covers[onto].of === pile.covers[src.c].of) setUnder({ ...under, [src.c]: onto });
+        if (arg !== undefined) {
+            const o = Number(arg);
+            if (o !== src.c && twins(o, src.c)) setUnder({ ...under, [src.c]: o });
         }
+        changed();
     };
     const dropRef = React.useRef(drop);
     dropRef.current = drop;
@@ -551,7 +594,8 @@ function BBComics(props: CompProps) {
     const overClass = (key: string) => (drag && drag.over === key ? " is-over" : "");
 
     const lockIn = () => {
-        const right = comicsRight(pile, slots);
+        // the cover on top of each slot is the guess
+        const right = comicsRight(pile, slots.map((_, i) => top(i)));
         if (right === n) {
             const secs = (Date.now() - start) / 1000;
             props.finish(1000 + Math.max(0, COMIC_LIMIT - secs));
@@ -579,9 +623,14 @@ function BBComics(props: CompProps) {
         );
         return (
             <div>
-                <Title>📚 Watch closely…</Title>
+                <div className="bbb-comic-review-bar">
+                    <Title>📚 Watch closely…</Title>
+                    <button type="button" className="button is-warning" onClick={() => setReviewing(false)}>
+                        ⏹ Stop the review
+                    </button>
+                </div>
                 <div className="bbb-comics-review">
-                    <div className="bbb-comic-strip" style={{ animationDuration: `${3 + half * COMIC_PASS}s` }} onAnimationEnd={() => setReviewing(false)}>
+                    <div className="bbb-comic-strip" style={{ animationDuration: `${4 + half * COMIC_PASS}s` }} onAnimationEnd={() => setReviewing(false)}>
                         {row(reals.slice(0, half))}
                         {row(reals.slice(half))}
                     </div>
@@ -592,41 +641,58 @@ function BBComics(props: CompProps) {
             </div>
         );
     }
-    const nextFree = slots.indexOf(null);
+    const nextFree = slots.findIndex((s) => s.length === 0);
+    const choices = comparing ? compareList(comparing) : [];
     return (
         <div>
             <Title>Put the real covers in order</Title>
             <Subtle>
-                Drag covers into the slots, in the order they went by (or tap one, then tap a slot). Drop a cover on another of the same houseguest's to
-                stack them; tap a stack to compare the two and keep one. Drag a cover out of its slot, or tap it, to put it back.
+                Drag covers into the slots, in the order they went by (or tap one, then tap a slot). Put a duplicate on top of a cover to pile them up:
+                the one on top is your answer. Tap a pile to see them all and keep one. Drag a cover out of its slot, or tap it, to put it back.
             </Subtle>
             <div className="bbb-comic-slots">
-                {slots.map((c, i) => (
-                    <div key={i} className={"bbb-comic-slot" + (held !== null || drag ? " is-target" : "") + overClass(`slot:${i}`)} data-drop={`slot:${i}`}>
-                        <span>#{i + 1}</span>
-                        {c === null ? (
-                            <button type="button" className="bbb-comic-empty" aria-label={`Slot ${i + 1}`} onClick={tapped(() => tapSlot(i))} />
-                        ) : (
-                            <div className={"bbb-comic-drag" + (dragging(c) ? " is-dragging" : "")} onPointerDown={startDrag({ from: "slot", i, c })}>
-                                {cover(c, tapped(() => tapSlot(i)))}
-                            </div>
-                        )}
-                    </div>
-                ))}
+                {slots.map((s, i) => {
+                    const t = top(i);
+                    return (
+                        <div
+                            key={i}
+                            className={"bbb-comic-slot" + (held !== null || drag ? " is-target" : "") + overClass(`slot:${i}`)}
+                            data-drop={`slot:${i}`}
+                        >
+                            <span>#{i + 1}</span>
+                            {t === null ? (
+                                <button type="button" className="bbb-comic-empty" aria-label={`Slot ${i + 1}`} onClick={tapped(() => tapSlot(i))} />
+                            ) : (
+                                <ComicPileView
+                                    below={s.slice(0, -1).map((c) => cover(c))}
+                                    top={
+                                        <div className={"bbb-comic-drag" + (dragging(t) ? " is-dragging" : "")} onPointerDown={startDrag({ from: "slot", i, c: t })}>
+                                            {cover(t, tapped(() => tapSlot(i)))}
+                                        </div>
+                                    }
+                                />
+                            )}
+                        </div>
+                    );
+                })}
             </div>
             {checked && (
                 <div className="bbb-comic-wrong" role="alert">
                     ❌ <span>Not right. Something's wrong.</span>
                 </div>
             )}
-            {comparing !== null && under[comparing] !== undefined ? (
+            {comparing && choices.length > 1 ? (
                 <div className="bbb-comic-compare">
-                    <Subtle>Which one do you keep? The other goes back on the table.</Subtle>
+                    <Subtle>
+                        {comparing.at === "slot"
+                            ? `Slot #${comparing.i + 1}: which one stays? The others go back on the table.`
+                            : "Which one do you keep? The other goes back on the table."}
+                    </Subtle>
                     <div className="bbb-comics">
-                        {[comparing, under[comparing]].map((c) => (
+                        {choices.map((c) => (
                             <div key={c} className="bbb-comic-choice">
                                 {cover(c)}
-                                <BigButton kind="success" onClick={() => keep(comparing, c)}>
+                                <BigButton kind="success" onClick={() => keep(c)}>
                                     Keep this one
                                 </BigButton>
                             </div>
@@ -635,11 +701,11 @@ function BBComics(props: CompProps) {
                     <BigButton
                         kind="light"
                         onClick={() => {
-                            unstack(comparing);
+                            if (comparing.at === "table") unstack(comparing.top);
                             setComparing(null);
                         }}
                     >
-                        Put both back
+                        {comparing.at === "table" ? "Put both back" : "Leave the pile as it is"}
                     </BigButton>
                 </div>
             ) : (
@@ -665,6 +731,7 @@ function BBComics(props: CompProps) {
                     const stack = under[i] !== undefined;
                     const free = !used.has(i) && !stack;
                     const classes = [used.has(i) ? "is-used" : "", held === i ? "is-held" : "", stack ? "is-stack" : "", dragging(i) ? "is-dragging" : ""];
+                    const face = cover(i, used.has(i) || comparing !== null ? undefined : tapped(() => tapTable(i)));
                     return (
                         <div
                             key={i}
@@ -672,8 +739,7 @@ function BBComics(props: CompProps) {
                             data-drop={free ? `table:${i}` : undefined}
                             onPointerDown={free ? startDrag({ from: "table", c: i }) : undefined}
                         >
-                            {stack && <div className="bbb-comic-stack-badge">2</div>}
-                            {cover(i, used.has(i) || comparing !== null ? undefined : tapped(() => tapTable(i)))}
+                            {stack ? <ComicPileView below={[cover(under[i])]} top={face} /> : face}
                         </div>
                     );
                 })}
@@ -686,7 +752,7 @@ function BBComics(props: CompProps) {
             <BigButton kind="info" onClick={() => setReviewing(true)}>
                 📚 Review the comics
             </BigButton>
-            <BigButton kind="success" disabled={used.size < n} onClick={lockIn}>
+            <BigButton kind="success" disabled={nextFree >= 0} onClick={lockIn}>
                 Lock it in{wrong > 0 ? ` (try ${wrong + 1})` : ""}
             </BigButton>
         </div>
@@ -712,7 +778,7 @@ export const BBComicsComp: CompDefinition = {
         "A jury-phase classic: every houseguest of the season stars in their own comic book. All the covers are on the table, but next to each real one are forgeries that change one detail: " +
         "the title, the speech bubble, the sound effect, the rival, the prop, which way the hero faces, the color or the issue number. " +
         "Press Review and the real covers roll across the screen in two rows, numbered in order, then they're gone. Review as often as you like (the clock keeps running), then put the real ones in that order. " +
-        "Drag the covers into place, or tap one and then a slot. Stack two covers of the same houseguest to compare them and keep one. " +
+        "Drag the covers into place, or tap one and then a slot. Pile a duplicate on top of a cover in a slot: the one on top is your answer. " +
         "When you lock it in, a red cross means something's wrong, but you won't be told what. Fastest to get it right wins.",
     maxSeconds: COMIC_LIMIT,
     available: (gs) => gs.houseguests.filter((hg) => hg.isJury).length >= 2,

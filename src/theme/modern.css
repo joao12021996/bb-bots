@@ -1435,11 +1435,21 @@ input[type="number"] {
     75% { transform: translateX(8px); }
 }
 .bbb-comics-review {
+    position: relative;
     overflow: hidden;
     margin: 12px 0;
-    min-height: 260px;
+    min-height: 520px;
+}
+.bbb-comic-review-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
 .bbb-comic-strip {
+    position: absolute;
+    top: 0;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -1470,8 +1480,16 @@ input[type="number"] {
 .bbb-comics-pool > .is-stack {
     position: relative;
 }
-.bbb-comics-pool > .is-stack .bbb-comic {
-    box-shadow: 4px 4px 0 #111, 9px 9px 0 #ddd, 11px 11px 0 #111;
+/* a pile, solitaire style: each cover underneath shows its top edge above the next */
+.bbb-comic-pile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.bbb-comic-peek {
+    height: 22px;
+    overflow: hidden;
+    pointer-events: none;
 }
 .bbb-comic-stack-badge {
     position: absolute;
@@ -1553,10 +1571,10 @@ input[type="number"] {
     align-items: center;
     gap: 6px;
 }
-/* in from the right, all the way across, out on the left */
+/* in from the right edge of the box (straight away, however wide the screen), across, and out on the left */
 @keyframes bbb-comic-pass {
-    from { transform: translateX(100vw); }
-    to { transform: translateX(-100%); }
+    from { left: 100%; transform: translateX(0); }
+    to { left: 0; transform: translateX(-100%); }
 }
 .bbb-comic-real .bbb-comic {
     outline: 3px solid var(--bbb-gold);
