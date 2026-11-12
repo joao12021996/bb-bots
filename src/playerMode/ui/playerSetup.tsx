@@ -10,7 +10,8 @@ import { clearSave, inlineBlobImages, readSave } from "../save/serialize";
 import { buildSeason } from "../setupGame";
 import { BigButton, Face, Grid, Loading, Panel, Stepper, Subtle, Title } from "./common";
 import { DifficultyPicker, RulesEditor } from "./rulesEditor";
-import { SeasonRules, withDefaults } from "../rules";
+import { DEFAULT_RULES, SeasonRules, withDefaults } from "../rules";
+import { loadCareer } from "../../career/career";
 export { Stepper };
 import { cartoonFor } from "../../cartoon/cartoon";
 import { FaceEditor, Look } from "./faceEditor";
@@ -69,6 +70,21 @@ export function PlayerSetup() {
     const [juryPick, setJuryPick] = React.useState<number | null>(null);
     React.useEffect(() => savePref("setup.rules", rules), [rules]);
     React.useEffect(() => savePref("setup.hohPlaysVeto", hohVeto), [hohVeto]);
+    // a guided season: on until you've finished a season, then whatever you picked last
+    const [firstTimer] = React.useState(() => loadCareer().seasons.length === 0);
+    const [guided, setGuided] = React.useState<boolean>(() => loadPref("setup.guided", firstTimer));
+    React.useEffect(() => savePref("setup.guided", guided), [guided]);
+    // a gentle first season: a small house, easy bots, no twists, and the coach
+    const firstSeason = () => {
+        setBotCount(Math.max(MIN_HOUSEGUESTS - playerCount, 8 - playerCount));
+        setDifficulty("easy");
+        setPowerMode("off");
+        setHideSkills(false);
+        setRules(DEFAULT_RULES);
+        setHohVeto(true);
+        setJuryPick(null);
+        setGuided(true);
+    };
 
     const basePool = [...cast, ...customs];
     const pool: PlayerProfile[] = basePool.map((hg, i) => (looks[i] && selected.includes(i) ? { ...hg, ...looks[i] } : hg));
@@ -130,7 +146,7 @@ export function PlayerSetup() {
         // make uploaded portraits survive a reload
         await inlineBlobImages(setup.gameState.houseguests);
         const powers = powerMode === "surprise" ? "surprise" : powerMode === "choose" ? chosenPowers : [];
-        const save = newPlayerSave(setup.gameState, setup.humanIds, setup.castOptions, hideSkills, { difficulty, powers, rules });
+        const save = newPlayerSave(setup.gameState, setup.humanIds, setup.castOptions, hideSkills, { difficulty, powers, rules, guided });
         await newEpisode(null);
         await newEpisode(new PregameEpisode(setup.gameState));
         launch(new PlayerModeController(save));
@@ -159,6 +175,18 @@ export function PlayerSetup() {
                     Choose how many people are playing and how many bots join them. With 2 or more players, pass
                     this device around for secret moves. (To play on separate devices, use Play online on the start screen.)
                 </Subtle>
+            </div>
+            <div className={"bbb-guided" + (firstTimer ? " is-first" : "")}>
+                <label className="bbb-toggle">
+                    <input type="checkbox" checked={guided} onChange={(e) => setGuided(e.target.checked)} />
+                    <span>
+                        🎓 <b>Guided season</b>: a coach explains each part of the week the first time it comes up. Great for a
+                        first season.
+                    </span>
+                </label>
+                <button type="button" className="button is-small is-info is-light" onClick={firstSeason}>
+                    ✨ Set up a gentle first season for me
+                </button>
             </div>
             <div className="bbb-steppers">
                 <Stepper label="🎮 Players" value={playerCount} min={1} max={maxPlayers} onChange={changePlayers} />

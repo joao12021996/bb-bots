@@ -26,6 +26,33 @@ import { rankResults } from "../comps/compRunner";
 import { Cue, play } from "../../sound/sound";
 import { recordScore } from "../../prefs/prefs";
 import { POWERS } from "../social/powers";
+import { Tip } from "../coach";
+
+// Guided seasons: the coach explains a part of the week, the first time it comes up.
+export function CoachTip(props: { tip: Tip; onDismiss: () => void; onStop: () => void }) {
+    const { tip } = props;
+    return (
+        <aside className="bbb-coach" role="note" aria-label={`Tip: ${tip.title}`}>
+            <div className="bbb-coach-head">
+                <span className="bbb-coach-icon" aria-hidden="true">
+                    🎓
+                </span>
+                <b>{tip.title}</b>
+            </div>
+            {tip.lines.map((line, i) => (
+                <p key={i}>{line}</p>
+            ))}
+            <div className="bbb-coach-buttons">
+                <button type="button" className="button is-small is-info" onClick={props.onDismiss}>
+                    Got it
+                </button>
+                <button type="button" className="button is-small is-text" onClick={props.onStop}>
+                    Turn off tips
+                </button>
+            </div>
+        </aside>
+    );
+}
 
 interface Props {
     controller: PlayerModeController;
@@ -50,6 +77,7 @@ function saveWallOpen(open: boolean) {
 
 interface State {
     wallOpen?: boolean;
+    tip?: Tip | null; // guided seasons: the coach's tip for the screen that's up
     prompt: Prompt | null;
     personal: { [playerId: number]: Prompt }; // online: players' own screens
 }
@@ -115,7 +143,12 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         const session = sessionFor(controller);
         // online, another player's move can arrive while the season is mid-update: render after it's done
         const later = (update: () => void) => (session ? Promise.resolve().then(update) : update());
-        this.sub = controller.prompt$.subscribe((prompt) => later(() => this.setState({ prompt }, () => this.cue())));
+        this.sub = controller.prompt$.subscribe((prompt) =>
+            later(() => {
+                const tip = prompt && prompt.kind !== "gameOver" ? controller.coachTip(prompt) : null;
+                this.setState({ prompt, tip }, () => this.cue());
+            })
+        );
         this.personalSub = controller.personal$.subscribe((personal) => later(() => this.setState({ personal }, () => this.cue())));
         // online: re-render when players come and go (who's waiting on whom)
         if (session) this.statusSub = session.status$.subscribe(() => this.forceUpdate());
@@ -512,6 +545,16 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                 )}
                 {session && !session.spectating && owner === null && actor === null && !session.amHost && !session.everyoneContinues && prompt.kind !== "gameOver" && prompt.kind !== "waiting" && (
                     <div className="bbb-online-note">⏩ The host moves the show along from here.</div>
+                )}
+                {this.state.tip && owner === null && (
+                    <CoachTip
+                        tip={this.state.tip}
+                        onDismiss={() => this.setState({ tip: null })}
+                        onStop={() => {
+                            controller.stopCoaching();
+                            this.setState({ tip: null });
+                        }}
+                    />
                 )}
                 {body}
                 {session && <ChatDock session={session} controller={controller} />}

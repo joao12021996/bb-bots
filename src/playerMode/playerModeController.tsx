@@ -196,6 +196,7 @@ import { feelingLabel } from "./social/socialActions";
 import { DiaryEntry, diaryEntries, recapText } from "./social/diary";
 import { battleBackCandidates, battleBackDue, haveNotCount } from "./social/twists";
 import { DiaryRoom } from "./ui/diaryRoom";
+import { nextTip, Tip, tipIdsFor } from "./coach";
 
 export type { Difficulty } from "./rules";
 
@@ -333,6 +334,8 @@ export interface PlayerSave {
     statsHidden?: boolean; // skill randomizer: Social/Comp scores are random and secret until the end
     difficulty?: Difficulty; // how well bots play comps, and how strategically they vote
     rules?: SeasonRules; // house rules (see rules.ts); left out: the defaults
+    guided?: boolean; // a guided season: the coach explains each part of the week the first time (see coach.ts)
+    tipsSeen?: string[]; // the coach's tips already shown
     powers?: PowersState; // the season's secret powers: which, when, and who holds them
     announce?: { title: string; lines: string[] }[]; // the host's announcements, shown before the next step
     moves?: MoveRecord[]; // big moves and backstabs, for the season awards
@@ -633,6 +636,30 @@ export class PlayerModeController {
 
     get rules(): SeasonRules {
         return withDefaults(this.state.rules);
+    }
+
+    // ---------- the coach (guided seasons; never online) ----------
+
+    get guided(): boolean {
+        return !!this.state.guided && !this.net;
+    }
+
+    // The coach's tip for this screen, if there's one the players haven't seen. Marks it seen.
+    public coachTip(prompt: Prompt): Tip | null {
+        if (!this.guided) return null;
+        const p: any = prompt;
+        const ids = tipIdsFor({ kind: prompt.kind, title: p.title, sceneTitle: p.scene && p.scene.title }, this.state.step, this.gameState.phase);
+        const found = nextTip(ids, this.state.tipsSeen || []);
+        if (found) {
+            this.state.tipsSeen = [...(this.state.tipsSeen || []), found.id];
+            writeSave(this.state);
+        }
+        return found;
+    }
+
+    public stopCoaching() {
+        this.state.guided = false;
+        if (!this.net) writeSave(this.state);
     }
 
     get gameState(): GameState {
@@ -5388,7 +5415,7 @@ export function newPlayerSave(
     humanIds: number[],
     castOptions?: CastOptionsOverride,
     statsHidden?: boolean,
-    extras: { difficulty?: Difficulty; powers?: PowerId[] | "surprise"; battleBack?: boolean; rules?: SeasonRules } = {}
+    extras: { difficulty?: Difficulty; powers?: PowerId[] | "surprise"; battleBack?: boolean; rules?: SeasonRules; guided?: boolean } = {}
 ): PlayerSave {
     const seed = Date.now() % 1000000007;
     const rand = seededRand(hashcode(`${seed}:powers`));
@@ -5421,5 +5448,6 @@ export function newPlayerSave(
         difficulty: extras.difficulty || "normal",
         rules: extras.rules ? withDefaults(extras.rules) : undefined,
         powers,
+        guided: extras.guided || undefined,
     };
 }

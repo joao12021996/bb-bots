@@ -66,6 +66,33 @@ function controllerAtSocial(): PlayerModeController {
     return controller;
 }
 
+// Plays a player's decision on any screen that isn't a scene: always the first option, winning or losing comps.
+function autoplay(controller: PlayerModeController, p: Prompt, win: boolean) {
+    const { rankResults } = require("../comps/compRunner");
+        if (p.kind === "handoff") p.next();
+        else if (p.kind === "social") controller.endSocial();
+        else if (p.kind === "alliance") controller.endAlliance();
+        else if (p.kind === "compPlay") p.onScore(win ? 1e9 : -1e9);
+        else if (p.kind === "compResults") p.onDone(rankResults(p.results)[0].id);
+        else if (p.kind === "tiebreak") p.onGuess(p.question.answer);
+        else if (p.kind === "hideTiebreak") p.onHide(0);
+        else if (p.kind === "tiebreakResults" || p.kind === "hideResults" || p.kind === "knockout" || p.kind === "juryReveal") p.onDone();
+        else if (p.kind === "choose") p.resolve(p.noneLabel ? [] : p.options.slice(0, p.count).map((o) => o.id));
+        else if (p.kind === "speech") {
+            p.deliver(p.tones[0].id, p.tones[0].pick ? [p.tones[0].pick.options[0].id] : []);
+            p.next();
+        } else if (p.kind === "hohVisit") {
+            controller.hohVisit(p.actorId, null);
+            controller.continue();
+        } else if (p.kind === "hohRoom") controller.endHohRoom();
+        else if (p.kind === "winePour") p.onPour({ offerTainted: true, claim: "clean" });
+        else if (p.kind === "memoryDuel") p.onDone ? p.onDone() : p.onFlip!(p.deck.findIndex((_, i) => p.matched[i] === undefined && !p.open.includes(i)));
+        else if (p.kind === "wineDrink") p.onDecide(false);
+        else if (p.kind === "ownMoves") p.onDone([]);
+        else if (p.kind === "juryQuestion") p.onAnswer("own");
+        else throw new Error(`unhandled ${(p as any).kind}`);
+}
+
 describe("player mode screens", () => {
     it("sounds: nominations, evictions, your own comp win or loss, and the finale each have their own", () => {
         const scene = (title: string) => ({ kind: "scene", scene: new Scene({ title }) } as Prompt);
@@ -668,7 +695,6 @@ describe("player mode screens", () => {
     });
 
     it("every scene in a season can be continued with its own Continue button (the finale used to get stuck)", () => {
-        const { rankResults } = require("../comps/compRunner");
         for (const humanId of [0, 3]) {
             const cast: PlayerProfile[] = Array.from({ length: 8 }, (_, i) => ({ name: `HG${i}`, imageURL: "", social: 5, comp: 5 }));
             const controller = new PlayerModeController(newPlayerSave(new GameState({ players: cast, jury: 3 }), [humanId]));
@@ -689,30 +715,7 @@ describe("player mode screens", () => {
                     if ((prompt as unknown as Prompt) === p) throw new Error(`Continue did nothing on "${p.scene.title}"`);
                     continue;
                 }
-                act(() => {
-                    if (p.kind === "handoff") p.next();
-                    else if (p.kind === "social") controller.endSocial();
-                    else if (p.kind === "alliance") controller.endAlliance();
-                    else if (p.kind === "compPlay") p.onScore(humanId === 0 ? 1e9 : -1e9);
-                    else if (p.kind === "compResults") p.onDone(rankResults(p.results)[0].id);
-                    else if (p.kind === "tiebreak") p.onGuess(p.question.answer);
-                    else if (p.kind === "hideTiebreak") p.onHide(0);
-                    else if (p.kind === "tiebreakResults" || p.kind === "hideResults" || p.kind === "knockout" || p.kind === "juryReveal") p.onDone();
-                    else if (p.kind === "choose") p.resolve(p.noneLabel ? [] : p.options.slice(0, p.count).map((o) => o.id));
-                    else if (p.kind === "speech") {
-                        p.deliver(p.tones[0].id, p.tones[0].pick ? [p.tones[0].pick.options[0].id] : []);
-                        p.next();
-                    } else if (p.kind === "hohVisit") {
-                        controller.hohVisit(p.actorId, null);
-                        controller.continue();
-                    } else if (p.kind === "hohRoom") controller.endHohRoom();
-                    else if (p.kind === "winePour") p.onPour({ offerTainted: true, claim: "clean" });
-                    else if (p.kind === "memoryDuel") p.onDone ? p.onDone() : p.onFlip!(p.deck.findIndex((_, i) => p.matched[i] === undefined && !p.open.includes(i)));
-                    else if (p.kind === "wineDrink") p.onDecide(false);
-                    else if (p.kind === "ownMoves") p.onDone([]);
-                    else if (p.kind === "juryQuestion") p.onAnswer("own");
-                    else throw new Error(`unhandled ${(p as any).kind}`);
-                });
+                act(() => autoplay(controller, p, humanId === 0));
             }
             expect((prompt as unknown as Prompt).kind).toBe("gameOver");
             if (humanId === 0) expect(titles.has("Final Two")).toBe(true);
@@ -837,5 +840,52 @@ describe("sharing a cast on the casting screen", () => {
         });
         act(() => (Array.from(c.querySelectorAll("button")).find((b) => b.textContent === "Load") as HTMLButtonElement).click());
         expect(c.textContent).toContain("From A Friend");
+    });
+});
+
+describe("guided seasons", () => {
+    it("the coach explains each part of the week once, in order, and can be turned off", () => {
+        const cast: PlayerProfile[] = Array.from({ length: 8 }, (_, i) => ({ name: `HG${i}`, imageURL: "", social: 5, comp: 5 }));
+        const controller = new PlayerModeController(newPlayerSave(new GameState({ players: cast, jury: 3 }), [0], undefined, false, { guided: true }));
+        controller.state.seed = 901;
+        let prompt: Prompt | null = null;
+        controller.prompt$.subscribe((p) => (prompt = p));
+        controller.start();
+        const container = mount(<PlayerModeScreen controller={controller} />);
+        const shown: string[] = [];
+        for (let guard = 0; guard < 3000; guard++) {
+            const p = prompt as unknown as Prompt;
+            if (p.kind === "gameOver") break;
+            const tip = container.querySelector(".bbb-coach");
+            if (tip) {
+                shown.push(tip.querySelector("b")!.textContent || "");
+                click(tip as HTMLElement, "Got it");
+                expect(container.querySelector(".bbb-coach")).toBeNull();
+            }
+            if (p.kind === "scene") act(() => controller.continue());
+            else act(() => autoplay(controller, p, true));
+        }
+        expect((prompt as unknown as Prompt).kind).toBe("gameOver");
+        expect(shown[0]).toBe("Welcome to the house!");
+        expect(new Set(shown).size).toBe(shown.length); // never twice
+        ["Social time", "Head of House", "Nominations", "The Veto", "Eviction night", "Facing the jury"].forEach((t) => expect(shown).toContain(t));
+        expect(controller.state.tipsSeen!.length).toBe(shown.length);
+
+        // turned off: no more tips, and it stays off
+        const quiet = new PlayerModeController(newPlayerSave(new GameState({ players: cast, jury: 3 }), [0], undefined, false, { guided: true }));
+        quiet.start();
+        const c2 = mount(<PlayerModeScreen controller={quiet} />);
+        click(c2.querySelector(".bbb-coach") as HTMLElement, "Turn off tips");
+        expect(quiet.state.guided).toBe(false);
+        act(() => quiet.continue());
+        expect(c2.querySelector(".bbb-coach")).toBeNull();
+    });
+
+    it("no coach in a normal season", () => {
+        const cast: PlayerProfile[] = Array.from({ length: 6 }, (_, i) => ({ name: `HG${i}`, imageURL: "", social: 5, comp: 5 }));
+        const controller = new PlayerModeController(newPlayerSave(new GameState({ players: cast, jury: 3 }), [0]));
+        controller.start();
+        const c = mount(<PlayerModeScreen controller={controller} />);
+        expect(c.querySelector(".bbb-coach")).toBeNull();
     });
 });

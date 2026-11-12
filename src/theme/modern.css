@@ -2908,3 +2908,59 @@ body.bbb-reduce-motion *::after {
     flex: 1 1 220px;
     min-width: 0;
 }
+
+/* ---------- guided seasons: the coach ---------- */
+.bbb-coach {
+    max-width: 640px;
+    margin: 0 auto 14px;
+    padding: 12px 16px;
+    text-align: left;
+    background: linear-gradient(160deg, rgba(56, 189, 248, 0.14), rgba(139, 92, 246, 0.12));
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: var(--bbb-radius);
+    color: var(--bbb-text);
+    animation: bbb-coach-in 220ms ease-out;
+}
+.bbb-coach-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.05rem;
+    margin-bottom: 4px;
+}
+.bbb-coach-icon {
+    font-size: 1.3rem;
+}
+.bbb-coach p {
+    margin: 4px 0;
+    font-size: 0.92rem;
+    line-height: 1.4;
+}
+.bbb-coach-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+.bbb-coach-buttons .is-text {
+    color: var(--bbb-muted);
+}
+@keyframes bbb-coach-in {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+}
+.bbb-guided {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin: 6px auto 12px;
+    max-width: 600px;
+}
+.bbb-guided.is-first {
+    padding: 10px;
+    border-radius: var(--bbb-radius);
+    border: 1px dashed rgba(56, 189, 248, 0.4);
+}

@@ -180,6 +180,11 @@ const SECTIONS: Section[] = [
                     friend who joins takes the place of one. Late to the party? Tap 👀 Just watch to follow the season live.
                 </li>
                 <li>
+                    <b>🎓 Guided season</b>: new to the game? Turn on Guided season when you set up (it's on until you've
+                    finished a season) and a coach explains each part of the week the first time it comes up. ✨ Set up a
+                    gentle first season picks a small house, Casual bots and no twists for you.
+                </li>
+                <li>
                     <b>🎚️ Difficulty and 📜 House rules</b>: from Casual (forgiving bots) to Cutthroat (bots that doubt
                     you and break their word). House rules set the jury size, whether the Head of House plays in the
                     Veto, big three-nominee weeks, actions per social block, and which kinds of comp come up.
