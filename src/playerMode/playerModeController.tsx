@@ -165,6 +165,7 @@ import {
     assignPersonalities,
     hash01,
     noticedTells,
+    setPersonalitySource,
     PersonalityId,
     PersonalityInfo,
     PERSONALITIES,
@@ -621,6 +622,8 @@ export class PlayerModeController {
     constructor(save: PlayerSave) {
         this.state = save;
         this.applyDifficulty();
+        // comps that quote the bots (Who Said It?) hear the voices of this season's bots
+        setPersonalitySource(() => this.personalities);
     }
 
     // Bots believe what they're told more readily, or less, depending on the difficulty.

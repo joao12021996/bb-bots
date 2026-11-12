@@ -505,3 +505,52 @@ describe("after each round: your answer, everyone else's, then the right one", (
         m.done();
     });
 });
+
+describe("new comps", () => {
+    const { makeQuotes, WhoSaidItComp, BuzzerBashComp, BalanceBeamComp } = require("./newComps");
+    const { setPersonalitySource } = require("../social/personality");
+    afterEach(() => setPersonalitySource(() => null));
+
+    it("Who Said It? quotes the season's bots in their own voices, against bots that talk differently", () => {
+        const gs = game();
+        const ps: any = { 1: "villain", 2: "sweetheart", 3: "superfan", 4: "clown", 5: "paranoid", 6: "charmer", 7: "mastermind" };
+        setPersonalitySource(() => ps);
+        const quotes = makeQuotes(gs, seededRand(5));
+        expect(quotes.length).toBe(6);
+        quotes.forEach((q: any) => {
+            expect(q.speakerId).not.toBe(0); // a player has no voice to quote
+            expect(q.optionIds).toContain(q.speakerId);
+            expect(new Set(q.optionIds.map((id: number) => ps[id])).size).toBe(q.optionIds.length);
+            expect(q.text).not.toContain("{name}");
+        });
+        // and the same quotes for every player and bot
+        expect(makeQuotes(gs, seededRand(5))).toEqual(quotes);
+        const ctx = { seed: 5, gameState: gs, history, participants: nonEvictedHouseguests(gs) };
+        const r = WhoSaidItComp.simulate(ctx, 0.5, seededRand(2));
+        expect(r.answers.length).toBe(6);
+        expect(Math.floor(r.score / 100)).toBe(r.answers.filter(Boolean).length);
+    });
+
+    it("Buzzer Bash bots play the boards the players get, and a buzzed round scores nothing", () => {
+        const gs = game();
+        const ctx = { seed: 11, gameState: gs, history, participants: nonEvictedHouseguests(gs) };
+        for (let s = 1; s < 30; s++) {
+            const r = BuzzerBashComp.simulate(ctx, 0.5, seededRand(s));
+            expect(r.picks.length).toBe(3);
+            r.picks.forEach((p: number, i: number) => {
+                if (!r.answers[i]) expect(p).toBe(0);
+                expect(p).toBeLessThanOrEqual(10);
+            });
+            expect(r.score).toBe(r.picks.reduce((a: number, b: number) => a + b, 0));
+        }
+    });
+
+    it("Balance Beam lasts at most a minute", () => {
+        const gs = game();
+        for (let s = 1; s < 30; s++) {
+            const r = BalanceBeamComp.simulate({ seed: s, gameState: gs, history, participants: [] }, s / 30, seededRand(s));
+            expect(r.score).toBeGreaterThan(0);
+            expect(r.score).toBeLessThanOrEqual(60);
+        }
+    });
+});

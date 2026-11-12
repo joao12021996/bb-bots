@@ -16,6 +16,7 @@ import { BullseyeComp, ColorClashComp, NumberGridComp, ReactionLightsComp, Whack
 import { SlidePuzzleComp } from "./slidePuzzle";
 import { StopTheClockComp } from "./stopTheClock";
 import { WINE_CELLAR_ID, WineCellarComp } from "./wineCellar";
+import { BalanceBeamComp, BuzzerBashComp, WhoSaidItComp } from "./newComps";
 import { BBComicsComp, DaysQuizComp, FaceMorphComp, HideAndGoVetoComp, OtevComp, OverOrUnderComp } from "./iconicComps";
 
 export const ALL_COMPS: CompDefinition[] = [
@@ -50,12 +51,15 @@ export const ALL_COMPS: CompDefinition[] = [
     SteadyHandComp,
     CatchTheKeysComp,
     TowerStackComp,
+    BalanceBeamComp,
     // luck
     HigherOrLowerComp,
     BankOrBustComp,
+    BuzzerBashComp,
     // house knowledge
     ZoomInComp,
     FactOrFictionComp,
+    WhoSaidItComp,
     // iconic formats
     OtevComp,
     HideAndGoVetoComp,

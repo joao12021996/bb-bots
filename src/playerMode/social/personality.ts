@@ -378,3 +378,14 @@ export function noticedTells(p: PersonalityId | undefined, weeksPlayed: number, 
     const tells = [...PERSONALITIES[p].tells].sort((a, b) => hash01(`${key}:${a}`) - hash01(`${key}:${b}`));
     return tells.slice(0, count);
 }
+
+// The season's bot personalities, for comps that need them (Who Said It?). Set by the season in play.
+let personalitySource: () => { [id: number]: PersonalityId } | null = () => null;
+
+export function setPersonalitySource(source: () => { [id: number]: PersonalityId } | null) {
+    personalitySource = source;
+}
+
+export function currentPersonalities(): { [id: number]: PersonalityId } | null {
+    return personalitySource();
+}
