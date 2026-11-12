@@ -12,12 +12,13 @@ import { BigButton, Face, Grid, Loading, Panel, Stepper, Subtle, Title } from ".
 import { DifficultyPicker, RulesEditor } from "./rulesEditor";
 import { DEFAULT_RULES, SeasonRules, withDefaults } from "../rules";
 import { loadCareer } from "../../career/career";
-export { Stepper };
 import { cartoonFor } from "../../cartoon/cartoon";
 import { FaceEditor, Look } from "./faceEditor";
 import { PlayerModeScreen } from "./playerModeScreen";
 import { loadPref, savePref } from "../../prefs/prefs";
 import { statRoll } from "../../cartoon/cartoon";
+
+export { Stepper };
 
 let launches = 0;
 
