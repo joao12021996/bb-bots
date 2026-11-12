@@ -21,6 +21,12 @@ curl -fsSL https://raw.githubusercontent.com/joao12021996/bb-bots/master/server/
 
 Run it again to update the relay. The manual steps below show what it does.
 
+## Home PC instead of the droplet
+
+On a Linux PC set up with CoSpotle's `home-setup.sh` (Caddy on 127.0.0.1:8080 behind a Cloudflare Tunnel),
+run the same command above. The relay's route goes into `/etc/caddy/sites.d`, which the home Caddyfile imports.
+Check locally with `npx wscat -c ws://127.0.0.1:8080/bb-relay`.
+
 ## Droplet setup (manual)
 
 1. **DNS**: point `api.spotlegame.co.uk` (an A record) at the droplet's IP. Skip this if it already points there.

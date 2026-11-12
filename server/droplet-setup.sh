@@ -6,6 +6,7 @@
 # Run as root on the droplet:
 #   curl -fsSL https://raw.githubusercontent.com/joao12021996/bb-bots/master/server/droplet-setup.sh | bash
 # Run it again any time to update the relay to the latest code.
+# It works the same on the home PC set up by CoSpotle's home-setup.sh (Caddy there sits behind a Cloudflare Tunnel).
 set -euo pipefail
 
 DOMAIN="api.spotlegame.co.uk"
@@ -19,7 +20,7 @@ if ! command -v node >/dev/null; then
   apt-get install -y nodejs
 fi
 if ! command -v caddy >/dev/null; then
-  echo "Caddy isn't installed. Run the CoSpotle droplet-setup.sh first." >&2
+  echo "Caddy isn't installed. Run the CoSpotle droplet-setup.sh (or home-setup.sh) first." >&2
   exit 1
 fi
 
