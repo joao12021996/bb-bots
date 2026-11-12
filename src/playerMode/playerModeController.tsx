@@ -163,6 +163,7 @@ import {
     apparentRelationship,
     assignPersonalities,
     hash01,
+    noticedTells,
     PersonalityId,
     PersonalityInfo,
     PERSONALITIES,
@@ -2696,6 +2697,8 @@ export class PlayerModeController {
             })),
             voteSaid: said !== undefined ? this.player(said).name : undefined,
             notes: [...this.intelOn(viewerId, otherId)].reverse(),
+            // bots only: what you've noticed about how they play, more as the weeks go on
+            tells: this.isHuman(other) ? [] : noticedTells(this.personalities[otherId], this.state.history.length, `${this.state.seed}:${otherId}`),
         };
     }
 
@@ -3717,7 +3720,13 @@ export class PlayerModeController {
                 );
             });
             const fight = botFight(gs, this.ledger, s.humanIds, (id) =>
-                this.personalities[id] === "villain" ? 2.5 : this.personalities[id] === "wildcard" ? 1.5 : 1
+                this.personalities[id] === "villain"
+                    ? 2.5
+                    : this.personalities[id] === "wildcard" || this.personalities[id] === "paranoid"
+                    ? 1.5
+                    : this.personalities[id] === "sweetheart"
+                    ? 0.3
+                    : 1
             );
             if (fight) {
                 const a = getById(gs, fight.aId).name;
@@ -3731,7 +3740,7 @@ export class PlayerModeController {
                 return this.isHaveNot(id) ? { ...traits, chats: traits.chats * 0.4 } : traits;
             });
             this.wildcardSwings(gs);
-            botShowmances(gs, this.showmances, s.humanIds).forEach((sm) => {
+            botShowmances(gs, this.showmances, s.humanIds, (id) => (this.personalities[id] === "charmer" ? 2 : 1)).forEach((sm) => {
                 this.showmances.push(sm);
                 this.tell(s.humanIds, `💕 The house is buzzing: ${getById(gs, sm.a).name} and ${getById(gs, sm.b).name} are a showmance.`);
             });

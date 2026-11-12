@@ -22,6 +22,10 @@ const SOLO: { [p in PersonalityId]: string[] } = {
     villain: ["is complaining loudly about the dishes.", "slammed a door. Nobody knows why."],
     superfan: ["is talking to the cameras about the game.", "is reciting comp history to anyone who'll listen."],
     wildcard: ["is wearing a costume for no apparent reason.", "is having a conversation with the house plants."],
+    charmer: ["is flirting with the camera.", "is doing their hair in the mirror. Again."],
+    paranoid: ["is listening at the bedroom door.", "is counting who sat with whom at dinner."],
+    sweetheart: ["is baking cookies for the whole house.", "is writing a kind note for someone who had a rough day."],
+    clown: ["is putting on a talent show nobody asked for.", "is wearing a lampshade, and the house loves it."],
 };
 
 export interface FeedContext {

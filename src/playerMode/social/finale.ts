@@ -130,8 +130,9 @@ export function giveSpeech(
 // How a bot finalist plays its speech.
 export function botOwns(p: PersonalityId | undefined, moves: Move[]): string[] {
     if (p === "villain" || p === "mastermind" || p === "compBeast") return moves.map((m) => m.id);
-    if (p === "loyalSoldier" || p === "superfan") return moves.filter((m) => m.kind === "grudge" || m.id === "credit:social").map((m) => m.id);
-    if (p === "floater") return moves.filter((m) => m.id === "credit:social").map((m) => m.id);
+    if (p === "loyalSoldier" || p === "superfan" || p === "sweetheart")
+        return moves.filter((m) => m.kind === "grudge" || m.id === "credit:social").map((m) => m.id);
+    if (p === "floater" || p === "charmer" || p === "clown") return moves.filter((m) => m.id === "credit:social").map((m) => m.id);
     return moves.filter(() => rand() < 0.5).map((m) => m.id);
 }
 
@@ -186,7 +187,7 @@ export function answer(gs: GameState, jury: JuryBook, q: JuryQuestion, a: Answer
 
 export function botAnswer(p: PersonalityId | undefined): Answer {
     if (p === "villain" || p === "mastermind" || p === "compBeast") return "own";
-    if (p === "loyalSoldier" || p === "superfan") return "sorry";
-    if (p === "floater") return "deny";
+    if (p === "loyalSoldier" || p === "superfan" || p === "sweetheart") return "sorry";
+    if (p === "floater" || p === "paranoid" || p === "charmer") return "deny";
     return (["own", "sorry", "deny"] as Answer[])[Math.floor(rand() * 3)];
 }

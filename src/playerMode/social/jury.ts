@@ -52,7 +52,7 @@ export function grudgeOf(jury: JuryBook, jurorId: number, againstId: number): Gr
 // Loyal soldiers and villains vote with their hearts; masterminds, superfans and comp beasts with their
 // heads; everyone else could go either way.
 export function jurorType(p: PersonalityId | undefined, key: string): JurorType {
-    if (p === "loyalSoldier" || p === "villain") return "bitter";
+    if (p === "loyalSoldier" || p === "villain" || p === "sweetheart" || p === "paranoid") return "bitter";
     if (p === "mastermind" || p === "superfan" || p === "compBeast") return "objective";
     return hash01(`${key}:juror`) < 0.5 ? "bitter" : "objective";
 }

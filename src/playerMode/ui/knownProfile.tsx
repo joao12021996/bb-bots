@@ -63,6 +63,15 @@ export function KnownProfileCard(props: { controller: PlayerModeController; view
                             ))}
                         </>
                     )}
+                    {p.tells.length > 0 && (
+                        <>
+                            <h4>🔎 What you've noticed</h4>
+                            {p.tells.map((t, i) => (
+                                <p key={i}>{t}</p>
+                            ))}
+                            <p style={{ opacity: 0.6, fontSize: "0.9em" }}>Everyone shows their true colours in the end. More to notice as the weeks go on.</p>
+                        </>
+                    )}
                     {p.notes.length > 0 && (
                         <>
                             <h4>What you've picked up</h4>

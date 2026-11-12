@@ -2085,6 +2085,46 @@ describe("bot personalities", () => {
         expect(voice("villain", "voteAnswer", "x", "Zed")).not.toEqual(voice("floater", "voteAnswer", "x", "Zed"));
     });
 
+    it("the newer types all turn up, and each bot shows more of its tells as the weeks go on", () => {
+        const { noticedTells, PERSONALITIES } = require("./social/personality");
+        const seen = new Set<string>();
+        for (let seed = 0; seed < 30; seed++) {
+            const gs = new GameState({ players: cast(12), jury: 5 });
+            Object.values(assignPersonalities(gs.houseguests, seed)).forEach((p) => seen.add(p));
+        }
+        ["charmer", "paranoid", "sweetheart", "clown"].forEach((p) => expect(seen.has(p)).toBe(true));
+        PERSONALITY_IDS.forEach((p) => {
+            expect(PERSONALITIES[p].tells.length).toBe(3);
+            expect(noticedTells(p, 0, "k")).toEqual([]);
+            expect(noticedTells(p, 1, "k").length).toBe(1);
+            expect(noticedTells(p, 3, "k").length).toBe(2);
+            expect(noticedTells(p, 9, "k").length).toBe(3);
+            // the first one you notice stays the first one
+            expect(noticedTells(p, 5, "k")[0]).toBe(noticedTells(p, 1, "k")[0]);
+            noticedTells(p, 9, "k").forEach((t: string) => expect(PERSONALITIES[p].tells).toContain(t));
+        });
+    });
+
+    it("charmers fall into showmances faster", () => {
+        const count = (charm: number) => {
+            let n = 0;
+            for (let i = 0; i < 200; i++) {
+                const gs = new MutableGameState(prepareNextWeek(newGame(4), BigBrotherVanilla));
+                gs.houseguests.forEach((a) => gs.houseguests.forEach((b) => a.id !== b.id && (a.relationships[b.id] = 0.7)));
+                n += botShowmances(gs, [], [], (id) => (id === 0 ? charm : 1)).length;
+            }
+            return n;
+        };
+        expect(count(1)).toBe(0); // 0.7 isn't close enough for anyone else
+        expect(count(2)).toBeGreaterThan(0);
+    });
+
+    it("a bot's profile lists the tells you've noticed; a player's never does", () => {
+        const { controller } = playSeason(8, [0], "random", "random");
+        const bot = controller.gameState.houseguests.find((hg) => hg.id !== 0)!;
+        expect(controller.knownProfile(0, bot.id).tells.length).toBeGreaterThan(0);
+    });
+
     it("comp beasts never throw a comp; floaters sometimes do", () => {
         const threwAs = (personality: any) => {
             let threw = 0;
@@ -2279,7 +2319,7 @@ describe("season end", () => {
             if (p.kind === "gameOver") {
                 const html = renderToStaticMarkup(p.content);
                 expect(html).toContain("Who they really were");
-                expect(html).toMatch(/Mastermind|Comp Beast|Floater|Loyal Soldier|Villain|Superfan|Wildcard/);
+                expect(html).toMatch(/Mastermind|Comp Beast|Floater|Loyal Soldier|Villain|Superfan|Wildcard|Charmer|Paranoid|Sweetheart|Class Clown/);
                 return;
             }
             answer(controller, p, "random", "random");

@@ -22,14 +22,16 @@ export function partnerOf(list: Showmance[], id: number): number | undefined {
 }
 
 // Bots who get very close may become a showmance.
-export function botShowmances(gs: MutableGameState, list: Showmance[], humanIds: number[]): Showmance[] {
+// `charm`: how much more easily a bot falls for someone (1: the usual; charmers fall faster).
+export function botShowmances(gs: MutableGameState, list: Showmance[], humanIds: number[], charm: (id: number) => number = () => 1): Showmance[] {
     const fresh: Showmance[] = [];
     const bots = nonEvictedHouseguests(gs).filter((hg) => !humanIds.includes(hg.id));
     const taken = (id: number) => partnerOf(list, id) !== undefined || fresh.some((s) => s.a === id || s.b === id);
     bots.forEach((x, i) =>
         bots.slice(i + 1).forEach((y) => {
-            if (taken(x.id) || taken(y.id) || x.relationships[y.id] < 0.8) return;
-            if (rand() >= 0.12) return;
+            const c = Math.max(charm(x.id), charm(y.id));
+            if (taken(x.id) || taken(y.id) || x.relationships[y.id] < (c > 1 ? 0.65 : 0.8)) return;
+            if (rand() >= 0.12 * c) return;
             shiftRelationship(gs, x.id, y.id, 0.1);
             fresh.push({ a: x.id, b: y.id, week: gs.phase });
         })
