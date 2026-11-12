@@ -1774,3 +1774,8 @@ input[type="number"] {
 .bbb-live-standings {
     margin-top: 12px;
 }
+.bbb-banner.bbb-rule-breaker {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.45);
+    color: #fecaca;
+}

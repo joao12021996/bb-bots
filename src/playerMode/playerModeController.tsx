@@ -26,7 +26,7 @@ import { juryVoteScene } from "../components/episode/scenes/juryVoteScene";
 import { Scene } from "../components/episode/scenes/scene";
 import { NextEpisodeButton } from "../components/nextEpisodeButton/nextEpisodeButton";
 import { GoldenVeto } from "../components/episode/veto/veto";
-import { refreshHgStats } from "../components/episode/utilities/evictHouseguest";
+import { evictHouseguest, refreshHgStats } from "../components/episode/utilities/evictHouseguest";
 import { generateVotingTable } from "../components/votingTable/votingTable";
 import { newEpisode, playerModeScreen$, pushToMainContentStream, secretRelationships$, selectedPlayer$ } from "../subjects/subjects";
 import { Screens } from "../components/topbar/topBar";
@@ -287,6 +287,7 @@ export interface PlayerSave {
     history: WeekRecord[];
     usedComps: string[]; // every comp played this season, in order (comps don't repeat)
     social: { [humanId: number]: SocialMemory };
+    ruleBreakers?: number[]; // players expelled for breaking the rules (online: opening the inspect tools)
     socialTurn: number; // which alive player is taking their social turn
     socialStage: "social" | "alliance"; // each player's turn: social time, then alliance time
     actionsLeft: number;
@@ -1254,8 +1255,96 @@ export class PlayerModeController {
 
     // ---------- helpers ----------
 
+    public isRuleBreaker(id: number): boolean {
+        return (this.state.ruleBreakers || []).includes(id);
+    }
+
+    private clearAllPersonal() {
+        Object.keys(this.personal$.value).forEach((id) => this.clearPersonal(Number(id)));
+    }
+
+    // A player broke the rules (online: opened the browser's inspect tools): expelled on the spot, in front of
+    // everyone. On the block, that's the week's eviction: no vote needed. Already out, they lose their jury seat;
+    // in the final two, every jury vote goes to the other finalist.
+    public ruleBreak() {
+        const s = this.state;
+        const id = this.actingFor;
+        if (id === null || !s.humanIds.includes(id) || this.isRuleBreaker(id) || s.step === Step.GameOver) return;
+        s.ruleBreakers = [...(s.ruleBreakers || []), id];
+        const hg = this.player(id);
+        const name = hg.name;
+        const lines = [`🚨 ${name} opened the inspect tools in the middle of the game. That's against the rules.`];
+        const week: Step[] = [
+            Step.SocialMorning,
+            Step.Hoh,
+            Step.AllianceHoh,
+            Step.HohRoom,
+            Step.Noms,
+            Step.PawnTalk,
+            Step.SocialAfternoon,
+            Step.Veto,
+            Step.VetoCeremony,
+            Step.SocialBlockbuster,
+            Step.Blockbuster,
+            Step.SocialCampaign,
+            Step.Speeches,
+            Step.Eviction,
+        ];
+        const finalThree: Step[] = [Step.SocialFinale1, Step.FinaleHoh1, Step.SocialFinale2, Step.FinaleHoh2, Step.SocialFinale3, Step.FinaleHoh3, Step.FinalEviction];
+        if (hg.isEvicted) {
+            if (hg.isJury) {
+                this.mutate((gs) => (getById(gs, id).isJury = false));
+                lines.push(`${name} loses their seat on the jury.`);
+            } else lines.push(`${name} is out of the game for good.`);
+        } else if (s.step === Step.FinalTwo || s.step === Step.Jury) {
+            lines.push(`${name} is disqualified: every jury vote goes to the other finalist.`);
+        } else {
+            const phase = s.gameState.phase;
+            this.mutate((gs) => {
+                evictHouseguest(gs, id);
+                getById(gs, id).isJury = false;
+            });
+            this.feedPush(`🚨 ${name} broke the rules and was expelled.`);
+            lines.push(`${name} has been expelled from the house, effective immediately.`);
+            if (finalThree.includes(s.step)) {
+                lines.push("That leaves the final two: on to the jury.");
+                s.step = Step.FinalTwo;
+            } else if (week.includes(s.step)) {
+                const nominee = (s.week.nomineeIds || []).includes(id);
+                if (nominee || s.gameState.remainingPlayers <= 3) {
+                    // that's this week's eviction
+                    s.history = [
+                        ...s.history,
+                        {
+                            week: phase,
+                            hohId: s.week.hohId,
+                            nomineeIds: s.week.nomineeIds || [],
+                            povId: s.week.povId,
+                            blockbusterId: s.week.blockbusterId,
+                            evictedIds: [id],
+                        },
+                    ];
+                    lines.push(nominee ? `${name} was on the block, so there's no eviction vote this week.` : "That's this week's eviction.");
+                    pruneAlliances(s.gameState, s.book).forEach((a) => this.tellAlliance(a, `💔 ${a.name} is no more.`));
+                    this.pushEpisode(BigBrotherVanilla, `Day ${dayOf(s.gameState, phase, DAY_PART.eviction)}`);
+                    s.step = Step.Fallout;
+                } else if (s.week.hohId === id && !s.week.nomineeIds) {
+                    // the Head of House is gone before nominations: the HoH comp's results stand, without them
+                    lines.push(`The Head of House is gone. The comp results stand without ${name}.`);
+                    s.week.hohId = undefined;
+                    s.week.room = undefined;
+                    s.step = Step.Hoh;
+                }
+            }
+        }
+        this.announce("🚨 Rule breaker", lines);
+        this.clearAllPersonal();
+        this.save();
+        this.run();
+    }
+
     public isHuman(hg: { id: number } | undefined) {
-        return !!hg && this.state.humanIds.includes(hg.id);
+        return !!hg && this.state.humanIds.includes(hg.id) && !this.isRuleBreaker(hg.id);
     }
 
     private playingHumans(hgs: { id: number }[]): Houseguest[] {
@@ -4149,6 +4238,13 @@ export class PlayerModeController {
                     all[j] = v.vote;
                     reasons[j] = v.reason;
                 });
+                // a finalist who broke the rules is disqualified: every vote goes to the other one
+                const clean = finalistIds.filter((f) => !this.isRuleBreaker(f));
+                if (clean.length === 1)
+                    jurorIds.forEach((j) => {
+                        all[j] = clean[0];
+                        reasons[j] = "The other finalist broke the rules.";
+                    });
                 this.juryBook.reasons = reasons;
                 // finale night: the votes are read one at a time
                 const order = shuffled(seededRand(hashcode(`${s.seed}:reveal`)), jurorIds).map((j) => ({ jurorId: j, finalistId: all[j] }));

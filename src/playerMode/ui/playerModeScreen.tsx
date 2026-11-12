@@ -4,6 +4,7 @@ import { continueOverride$ } from "../../subjects/subjects";
 import { CompPlay, CompResults, LiveStandings } from "../comps/compRunner";
 import { actorOf, PlayerModeController, Prompt } from "../playerModeController";
 import { sessionFor } from "../net/netSession";
+import { watchForInspector } from "../net/inspectWatch";
 import { OnlineBar, WaitingFor, WaitingOnPlayers } from "./onlineLobby";
 import { ChoosePrompt } from "./choosePrompt";
 import { BigButton, Panel, Subtle, Title } from "./common";
@@ -68,6 +69,7 @@ export class PlayerModeScreen extends React.Component<Props, State> {
     private personalSub: Subscription | null = null;
     private statusSub: Subscription | null = null;
     private changedSub: Subscription | null = null;
+    private stopWatch: (() => void) | null = null;
     state: State = { prompt: null, personal: {} };
     // forces child prompts to remount on every new prompt
     private shown: Prompt | null = null;
@@ -83,6 +85,12 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         this.personalSub = controller.personal$.subscribe((personal) => later(() => this.setState({ personal })));
         // online: re-render when players come and go (who's waiting on whom)
         if (session) this.statusSub = session.status$.subscribe(() => this.forceUpdate());
+        // online: opening the inspect tools gets a player expelled
+        if (session)
+            this.stopWatch = watchForInspector(() => {
+                const me = session.localPlayerId;
+                if (me !== null && !controller.isRuleBreaker(me)) session.reportRuleBreak();
+            });
         // online: comp scores coming in live from the other players
         if (session)
             this.changedSub = controller.changed$.subscribe(() => {
@@ -99,6 +107,7 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         this.personalSub && this.personalSub.unsubscribe();
         this.statusSub && this.statusSub.unsubscribe();
         this.changedSub && this.changedSub.unsubscribe();
+        this.stopWatch && this.stopWatch();
     }
 
     // What this device shows: online, its player's own screen if they have one (or, for the host, the screen of a
@@ -401,6 +410,11 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                             🧱 House wall {this.state.wallOpen ?? loadWallOpen() ? "▾" : "▸"}
                         </button>
                         {(this.state.wallOpen ?? loadWallOpen()) && <HouseWall controller={controller} />}
+                    </div>
+                )}
+                {session && session.localPlayerId !== null && controller.isRuleBreaker(session.localPlayerId) && (
+                    <div className="bbb-banner bbb-rule-breaker">
+                        🚨 You were expelled for breaking the rules: no inspect tools during an online game. You can keep watching.
                     </div>
                 )}
                 {session && owner !== null && owner !== session.localPlayerId && (

@@ -2181,7 +2181,7 @@ describe("the jury", () => {
         }
         expect(roundtables).toBe(4);
         expect(goodbyes).toBeGreaterThan(0);
-    });
+    }, 20000); // four whole seasons
 });
 
 describe("final two speeches and jury questions", () => {

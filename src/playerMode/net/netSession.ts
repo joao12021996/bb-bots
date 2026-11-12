@@ -677,6 +677,8 @@ export class NetSession {
             this.rawMethods[name] = raw;
             c[name] = this.wrap("method", name, raw);
         });
+        // sent by the session itself, for this device's own player (see reportRuleBreak)
+        this.rawMethods.ruleBreak = c.ruleBreak.bind(controller);
     }
 
     // owner: a player's own screen (undefined: the screen everyone shares)
@@ -706,6 +708,16 @@ export class NetSession {
         writeOnlineSave({ code: this.code, playerId: this.localPlayerId, json });
     }
 
+    // This device's player broke the rules (opened the inspect tools): everyone finds out, and they're expelled.
+    public reportRuleBreak() {
+        const owner = this.localPlayerId;
+        if (!this.started || !this.controller || owner === null) return;
+        const proposal: Proposal = { kind: "method", name: "ruleBreak", args: [], owner };
+        if (!this.valid(proposal, this.room.selfId)) return;
+        if (this.isHost) this.sequence(proposal, this.room.selfId);
+        else if (this.hostId) this.room.send("propose", toWireInput({ ...proposal, seq: 0 }), this.hostId);
+    }
+
     // The screen showing a player's own screen says so: methods called from it act for that player.
     public focus(owner: number | null) {
         this.focusOwner = owner;
@@ -724,6 +736,10 @@ export class NetSession {
     // Whether an input can be applied now: sent by a device allowed to, for a screen that's still showing.
     private valid(p: Proposal, from: string): boolean {
         if (!this.allowed(p.owner, from)) return false;
+        if (p.kind === "method" && p.name === "ruleBreak") {
+            // only ever about the sender's own player
+            return p.owner !== null && this.claims[p.owner] === from && !this.controller!.isRuleBreaker(p.owner);
+        }
         if (p.kind === "method") {
             if (!this.rawMethods[p.name]) return false;
             // a method acts for a player who has a screen up: the shared one, or their own

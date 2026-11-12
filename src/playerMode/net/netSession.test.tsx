@@ -268,6 +268,97 @@ describe("online play", () => {
         expectInSync(now);
     });
 
+    // plays on until `when` holds, then the player it picks opens the inspect tools; the season then plays to the end
+    function caught(pick: (c: PlayerModeController) => number | undefined) {
+        const { hub, host, all } = setup(10, [1, 4, 7], 23);
+        let id: number | undefined;
+        for (let guard = 0; guard < 5000 && id === undefined; guard++) {
+            id = pick(host.controller!);
+            if (id === undefined) expect(step(hub, all)).toBe(true);
+        }
+        const theirs = all.find((s) => s.localPlayerId === id)!;
+        const others = all.filter((s) => s !== theirs);
+        // the host takes a report only from the player's own device
+        const forged = { kind: "method", name: "ruleBreak", args: [], owner: id };
+        others.forEach((s) => expect((host as any).valid(forged, (s as any).room.selfId)).toBe(false));
+        expect((host as any).valid(forged, (theirs as any).room.selfId)).toBe(true);
+        const before = { history: host.controller!.state.history.length, step: host.controller!.state.step };
+        theirs.reportRuleBreak();
+        hub.flush();
+        all.forEach((s) => {
+            expect(s.controller!.state.ruleBreakers).toEqual([id]);
+            expect(s.controller!.player(id!).isEvicted).toBe(true);
+        });
+        expect(prompt(host).kind).toBe("scene"); // everyone hears about it
+        settle(hub, host);
+        expectInSync(all);
+        return { hub, host, all, id: id!, before };
+    }
+
+    it("expels a nominee who opens the inspect tools, with no eviction vote", () => {
+        const { hub, host, all, id, before } = caught((c) => {
+            const s = c.state;
+            const nom = (s.week.nomineeIds || []).find((n) => [1, 4, 7].includes(n) && !c.player(n).isEvicted);
+            return s.step === Step.Veto || s.step === Step.SocialCampaign ? nom : undefined;
+        });
+        const c = host.controller!;
+        expect(before.step).not.toBe(Step.Fallout);
+        expect(c.state.history.length).toBe(before.history + 1);
+        expect(c.state.history[c.state.history.length - 1].evictedIds).toEqual([id]);
+        expect(c.state.step).toBe(Step.Fallout);
+        // and the season goes on to the end, everyone in sync
+        for (let guard = 0; guard < 8000 && step(hub, all); guard++);
+        expect(prompt(host).kind).toBe("gameOver");
+        settle(hub, host);
+        expectInSync(all);
+        expect(c.state.history.flatMap((w) => w.evictedIds).filter((e) => e === id)).toHaveLength(1);
+    });
+
+    it("a player caught in the middle of a comp is out, and the comp goes on without them", () => {
+        const { hub, host, all, id } = caught((c) => {
+            const own = c.personal$.value;
+            const playing = Object.keys(own).map(Number).filter((o) => own[o].kind === "compPlay");
+            return playing.length >= 2 ? playing[playing.length - 1] : undefined;
+        });
+        const c = host.controller!;
+        expect(c.player(id).isJury).toBe(false);
+        for (let guard = 0; guard < 8000 && step(hub, all); guard++) {
+            all.forEach((s) => expect(Object.keys(s.controller!.personal$.value)).not.toContain(String(id)));
+        }
+        expect(prompt(host).kind).toBe("gameOver");
+        settle(hub, host);
+        expectInSync(all);
+    });
+
+    it("a finalist caught in the final three or the final two can't win", () => {
+        for (const at of [Step.FinaleHoh1, Step.FinalTwo]) {
+            let tries = 0;
+            for (const seed of [23, 5, 9, 31, 44, 12, 77]) {
+                const { hub, host, all } = setup(10, [1, 4, 7], seed);
+                let id: number | undefined;
+                for (let guard = 0; guard < 8000; guard++) {
+                    const c = host.controller!;
+                    if (c.state.step === at) id = [1, 4, 7].find((n) => !c.player(n).isEvicted);
+                    if (id !== undefined || !step(hub, all)) break;
+                }
+                if (id === undefined) continue; // every player was out before then
+                tries++;
+                all.find((x) => x.localPlayerId === id)!.reportRuleBreak();
+                hub.flush();
+                for (let guard = 0; guard < 8000 && step(hub, all); guard++);
+                expect(prompt(host).kind).toBe("gameOver");
+                settle(hub, host);
+                expectInSync(all);
+                const c = host.controller!;
+                if (at === Step.FinalTwo) {
+                    expect(Object.values(c.juryBook.reasons || {}).every((r) => r === "The other finalist broke the rules.")).toBe(true);
+                } else expect(c.player(id).isEvicted).toBe(true);
+                break;
+            }
+            expect(tries).toBe(1);
+        }
+    });
+
     it("only lets the player a prompt belongs to answer it", () => {
         const { hub, host, clients, all } = setup(8, [0, 3], 5);
         let guard = 0;
