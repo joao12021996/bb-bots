@@ -46,10 +46,32 @@ function SteadyHand(props: CompProps) {
         pointer.current = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
     };
 
+    // the keyboard: the arrow keys steer
+    React.useEffect(() => {
+        const keys = new Set<string>();
+        const down = (e: KeyboardEvent) => e.key.startsWith("Arrow") && keys.add(e.key);
+        const up = (e: KeyboardEvent) => keys.delete(e.key);
+        const timer = window.setInterval(() => {
+            if (keys.size === 0) return;
+            const p = pointer.current || { x: 0.5, y: 0.5 };
+            const step = 0.025;
+            const x = p.x + (keys.has("ArrowRight") ? step : 0) - (keys.has("ArrowLeft") ? step : 0);
+            const y = p.y + (keys.has("ArrowDown") ? step : 0) - (keys.has("ArrowUp") ? step : 0);
+            pointer.current = { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) };
+        }, 30);
+        window.addEventListener("keydown", down);
+        window.addEventListener("keyup", up);
+        return () => {
+            window.clearInterval(timer);
+            window.removeEventListener("keydown", down);
+            window.removeEventListener("keyup", up);
+        };
+    }, []);
+
     return (
         <div>
             <Title>{held.toFixed(1)}s in the spotlight</Title>
-            <Subtle>Keep your finger (or mouse) inside the moving spotlight.</Subtle>
+            <Subtle>Keep your finger (or mouse, or the arrow keys) inside the moving spotlight.</Subtle>
             <div
                 ref={box}
                 onPointerMove={track}
@@ -182,7 +204,7 @@ function CatchTheKeys(props: CompProps) {
     return (
         <div>
             <Title>Score: {score}</Title>
-            <Subtle>Drag to move the basket. Catch 🔑 (+1), dodge 💣 (−2).</Subtle>
+            <Subtle>Drag (or use the arrow keys) to move the basket. Catch 🔑 (+1), dodge 💣 (−2).</Subtle>
             <div
                 ref={area}
                 onPointerMove={drag}
@@ -288,6 +310,18 @@ function TowerStack(props: CompProps) {
         props.report(next.length - 1);
         mv.current = { left: dir.current > 0 ? 0 : 1 - width, width };
     };
+    const dropRef = React.useRef(drop);
+    dropRef.current = drop;
+    React.useEffect(() => {
+        const key = (e: KeyboardEvent) => {
+            if (e.key === " " || e.key === "Enter") {
+                e.preventDefault();
+                dropRef.current();
+            }
+        };
+        window.addEventListener("keydown", key);
+        return () => window.removeEventListener("keydown", key);
+    }, []);
 
     const visible = blocks.slice(-9);
     const height = 30;

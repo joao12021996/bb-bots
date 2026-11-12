@@ -1,5 +1,5 @@
 import React from "react";
-import { BigButton, Subtle, Title, useElapsed } from "../ui/common";
+import { BigButton, pressable, Subtle, Title, useElapsed } from "../ui/common";
 import { Houseguest } from "../../model";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { gaussian, pick, Rand, seededRand } from "./random";
@@ -130,6 +130,7 @@ function SlidePuzzle(props: CompProps) {
                         <div
                             key={i}
                             onClick={() => move(i)}
+                            {...pressable(() => move(i), `Tile ${tile + 1}`)}
                             style={{
                                 backgroundImage: `url("${image}")`,
                                 backgroundSize: `${N * 100}% ${N * 100}%`,

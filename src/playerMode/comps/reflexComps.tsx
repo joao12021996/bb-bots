@@ -1,6 +1,6 @@
 import React from "react";
 import { nonEvictedHouseguests } from "../../model";
-import { BigButton, Subtle, Title } from "../ui/common";
+import { BigButton, pressable, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { AnswerReveal, bestOf, Reveal, revealRows, sumSoFar, useAnimationFrame } from "./compUi";
 import { chance, clamp, gaussian, pick, Rand, randInt, seededRand, shuffled } from "./random";
@@ -62,6 +62,7 @@ function Whack(props: CompProps) {
                         <div
                             key={hole}
                             onPointerDown={() => tap(hole)}
+                            {...pressable(() => tap(hole), mole ? `Hole ${hole + 1}: someone popped up!` : `Hole ${hole + 1}`)}
                             style={{
                                 ...({ aspectRatio: "1" } as any),
                                 borderRadius: "50%",
@@ -184,6 +185,7 @@ function ReactionLights(props: CompProps) {
             </Title>
             <div
                 onPointerDown={tap}
+                {...pressable(tap, "Tap when the light turns green")}
                 style={{
                     height: 220,
                     maxWidth: 420,

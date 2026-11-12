@@ -90,8 +90,8 @@ export function KnownProfileModal() {
     if (id === null || !controller || !controller.gameState.houseguests.some((h) => h.id === id)) return null;
     const close = () => knownProfile$.next(null);
     return (
-        <div className="bbb-profile-backdrop" onClick={close}>
-            <div onClick={(e) => e.stopPropagation()}>
+        <div className="bbb-profile-backdrop" onClick={close} onKeyDown={(e) => e.key === "Escape" && close()}>
+            <div role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
                 <KnownProfileCard controller={controller} viewerId={profileViewer(controller)} otherId={id} onClose={close} />
             </div>
         </div>

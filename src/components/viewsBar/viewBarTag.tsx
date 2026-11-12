@@ -50,9 +50,19 @@ export class ViewBarTag extends React.Component<ViewBarTagProps, { selected: boo
             <span
                 className={name}
                 style={style}
+                role="button"
+                tabIndex={this.props.disabled ? -1 : 0}
+                aria-disabled={!!this.props.disabled}
                 onClick={() => {
                     !this.props.disabled && setDisplayMode(this.props.mode);
                     !this.props.disabled && this.setState({ selected: true });
+                }}
+                onKeyDown={(e) => {
+                    if ((e.key === "Enter" || e.key === " ") && !this.props.disabled) {
+                        e.preventDefault();
+                        setDisplayMode(this.props.mode);
+                        this.setState({ selected: true });
+                    }
                 }}
             >
                 {styleText(this.props.text, this.state.selected)}

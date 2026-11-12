@@ -1,5 +1,5 @@
 import React from "react";
-import { BigButton, Subtle, Title } from "../ui/common";
+import { BigButton, pressable, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { AnswerReveal, bestOf, Keypad, Reveal, revealRows, sumSoFar } from "./compUi";
 import { chance, clamp, gaussian, pick, Rand, randInt, sample, seededRand, shuffled } from "./random";
@@ -180,7 +180,12 @@ function OddOneOut(props: CompProps) {
                 }}
             >
                 {Array.from({ length: board.size * board.size }, (_, i) => (
-                    <div key={i} onPointerDown={() => tap(i)} style={{ cursor: "pointer", touchAction: "manipulation", userSelect: "none" }}>
+                    <div
+                        key={i}
+                        onPointerDown={() => tap(i)}
+                        {...pressable(() => tap(i), `${i === board.at ? board.odd : board.common}, row ${Math.floor(i / board.size) + 1}, column ${(i % board.size) + 1}`)}
+                        style={{ cursor: "pointer", touchAction: "manipulation", userSelect: "none" }}
+                    >
                         {i === board.at ? board.odd : board.common}
                     </div>
                 ))}

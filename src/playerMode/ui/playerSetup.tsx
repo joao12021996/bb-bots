@@ -296,7 +296,9 @@ export function PlayerSetup() {
                 {bots.length < total - selected.length && (
                     <>
                         {" "}
-                        <a onClick={() => setBotOrder(shuffle(cast.map((_, i) => i)))}>🔀 Shuffle bots</a>
+                        <button type="button" className="bbb-link-button" onClick={() => setBotOrder(shuffle(cast.map((_, i) => i)))}>
+                            🔀 Shuffle bots
+                        </button>
                     </>
                 )}
             </Subtle>

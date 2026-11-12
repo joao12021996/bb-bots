@@ -199,6 +199,65 @@ describe("player mode season", () => {
     });
 });
 
+describe("week in review, and why they did it", () => {
+    it("records the vote count and every bot's reasons, tells a nominated player why, and recaps each week", () => {
+        const { controller } = playSeason(10, [4], "random", false);
+        const history = controller.state.history;
+        const weeks = history.filter((w) => w.evictedIds.length === 1 && w.votes);
+        expect(weeks.length).toBeGreaterThan(3);
+        weeks.forEach((w) => {
+            const total = Object.values(w.votes!).reduce((a, b) => a + b, 0);
+            expect(total).toBeGreaterThan(0);
+            // every bot voter has a reason, and the reason names a real nominee
+            Object.entries(w.why!.votes || {}).forEach(([voter, v]) => {
+                expect(controller.isHuman({ id: Number(voter) })).toBe(false);
+                expect(w.nomineeIds).toContain(v.t);
+                expect(v.why.length).toBeGreaterThan(10);
+            });
+        });
+        // bot HoHs explain their nominations
+        const botHohWeeks = history.filter((w) => w.hohId !== undefined && !controller.isHuman({ id: w.hohId }));
+        expect(botHohWeeks.some((w) => w.why && w.why.noms && Object.keys(w.why.noms).length > 0)).toBe(true);
+        // and it all shows when the season ends
+        const html = renderToStaticMarkup((controller as any).seasonRecap());
+        expect(html).toContain("Season awards");
+    });
+
+    it("the weekly review: the comps, the block and the count, and where a lone player stands", () => {
+        const { WeekReview } = require("./ui/weekReview");
+        const gs = newGame(8);
+        const html = renderToStaticMarkup(
+            <WeekReview
+                gs={gs}
+                week={{ week: 1, hohId: 0, povId: 1, nomineeIds: [2, 3], evictedIds: [3], votes: { 2: 0, 3: 5 }, why: { noms: { 2: "a pawn", 3: "payback" } } }}
+                threats={[{ id: 0, emoji: "🔥", label: "Biggest" }]}
+                standing={{
+                    name: "Pip",
+                    threat: { label: "Low", emoji: "🟢", reasons: [] },
+                    reputation: { label: "Solid", emoji: "🤝" },
+                    alliances: [],
+                    warm: 2,
+                    cold: 1,
+                    unknown: 3,
+                    tips: ["Talk to people."],
+                }}
+            />
+        );
+        expect(html).toContain("by a vote of 5 to 0");
+        expect(html).toContain("unanimous");
+        expect(html).toContain("payback");
+        expect(html).toContain("Where you stand, Pip");
+        expect(html).toContain("Talk to people.");
+    });
+
+    it("a lone player gets their standing; pass-and-play players don't (it's private)", () => {
+        const solo = new PlayerModeController(newPlayerSave(newGame(8), [0]));
+        expect(solo.standingOf(0)).toBeDefined();
+        const shared = new PlayerModeController(newPlayerSave(newGame(8), [0, 1]));
+        expect(shared.standingOf(0)).toBeUndefined();
+    });
+});
+
 describe("bot mode", () => {
     it("still plays a full season without player mode", () => {
         const season = new Season();

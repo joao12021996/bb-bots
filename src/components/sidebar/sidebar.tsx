@@ -78,7 +78,13 @@ export class Sidebar extends React.Component<{}, SidebarState> {
                 const id = ++episodeKey;
                 if (this.controller.getSelectedEpisode() === episode.gameState.phase) {
                     result.push(
-                        <a key={id} onClick={() => this.controller.switchToScene(id)}>
+                        <a
+                            key={id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => this.controller.switchToScene(id)}
+                            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), this.controller.switchToScene(id))}
+                        >
                             {this.getHighlight(scene.title, id)}
                         </a>
                     );

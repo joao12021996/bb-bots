@@ -10,6 +10,7 @@ import { SeasonEditorPage } from "../seasonEditor/seasonEditorPage";
 import { BehaviorSubject, Subscription } from "rxjs";
 import { TutorialPage } from "../tutorial/tutorialPage";
 import { muted$, play } from "../../sound/sound";
+import { reduceMotion$ } from "../../prefs/motion";
 
 export enum Screens {
     Deck = 1,
@@ -23,18 +24,31 @@ export enum Screens {
 // for topbar minty colors
 export const activeScreen$ = new BehaviorSubject<Screens>(Screens.Ingame);
 
-export const TopbarLink = styled.a`
+// Links that act like buttons: reachable with Tab, pressed with Enter or Space.
+const keyboardPress = (props: any) => ({
+    role: "button",
+    tabIndex: 0,
+    onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => {
+        if (props.onKeyDown) props.onKeyDown(e);
+        if ((e.key === "Enter" || e.key === " ") && props.onClick) {
+            e.preventDefault();
+            props.onClick(e);
+        }
+    },
+});
+
+export const TopbarLink = styled.a.attrs(keyboardPress)`
     color: ${({ theme }: { theme: ColorTheme }) => theme.link};
     cursor: pointer;
 `;
 
-export const ActiveTopbarLink = styled.mark`
+export const ActiveTopbarLink = styled.mark.attrs((props: any) => ({ ...keyboardPress(props), "aria-current": "page" }))`
     cursor: pointer;
     font-weight: bold;
 `;
 
 export function CastingScreenLink(): JSX.Element {
-    const LinkStyle = activeScreen$.value === Screens.Casting ? ActiveTopbarLink : TopbarLink;
+    const LinkStyle: React.ComponentType<any> = activeScreen$.value === Screens.Casting ? ActiveTopbarLink : TopbarLink;
     return (
         <LinkStyle
             onClick={() => {
@@ -51,7 +65,7 @@ export function CastingScreenLink(): JSX.Element {
 }
 
 export function EditSeasonLink(): JSX.Element {
-    const LinkStyle = activeScreen$.value === Screens.Season ? ActiveTopbarLink : TopbarLink;
+    const LinkStyle: React.ComponentType<any> = activeScreen$.value === Screens.Season ? ActiveTopbarLink : TopbarLink;
     return (
         <LinkStyle
             onClick={() => {
@@ -69,7 +83,7 @@ export function showTutorial() {
 }
 
 export function TutorialLink(): JSX.Element {
-    const LinkStyle = activeScreen$.value === Screens.Tutorial ? ActiveTopbarLink : TopbarLink;
+    const LinkStyle: React.ComponentType<any> = activeScreen$.value === Screens.Tutorial ? ActiveTopbarLink : TopbarLink;
     return <LinkStyle onClick={showTutorial}>How to Play</LinkStyle>;
 }
 
@@ -127,6 +141,44 @@ export function MuteButton(): JSX.Element {
     );
 }
 
+function useSubject<T>(subject: BehaviorSubject<T>): T {
+    const [value, setValue] = React.useState(subject.value);
+    React.useEffect(() => {
+        const sub = subject.subscribe((v) => setValue(() => v));
+        return () => sub.unsubscribe();
+    }, [subject]);
+    return value;
+}
+
+// ⚙️ Settings: sound, motion, and (see i18n) the language. Remembered on this device.
+export function SettingsMenu(): JSX.Element {
+    const [open, setOpen] = React.useState(false);
+    const muted = useSubject(muted$);
+    const calm = useSubject(reduceMotion$);
+    return (
+        <span className="bbb-settings">
+            <button type="button" className="bbb-icon-button" aria-label="Settings" aria-expanded={open} onClick={() => setOpen(!open)}>
+                ⚙️
+            </button>
+            {open && (
+                <div className="bbb-settings-panel" role="dialog" aria-label="Settings" onKeyDown={(e) => e.key === "Escape" && setOpen(false)}>
+                    <label className="bbb-toggle">
+                        <input type="checkbox" checked={!muted} onChange={(e) => muted$.next(!e.target.checked)} />
+                        <span>🔊 Sound effects</span>
+                    </label>
+                    <label className="bbb-toggle">
+                        <input type="checkbox" checked={calm} onChange={(e) => reduceMotion$.next(e.target.checked)} />
+                        <span>🧘 Reduce motion (no sliding, spinning or pulsing)</span>
+                    </label>
+                    <button type="button" className="button is-small is-light" onClick={() => setOpen(false)}>
+                        Close
+                    </button>
+                </div>
+            )}
+        </span>
+    );
+}
+
 export class Topbar extends React.Component<{ style?: any }, { tab: Screens }> {
     private subs: Subscription[] = [];
     constructor(props: Readonly<{ style?: any }>) {
@@ -156,6 +208,7 @@ export class Topbar extends React.Component<{ style?: any }, { tab: Screens }> {
                     <EditSeasonLink />
                     <TutorialLink />
                     <MuteButton />
+                    <SettingsMenu />
                 </nav>
             </Box>
         );

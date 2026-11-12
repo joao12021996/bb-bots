@@ -2531,3 +2531,149 @@ input[type="number"] {
     font-size: 0.75em;
     opacity: 0.8;
 }
+
+/* ---------- week in review ---------- */
+.bbb-review {
+    background: var(--bbb-card);
+    border: 1px solid var(--bbb-border);
+    border-radius: var(--bbb-radius);
+    padding: 14px 16px;
+    margin: 12px auto;
+    max-width: 680px;
+    text-align: left;
+}
+.bbb-review-title {
+    font-family: var(--bbb-display);
+    font-weight: 800;
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+}
+.bbb-review-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 6px 14px;
+}
+.bbb-review-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.bbb-review-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--bbb-muted);
+}
+.bbb-review-face {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    vertical-align: middle;
+    object-fit: cover;
+    background: var(--bbb-card-2);
+}
+.bbb-review-tally {
+    color: var(--bbb-muted);
+}
+.bbb-review-why,
+.bbb-review-threats,
+.bbb-review-you {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--bbb-border);
+}
+.bbb-review-threat {
+    margin-right: 10px;
+    white-space: nowrap;
+}
+.bbb-review-you-title {
+    font-weight: 800;
+    margin-bottom: 6px;
+}
+.bbb-review-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.bbb-chip {
+    font-size: 0.8rem;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--bbb-card-2);
+    border: 1px solid var(--bbb-border);
+}
+.bbb-review-tip {
+    margin-top: 6px;
+    color: #fde68a;
+}
+.bbb-why-week {
+    margin: 6px 0;
+    padding: 6px 10px;
+    border: 1px solid var(--bbb-border);
+    border-radius: 10px;
+}
+.bbb-why-week summary {
+    cursor: pointer;
+    font-weight: 700;
+}
+.bbb-why-week p {
+    margin: 4px 0;
+}
+
+/* ---------- accessibility: focus you can see, and less motion ---------- */
+:focus-visible {
+    outline: 3px solid var(--bbb-gold) !important;
+    outline-offset: 2px;
+}
+[role="button"] {
+    cursor: pointer;
+}
+.bbb-link-button {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #a5b4fc;
+    cursor: pointer;
+    font: inherit;
+    text-decoration: underline;
+}
+.bbb-settings {
+    position: relative;
+    display: inline-block;
+}
+.bbb-settings-panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 50;
+    width: min(300px, 86vw);
+    background: var(--bbb-card-2);
+    border: 1px solid var(--bbb-border);
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-align: left;
+}
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+body.bbb-reduce-motion *,
+body.bbb-reduce-motion *::before,
+body.bbb-reduce-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+}

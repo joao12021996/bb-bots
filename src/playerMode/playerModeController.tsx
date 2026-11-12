@@ -31,6 +31,7 @@ import { generateVotingTable } from "../components/votingTable/votingTable";
 import { newEpisode, playerModeScreen$, pushToMainContentStream, secretRelationships$, selectedPlayer$ } from "../subjects/subjects";
 import { Screens } from "../components/topbar/topBar";
 import { WeekRecord } from "./history";
+import { capitalize, explainNomination, explainVote, ReasonContext } from "./social/reasons";
 import { CompDefinition, EnduranceDeals, Opponent } from "./comps/compTypes";
 import { CompRole, THROW_EFFORT, throwChance } from "./comps/throwing";
 import { KNOCKOUT_ID, KNOCKOUT_RULES } from "./comps/knockout";
@@ -133,7 +134,10 @@ import {
     settleFinalPledges,
     settleNominationPledges,
     hasFinal2,
+    reputation,
+    reputationLabel,
 } from "./social/promises";
+import { Standing, WeekReview, WhyTheyDidIt } from "./ui/weekReview";
 import { feelingReply, mentionsIn, opinionReply, readMessage, Reply, TALK_MAX_LENGTH, TALKS_MIN, talkLine, talkPatience, TalkLine } from "./social/botTalk";
 import {
     acceptFinal2,
@@ -284,6 +288,7 @@ interface WeekProgress {
     evictionIntro?: boolean;
     finaleIntro?: boolean;
     haveNots?: number[]; // the worst scorers in this week's HoH comp: one social action per block until the eviction
+    nomWhy?: { [nomineeId: number]: string }; // why a bot HoH nominated who they did
 }
 
 // Everything needed to resume a season. Must stay JSON-serializable (see save/serialize.ts).
@@ -1276,6 +1281,26 @@ export class PlayerModeController {
     }
 
     // ---------- season awards ----------
+
+    // ---------- why they did it ----------
+
+    private get reasonContext(): ReasonContext {
+        const s = this.state;
+        return { gs: s.gameState, book: this.book, history: s.history, ledger: this.ledger, showmances: this.showmances, personalities: this.personalities };
+    }
+
+    // A bot HoH's nominations, explained: kept for the recap and the season's end, and the nominated players hear it.
+    private explainNoms(hohId: number, nomineeIds: number[]) {
+        const s = this.state;
+        if (this.isHuman({ id: hohId })) return;
+        const ctx = this.reasonContext;
+        s.week.nomWhy = { ...(s.week.nomWhy || {}) };
+        nomineeIds.forEach((id) => {
+            const why = explainNomination(ctx, hohId, id);
+            s.week.nomWhy![id] = why;
+            if (!s.week.secretHoh) this.tell([id], `💬 Word around the house: ${this.player(hohId).name} nominated you. ${capitalize(why)}.`);
+        });
+    }
 
     private logMove(kind: "move" | "backstab", actorId: number, targetId: number | undefined, text: string, weight: number) {
         const s = this.state;
@@ -2320,6 +2345,38 @@ export class PlayerModeController {
 
     // ---------- steps ----------
 
+    // The house's biggest threats, for the weekly review.
+    private topThreats(n: number): { id: number; emoji: string; label: string }[] {
+        return nonEvictedHouseguests(this.gameState)
+            .map((hg) => ({ id: hg.id, ...this.threatOf(hg.id) }))
+            .sort((a, b) => a.rank - b.rank)
+            .slice(0, n)
+            .map((t) => ({ id: t.id, emoji: t.emoji, label: t.label }));
+    }
+
+    // Where a player stands: only shown when they're alone on their device (it's private).
+    public standingOf(id: number): Standing | undefined {
+        const s = this.state;
+        if (this.net || s.humanIds.length !== 1 || this.player(id).isEvicted) return undefined;
+        const others = nonEvictedHouseguests(this.gameState).filter((hg) => hg.id !== id);
+        const reads = (s.reads && s.reads[id]) || {};
+        const warm = others.filter((o) => reads[o.id] && reads[o.id].v > 0.25).length;
+        const cold = others.filter((o) => reads[o.id] && reads[o.id].v < -0.25).length;
+        const unknown = others.filter((o) => !reads[o.id]).length;
+        const threat = this.threatOf(id);
+        const rep = reputationLabel(reputation(this.ledger, id));
+        const alliances = this.alliancesOf(id)
+            .filter((a) => a.memberIds.filter((m) => !this.player(m).isEvicted).length >= 2)
+            .map((a) => a.name);
+        const tips: string[] = [];
+        if (unknown >= 3) tips.push(`You don't have a read on ${unknown} houseguests yet. A chat tells you how they feel about you.`);
+        if (alliances.length === 0) tips.push("Nobody has your back. An alliance can protect you on eviction night.");
+        if (threat.rank === 0 || threat.label === "High") tips.push("You're one of the biggest targets. A final-two deal, or a quiet week in the comps, could take the heat off.");
+        if (cold > warm && cold >= 2) tips.push("More people seem wary of you than friendly. Spend a few actions mending fences.");
+        if (reputation(this.ledger, id) < -0.3) tips.push("Your word isn't worth much right now. Keep your next few promises.");
+        return { name: this.player(id).name, threat, reputation: rep, alliances, warm, cold, unknown, tips: tips.slice(0, 2) };
+    }
+
     private weekStart() {
         const s = this.state;
         const remaining = s.gameState.remainingPlayers;
@@ -2357,6 +2414,14 @@ export class PlayerModeController {
                                 <p key={i}>{line}</p>
                             ))}
                         </div>
+                        {last && (
+                            <WeekReview
+                                gs={s.gameState}
+                                week={last}
+                                threats={this.topThreats(3)}
+                                standing={this.standingOf(s.humanIds[0])}
+                            />
+                        )}
                         {defaultContent(s.gameState)}
                     </div>
                 ),
@@ -4098,6 +4163,7 @@ export class PlayerModeController {
             };
             this.immunityCheck(picks, repick, (final, immunityNotes) => {
                 const kept = final.filter((id) => id >= 0);
+                this.explainNoms(hoh.id, kept.filter((id, i) => !(audience && i === final.length - 1)));
                 const nominees = kept.map((id) => getById(s.gameState, id));
                 const [gs, scene, noms] = generateNomCeremonyScene(s.gameState, [hoh], { forcedNominees: nominees });
                 s.gameState = gs;
@@ -4499,6 +4565,7 @@ export class PlayerModeController {
             if (!this.isHuman(hoh)) {
                 const { picks, betrayed } = botNominate(gsAtStart, s.book, hoh, options, 1, this.roomSway());
                 return renominate(choice, picks[0].id, options, (id) => {
+                    this.explainNoms(hoh.id, [id]);
                     if (id === picks[0].id) betrayed.forEach((victim) => this.backstab(hoh.id, victim, s.week.secretHoh ? 0.3 : 1));
                     if (!s.week.secretHoh) this.settleRoom(hoh.id, [id], false);
                 });
@@ -4593,6 +4660,14 @@ export class PlayerModeController {
                 adjustmentNotes: adjustNotes,
                 secretTieBreaker: !!s.week.secretHoh,
             });
+            const ctx = { ...this.reasonContext, gs: gsAtStart };
+            const voteWhy: { [voterId: number]: { t: number; why: string } } = {};
+            Object.keys(votes)
+                .map(Number)
+                .filter((v) => !this.isHuman({ id: v }))
+                .forEach((v) => (voteWhy[v] = { t: votes[v], why: explainVote(ctx, v, votes[v], noms.map((n) => n.id)) }));
+            const tally: { [nomineeId: number]: number } = {};
+            noms.forEach((n) => (tally[n.id] = Math.max(0, counted(n.id))));
             s.gameState = gs;
             const evictedIds = noms.filter((n) => getById(gs, n.id).isEvicted).map((n) => n.id);
             s.history = [
@@ -4604,6 +4679,8 @@ export class PlayerModeController {
                     povId: s.week.povId,
                     blockbusterId: s.week.blockbusterId,
                     evictedIds,
+                    votes: tally,
+                    why: { noms: s.week.nomWhy, votes: voteWhy },
                 },
             ];
             // votes against allies can get noticed (bots 30% of the time; players less often the more social they are)
@@ -5181,6 +5258,7 @@ export class PlayerModeController {
                     {this.seasonRecap()}
                     {this.whoTheyWere()}
                     {this.whyTheJuryVoted()}
+                    <WhyTheyDidIt gs={this.state.gameState} history={this.state.history} />
                     <DiaryRoom entries={this.diaryOf()} houseguest={(id) => this.player(id)} recap={this.seasonRecapText()} />
                 </div>
             ),

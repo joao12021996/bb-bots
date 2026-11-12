@@ -176,3 +176,19 @@ export function Loading(props: { text?: string; detail?: React.ReactNode }) {
         </div>
     );
 }
+
+// Makes something tappable work from the keyboard too, and tells screen readers it's a button: Enter or Space
+// presses it.
+export function pressable(onPress: () => void, label: string) {
+    return {
+        role: "button",
+        tabIndex: 0,
+        "aria-label": label,
+        onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onPress();
+            }
+        },
+    };
+}

@@ -6,4 +6,7 @@ export interface WeekRecord {
     povId?: number;
     blockbusterId?: number; // won the Last Chance comp (came off the block)
     evictedIds: number[];
+    votes?: { [nomineeId: number]: number }; // the eviction count, once announced (e.g. 5 to 2)
+    // why the bots did what they did: the HoH's nominations, and each bot's vote (revealed when the season ends)
+    why?: { noms?: { [nomineeId: number]: string }; votes?: { [voterId: number]: { t: number; why: string } } };
 }

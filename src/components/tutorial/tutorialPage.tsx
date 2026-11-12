@@ -2,6 +2,7 @@ import React from "react";
 import { HasText } from "../layout/text";
 import { APP_NAME, HOH, LAST_CHANCE, POWER_NAMES, VETO } from "../../playerMode/terms";
 import { cartoonCast } from "../../cartoon/cartoon";
+import { reducedMotion } from "../../prefs/motion";
 
 interface Section {
     id: string;
@@ -210,7 +211,7 @@ export function TutorialPage(): JSX.Element {
                                 // scroll, but leave the URL alone (it can carry an online join code)
                                 e.preventDefault();
                                 const el = document.getElementById(`tutorial-${s.id}`);
-                                if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                                if (el) el.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
                             }}
                         >
                             {s.emoji} {s.title}

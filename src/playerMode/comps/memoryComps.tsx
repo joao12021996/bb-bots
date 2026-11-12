@@ -1,5 +1,5 @@
 import React from "react";
-import { Subtle, Title } from "../ui/common";
+import { pressable, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { AnswerReveal, guessFrom, KnockoutPause, Keypad, Reveal, revealRows, sleep, sumSoFar, useRivalsPlaying } from "./compUi";
 import { chance, clamp, gaussian, pick, Rand, randInt, sample, seededRand, shuffled } from "./random";
@@ -128,6 +128,7 @@ function SimonSays(props: CompProps) {
                     <div
                         key={i}
                         onPointerDown={() => tap(i)}
+                        {...pressable(() => tap(i), `Pad ${i + 1}`)}
                         style={{
                             ...({ aspectRatio: "1" } as any),
                             borderRadius: 18,

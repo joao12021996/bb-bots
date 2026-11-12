@@ -499,7 +499,7 @@ function hitListRank(hero: Houseguest, id: number): number {
     return i < 0 ? 999 : i;
 }
 
-function currentTargets(book: AllianceBook, gs: GameState, id: number): number[] {
+export function currentTargets(book: AllianceBook, gs: GameState, id: number): number[] {
     return alliancesOf(book, id)
         .filter((a) => a.target !== undefined && a.targetWeek === gs.phase)
         .sort((x, y) => y.chemistry - x.chemistry)

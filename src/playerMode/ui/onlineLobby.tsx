@@ -253,7 +253,9 @@ function LobbyRoom(props: { session: NetSession; status: NetStatus }) {
                         <div>
                             <b>You're in as {mine.name}</b>
                             <br />
-                            <a onClick={() => session.leaveSeat()}>Leave the house</a>
+                            <button type="button" className="bbb-link-button" onClick={() => session.leaveSeat()}>
+                                Leave the house
+                            </button>
                         </div>
                     </div>
                 ) : (
