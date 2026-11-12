@@ -1501,6 +1501,37 @@ input[type="number"] {
     background: transparent;
     padding: 0;
 }
+/* dragging covers: the table still scrolls sideways; a cover in a slot is all yours */
+.bbb-comics-pool .bbb-comic {
+    touch-action: pan-x;
+}
+.bbb-comic-drag .bbb-comic {
+    touch-action: none;
+}
+.bbb-comics-pool > .is-dragging,
+.bbb-comic-drag.is-dragging {
+    opacity: 0.3;
+}
+.bbb-comic-slot.is-over .bbb-comic-empty,
+.bbb-comic-slot.is-over .bbb-comic,
+.bbb-comics-pool > .is-over .bbb-comic {
+    outline: 4px solid var(--bbb-gold);
+    outline-offset: 2px;
+}
+.bbb-comics-pool.is-over {
+    background: rgba(250, 204, 21, 0.08);
+    border-radius: 8px;
+}
+.bbb-comic-ghost {
+    position: fixed;
+    z-index: 1000;
+    pointer-events: none;
+    transform: translate(-50%, -50%) rotate(-4deg);
+    filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.5));
+}
+.bbb-comic-ghost .bbb-comic {
+    zoom: 0.6;
+}
 .bbb-comic-held {
     display: flex;
     flex-wrap: wrap;

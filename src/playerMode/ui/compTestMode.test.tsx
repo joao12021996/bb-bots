@@ -176,6 +176,80 @@ describe("BB Comics", () => {
         div.remove();
     });
 
+    it("covers can be dragged: into a slot, from slot to slot, onto a twin to stack, and back to the table", async () => {
+        const { gameState, history } = testSeason(cast, "jury");
+        const participants = nonEvictedHouseguests(gameState).slice(0, 2);
+        const pile = comicPile(gameState, history, seededRand(21));
+        const div = document.createElement("div");
+        document.body.appendChild(div);
+        const Comp = BBComicsComp.Component;
+        await act(async () => {
+            ReactDOM.render(
+                <Comp
+                    participants={participants}
+                    human={participants[0]}
+                    gameState={gameState}
+                    history={history}
+                    rand={seededRand(21)}
+                    opponents={[]}
+                    report={() => undefined}
+                    finish={() => undefined}
+                />,
+                div
+            );
+        });
+        const spot = (c: number) => div.querySelectorAll(".bbb-comics-pool > div")[c] as HTMLElement;
+        const slot = (i: number) => div.querySelectorAll(".bbb-comic-slot")[i] as HTMLElement;
+        const inSlot = (i: number) => slot(i).querySelector(".bbb-comic-drag") as HTMLElement | null;
+        const pointer = (type: string, x: number, y: number) => new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 });
+        const realElementFromPoint = (document as any).elementFromPoint;
+        // jsdom has no layout: say what's under the pointer
+        const dragTo = async (from: HTMLElement, to: Element) => {
+            (document as any).elementFromPoint = () => to;
+            await act(async () => {
+                from.dispatchEvent(pointer("pointerdown", 0, 0));
+            });
+            await act(async () => {
+                window.dispatchEvent(pointer("pointermove", 40, 40));
+            });
+            expect(div.querySelector(".bbb-comic-ghost")).not.toBeNull(); // it follows the pointer
+            await act(async () => {
+                window.dispatchEvent(pointer("pointerup", 60, 60));
+                from.querySelector(".bbb-comic") && (from.querySelector(".bbb-comic") as HTMLElement).click(); // the click that ends a drag
+            });
+            expect(div.querySelector(".bbb-comic-ghost")).toBeNull();
+        };
+        try {
+            const a = pile.covers.findIndex((c) => c.of === 0);
+            const b = pile.covers.findIndex((c) => c.of === 1);
+            await dragTo(spot(a), slot(2).querySelector("button")!);
+            expect(spot(a).className).toContain("is-used");
+            expect(div.querySelector(".is-held")).toBeNull(); // the drag's click didn't pick anything up
+            await dragTo(spot(b), slot(0));
+            // slot to slot: they swap
+            await dragTo(inSlot(2)!, slot(0));
+            expect(inSlot(0)!.textContent).toContain(pile.cast[0].name);
+            expect(inSlot(2)!.textContent).toContain(pile.cast[1].name);
+            // out of its slot, back onto the table
+            await dragTo(inSlot(2)!, div.querySelector(".bbb-comics-pool")!);
+            expect(inSlot(2)).toBeNull();
+            expect(spot(b).className).not.toContain("is-used");
+            // onto a twin: they stack
+            const twin = pile.covers.findIndex((c, i) => c.of === 1 && i !== b);
+            await dragTo(spot(b), spot(twin));
+            expect(spot(b).className).toContain("is-stack");
+            expect(spot(twin).querySelector(".bbb-comic")).toBeNull();
+            // a drag that goes nowhere changes nothing
+            const before = div.innerHTML;
+            await dragTo(inSlot(0)!, document.body);
+            expect(div.innerHTML).toBe(before);
+        } finally {
+            (document as any).elementFromPoint = realElementFromPoint;
+            ReactDOM.unmountComponentAtNode(div);
+            div.remove();
+        }
+    });
+
     it("bots that are better are faster", () => {
         const { gameState, history } = testSeason(cast, "jury");
         const avg = (skill: number) => {

@@ -408,6 +408,10 @@ export function comicsRight(pile: ComicPile, slots: (number | null)[]): number {
     return slots.filter((c, i) => c !== null && pile.covers[c].real && pile.covers[c].of === i).length;
 }
 
+type ComicSource = { from: "table"; c: number } | { from: "slot"; i: number; c: number };
+
+const DRAG_START = 8; // px the pointer moves before a press becomes a drag
+
 function BBComics(props: CompProps) {
     const [pile] = React.useState(() => comicPile(props.gameState, props.history, props.rand));
     const n = pile.cast.length;
@@ -416,15 +420,24 @@ function BBComics(props: CompProps) {
     // two of the same houseguest's covers, one on top of the other: under[top] is the one underneath
     const [under, setUnder] = React.useState<{ [top: number]: number }>({});
     const [comparing, setComparing] = React.useState<number | null>(null); // a stack, spread out to choose from
+    const [drag, setDrag] = React.useState<{ src: ComicSource; x: number; y: number; over: string } | null>(null);
     const [reviewing, setReviewing] = React.useState(false);
     const [wrong, setWrong] = React.useState(0); // tries that weren't right
     const [checked, setChecked] = React.useState(false); // the red cross, until something changes
     const [start] = React.useState(() => Date.now());
+    const justDragged = React.useRef(false); // the click that ends a drag isn't a tap
+    const endDrag = React.useRef<(() => void) | null>(null);
+    React.useEffect(() => () => {
+        if (endDrag.current) endDrag.current();
+    }, []);
     const hgOf = (c: number) => pile.cast[pile.covers[c].of];
     const rivalOf = (cover: Cover) => props.gameState.houseguests.find((h) => h.id === cover.rivalId);
     const cover = (c: number, onClick?: () => void) => <ComicCover hg={hgOf(c)} rival={rivalOf(pile.covers[c].cover)} cover={pile.covers[c].cover} onClick={onClick} />;
     const used = new Set(slots.filter((s): s is number => s !== null));
     const hidden = new Set(Object.values(under)); // underneath a stack
+    const tapped = (f: () => void) => () => {
+        if (!justDragged.current) f();
+    };
     const unstack = (top: number) => {
         const next = { ...under };
         delete next[top];
@@ -466,6 +479,77 @@ function BBComics(props: CompProps) {
         setComparing(null);
         setHeld(c);
     };
+
+    // dropping a dragged cover: on a slot (a cover from another slot swaps places with what's there), on another of
+    // the same houseguest's covers (they stack), or anywhere on the table (back it goes)
+    const drop = (src: ComicSource, target: string) => {
+        const [kind, arg] = target.split(":");
+        const next = [...slots];
+        setHeld(null);
+        setChecked(false);
+        if (kind === "slot") {
+            const j = Number(arg);
+            if (src.from === "slot") {
+                next[src.i] = next[j];
+                next[j] = src.c;
+            } else next[j] = src.c;
+            setSlots(next);
+            return;
+        }
+        if (src.from === "slot" && kind === "table") {
+            next[src.i] = null;
+            setSlots(next);
+        }
+        if (kind === "table" && arg !== undefined) {
+            const onto = Number(arg);
+            if (onto !== src.c && pile.covers[onto].of === pile.covers[src.c].of) setUnder({ ...under, [src.c]: onto });
+        }
+    };
+    const dropRef = React.useRef(drop);
+    dropRef.current = drop;
+    const targetAt = (x: number, y: number): string => {
+        const el = typeof document.elementFromPoint === "function" ? document.elementFromPoint(x, y) : null;
+        const t = el && el.closest("[data-drop]");
+        return (t && t.getAttribute("data-drop")) || "";
+    };
+    const startDrag = (src: ComicSource) => (e: React.PointerEvent) => {
+        if (e.button > 0 || comparing !== null) return;
+        const x0 = e.clientX;
+        const y0 = e.clientY;
+        let moving = false;
+        const move = (ev: PointerEvent) => {
+            if (!moving && Math.hypot(ev.clientX - x0, ev.clientY - y0) < DRAG_START) return;
+            moving = true;
+            ev.preventDefault();
+            setDrag({ src, x: ev.clientX, y: ev.clientY, over: targetAt(ev.clientX, ev.clientY) });
+        };
+        const up = (ev: PointerEvent) => {
+            stop();
+            if (!moving) return;
+            justDragged.current = true;
+            setTimeout(() => (justDragged.current = false), 0);
+            setDrag(null);
+            dropRef.current(src, targetAt(ev.clientX, ev.clientY));
+        };
+        const cancel = () => {
+            stop();
+            setDrag(null);
+        };
+        const stop = () => {
+            window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", up);
+            window.removeEventListener("pointercancel", cancel);
+            endDrag.current = null;
+        };
+        if (endDrag.current) endDrag.current();
+        endDrag.current = stop;
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+        window.addEventListener("pointercancel", cancel);
+    };
+    const dragging = (c: number) => !!drag && drag.src.c === c;
+    const overClass = (key: string) => (drag && drag.over === key ? " is-over" : "");
+
     const lockIn = () => {
         const right = comicsRight(pile, slots);
         if (right === n) {
@@ -513,17 +597,19 @@ function BBComics(props: CompProps) {
         <div>
             <Title>Put the real covers in order</Title>
             <Subtle>
-                Tap a cover to pick it up, then tap a slot (in the order they went by). Tap another cover of the same houseguest to stack them; tap a
-                stack to compare the two and keep one. Tap a filled slot to put its cover back.
+                Drag covers into the slots, in the order they went by (or tap one, then tap a slot). Drop a cover on another of the same houseguest's to
+                stack them; tap a stack to compare the two and keep one. Drag a cover out of its slot, or tap it, to put it back.
             </Subtle>
             <div className="bbb-comic-slots">
                 {slots.map((c, i) => (
-                    <div key={i} className={"bbb-comic-slot" + (held !== null ? " is-target" : "")}>
+                    <div key={i} className={"bbb-comic-slot" + (held !== null || drag ? " is-target" : "") + overClass(`slot:${i}`)} data-drop={`slot:${i}`}>
                         <span>#{i + 1}</span>
                         {c === null ? (
-                            <button type="button" className="bbb-comic-empty" aria-label={`Slot ${i + 1}`} onClick={() => tapSlot(i)} />
+                            <button type="button" className="bbb-comic-empty" aria-label={`Slot ${i + 1}`} onClick={tapped(() => tapSlot(i))} />
                         ) : (
-                            cover(c, () => tapSlot(i))
+                            <div className={"bbb-comic-drag" + (dragging(c) ? " is-dragging" : "")} onPointerDown={startDrag({ from: "slot", i, c })}>
+                                {cover(c, tapped(() => tapSlot(i)))}
+                            </div>
                         )}
                     </div>
                 ))}
@@ -573,21 +659,30 @@ function BBComics(props: CompProps) {
                     </div>
                 )
             )}
-            <div className="bbb-comics-pool">
-                {pile.covers.map((_, i) =>
-                    hidden.has(i) ? (
-                        <div key={i} className="is-under" />
-                    ) : (
+            <div className={"bbb-comics-pool" + overClass("table")} data-drop="table">
+                {pile.covers.map((_, i) => {
+                    if (hidden.has(i)) return <div key={i} className="is-under" />;
+                    const stack = under[i] !== undefined;
+                    const free = !used.has(i) && !stack;
+                    const classes = [used.has(i) ? "is-used" : "", held === i ? "is-held" : "", stack ? "is-stack" : "", dragging(i) ? "is-dragging" : ""];
+                    return (
                         <div
                             key={i}
-                            className={[used.has(i) ? "is-used" : "", held === i ? "is-held" : "", under[i] !== undefined ? "is-stack" : ""].join(" ").trim()}
+                            className={classes.join(" ").trim() + (free ? overClass(`table:${i}`) : "")}
+                            data-drop={free ? `table:${i}` : undefined}
+                            onPointerDown={free ? startDrag({ from: "table", c: i }) : undefined}
                         >
-                            {under[i] !== undefined && <div className="bbb-comic-stack-badge">2</div>}
-                            {cover(i, used.has(i) || comparing !== null ? undefined : () => tapTable(i))}
+                            {stack && <div className="bbb-comic-stack-badge">2</div>}
+                            {cover(i, used.has(i) || comparing !== null ? undefined : tapped(() => tapTable(i)))}
                         </div>
-                    )
-                )}
+                    );
+                })}
             </div>
+            {drag && (
+                <div className="bbb-comic-ghost" style={{ left: drag.x, top: drag.y }} aria-hidden="true">
+                    {cover(drag.src.c)}
+                </div>
+            )}
             <BigButton kind="info" onClick={() => setReviewing(true)}>
                 📚 Review the comics
             </BigButton>
@@ -617,7 +712,7 @@ export const BBComicsComp: CompDefinition = {
         "A jury-phase classic: every houseguest of the season stars in their own comic book. All the covers are on the table, but next to each real one are forgeries that change one detail: " +
         "the title, the speech bubble, the sound effect, the rival, the prop, which way the hero faces, the color or the issue number. " +
         "Press Review and the real covers roll across the screen in two rows, numbered in order, then they're gone. Review as often as you like (the clock keeps running), then put the real ones in that order. " +
-        "Stack two covers of the same houseguest to compare them and keep one. " +
+        "Drag the covers into place, or tap one and then a slot. Stack two covers of the same houseguest to compare them and keep one. " +
         "When you lock it in, a red cross means something's wrong, but you won't be told what. Fastest to get it right wins.",
     maxSeconds: COMIC_LIMIT,
     available: (gs) => gs.houseguests.filter((hg) => hg.isJury).length >= 2,
