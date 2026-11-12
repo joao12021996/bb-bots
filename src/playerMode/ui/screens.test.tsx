@@ -7,6 +7,7 @@ import { createAlliance } from "../social/alliances";
 import { SocialScreen } from "./socialScreen";
 import { AllianceScreen } from "./allianceScreen";
 import { FaceEditor } from "./faceEditor";
+import { cartoonURL, lookFromURL, randomLook } from "../../cartoon/cartoon";
 import { HohRoomScreen, HohVisitScreen } from "./hohRoomScreen";
 import { openHohRoom } from "../social/hohRoom";
 import { SpeechPrompt } from "./speechPrompt";
@@ -708,21 +709,25 @@ describe("player mode screens", () => {
         expect(c.textContent).toContain("📅 Day 1");
     });
 
-    it("face editor: changes the name and picks an emoji face", () => {
+    it("avatar builder: changes the name and steps through features, and saves a cartoon", () => {
         let saved: { name: string; imageURL: string } | null = null;
+        const start = cartoonURL(randomLook(seededRand(3)));
         const c = mount(
-            <FaceEditor
-                original={{ name: "Janelle", imageURL: "https://example.com/janelle.png" }}
-                current={{ name: "Janelle", imageURL: "https://example.com/janelle.png" }}
-                onSave={(look) => (saved = look)}
-                onCancel={() => undefined}
-            />
+            <FaceEditor original={{ name: "Pip", imageURL: start }} current={{ name: "Pip", imageURL: start }} onSave={(look) => (saved = look)} onCancel={() => undefined} />
         );
-        const options = c.querySelectorAll(".bbb-face-options button");
-        expect(options.length).toBeGreaterThan(10);
-        act(() => (options[3] as HTMLButtonElement).click());
+        const input = c.querySelector("input[type=text]") as HTMLInputElement;
+        act(() => {
+            const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+            setter.call(input, "Juno");
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        const before = lookFromURL(start)!;
+        const next = c.querySelector('[aria-label="Next Glasses"]') as HTMLButtonElement;
+        act(() => next.click());
         click(c, "Save");
-        expect(saved).not.toBeNull();
-        expect(saved!.imageURL.startsWith("data:image/svg+xml")).toBe(true);
+        expect(saved!.name).toBe("Juno");
+        const after = lookFromURL(saved!.imageURL)!;
+        expect(after.glasses).toBe((before.glasses + 1) % 6);
+        expect({ ...after, glasses: before.glasses }).toEqual(before);
     });
 });

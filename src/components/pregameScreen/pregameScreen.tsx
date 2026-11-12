@@ -7,7 +7,7 @@ import { cast$, displayMode$, pushToMainContentStream, switchSceneRelative } fro
 import { Screens, TopbarLink } from "../topbar/topBar";
 import { SeasonEditorPage } from "../seasonEditor/seasonEditorPage";
 import { CastingScreen } from "../castingScreen/castingScreen";
-import { DeckScreen } from "../deckScreen/deckScreen";
+import { dealNewCast } from "../../cartoon/newCast";
 import { EditRelationshipsScreen, getProfiles } from "../editRelationshipsScreen/editRelationshipScreen";
 import { Tribe } from "../../model/tribe";
 import { selectPlayer } from "../playerPortrait/selectedPortrait";
@@ -81,9 +81,9 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                         ) : (
                             <button
                                 className="button is-primary"
-                                onClick={() => pushToMainContentStream(<DeckScreen />, Screens.Deck)}
+                                onClick={() => dealNewCast()}
                             >
-                                Choose a cast
+                                Deal a cast
                             </button>
                         )}
                     </div>
@@ -104,9 +104,9 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                             ) : (
                                 <button
                                     className="button is-warning"
-                                    onClick={() => pushToMainContentStream(<DeckScreen />, Screens.Deck)}
+                                    onClick={() => dealNewCast()}
                                 >
-                                    Pick a cast first
+                                    Deal a cast first
                                 </button>
                             )}
                             {hasSave() && (
@@ -134,9 +134,9 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                             ) : (
                                 <button
                                     className="button is-warning"
-                                    onClick={() => pushToMainContentStream(<DeckScreen />, Screens.Deck)}
+                                    onClick={() => dealNewCast()}
                                 >
-                                    Pick a cast first
+                                    Deal a cast first
                                 </button>
                             )}
                             <button className="button is-light" onClick={() => showJoinScreen()}>
@@ -148,12 +148,12 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                 <p className="bbb-steps">
                     <TopbarLink
                         onClick={() => {
-                            pushToMainContentStream(<DeckScreen />, Screens.Deck);
+                            dealNewCast();
                         }}
                     >
-                        Choose characters
+                        Deal a new cast
                     </TopbarLink>{" "}
-                    from 300+ collections, or{" "}
+                    of cartoon houseguests, or{" "}
                     <TopbarLink
                         onClick={() => {
                             pushToMainContentStream(<CastingScreen cast={[]} />, Screens.Casting);

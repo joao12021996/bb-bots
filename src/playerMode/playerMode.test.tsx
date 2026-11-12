@@ -4,6 +4,7 @@ import { rng } from "../utils";
 import { seedRng } from "./seeding";
 import { PlayerModeController, newPlayerSave, Prompt, Step, PlayerSave, migrateSave } from "./playerModeController";
 import { botPercentile, compLuck, luckyComp } from "./comps/botScores";
+import { cartoonCast, cartoonURL, decodeLook, encodeLook, lookDistance, lookFromURL, lookOf, randomLook } from "../cartoon/cartoon";
 import { botSocialTime, performSocialAction, SocialMemory } from "./social/socialActions";
 import { Alliance, betray, botNominate, createAlliance, emptyBook, holdMeeting } from "./social/alliances";
 import { openHohRoom, pComesUp, visitBotHoh } from "./social/hohRoom";
@@ -437,25 +438,37 @@ describe("season setup", () => {
     });
 });
 
-describe("real houseguest ratings and custom players", () => {
-    const { lookupStats, ALLOWED_DECKS, HOUSEGUEST_STATS } = require("../data/houseguestStats");
+describe("cartoon cast and custom players", () => {
     const { buildSeason } = require("./setupGame");
 
-    it("only offers US and Canada collections, with ratings in range", () => {
-        ALLOWED_DECKS.forEach((deck: string) =>
-            expect(/^(Big Brother (\d+|Canada \d+|Over The Top)|Celebrity Big Brother \d US)$/.test(deck)).toBe(true)
-        );
-        Object.values(HOUSEGUEST_STATS).forEach((people: any) =>
-            Object.values(people).forEach(([s, c]: any) => {
-                expect(s).toBeGreaterThanOrEqual(1);
-                expect(s).toBeLessThanOrEqual(10);
-                expect(c).toBeGreaterThanOrEqual(1);
-                expect(c).toBeLessThanOrEqual(10);
-            })
-        );
-        expect(lookupStats("Big Brother 6", "Janelle").comp).toBe(10);
-        expect(lookupStats("Big Brother 2", "Will").social).toBe(10);
-        expect(lookupStats("Big Brother Albania 1", "Someone")).toEqual({});
+    it("deals a cast of cartoon houseguests that all look different, with different names and ratings in range", () => {
+        const people = cartoonCast(16, 99);
+        expect(people.length).toBe(16);
+        expect(new Set(people.map((p) => p.name)).size).toBe(16);
+        expect(new Set(people.map((p) => p.name[0])).size).toBe(16); // easy to tell apart
+        const looks = people.map((p) => lookFromURL(p.imageURL)!);
+        looks.forEach((l) => expect(l).not.toBeNull());
+        // nobody is a near-copy of anyone else
+        for (let i = 0; i < looks.length; i++)
+            for (let j = i + 1; j < looks.length; j++) expect(lookDistance(looks[i], looks[j])).toBeGreaterThan(6);
+        // and every feature varies across the house
+        (["skin", "hair", "hairColor", "eyes", "glasses", "shirt"] as const).forEach((k) => expect(new Set(looks.map((l) => l[k])).size).toBeGreaterThan(3));
+        people.forEach((p) => {
+            expect(p.social).toBeGreaterThanOrEqual(1);
+            expect(p.social).toBeLessThanOrEqual(10);
+            expect(p.comp).toBeGreaterThanOrEqual(1);
+            expect(p.comp).toBeLessThanOrEqual(10);
+        });
+    });
+
+    it("a cartoon's look comes back out of its picture; anyone else gets one from their name", () => {
+        const look = randomLook(seededRand(4));
+        expect(decodeLook(encodeLook(look))).toEqual(look);
+        expect(lookFromURL(cartoonURL(look))).toEqual(look);
+        expect(lookFromURL("https://example.com/me.png")).toBeNull();
+        expect(lookOf({ name: "Sam", imageURL: "https://example.com/me.png" })).toEqual(lookOf({ name: "Sam" }));
+        // the comics draw the same face as a masked hero or a villain
+        expect(cartoonURL(look, { headOnly: true, mask: "cowl", villain: true })).not.toEqual(cartoonURL(look, { headOnly: true }));
     });
 
     it("plays a season with a player who joined under their own name, even with custom relationships", () => {

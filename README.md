@@ -4,7 +4,7 @@
 
 Big Brother Bots is a simulator for the reality show Big Brother.
 
-Choose characters from 300+ collections, or upload your own, then add twists and watch as everyone votes each other out until one winner remains! You can contact me on github or at `.prof.plum`.
+Deal a cast of cartoon houseguests (or upload your own), then add twists and watch as everyone votes each other out until one winner remains! You can contact me on github or at `.prof.plum`.
 
 <p align="center">
     <img width="" src="https://spaulmark.github.io/src/bb-bots.png" alt="Preview Image">
@@ -12,10 +12,11 @@ Choose characters from 300+ collections, or upload your own, then add twists and
 
 ---
 
-## Choose a Cast of Characters ##
-![CastingScreen](https://user-images.githubusercontent.com/48075143/161446733-c48996f9-15c8-4427-9a5d-b04b74147a56.png)
+## A Cast of Cartoon Houseguests ##
 
-Big brother bots has over 300 pre-made casts of characters available to choose from. You can search for the cast of your choice using the search bar (1). Then, select as many casts as you like (2), and then press submit (3). 
+Every season starts with a cast of made-up cartoon houseguests, drawn on the spot: skin, face shape, hair, eyes,
+brows, nose, mouth, glasses, facial hair, hats, extras and outfits all vary, so no two look alike. Press **New Cast**
+for a different house. Players design their own avatar the same way, feature by feature, or use a photo.
 
 ---
 

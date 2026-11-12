@@ -727,8 +727,9 @@ input[type="number"] {
     margin-bottom: 8px;
 }
 .bbb-face-editor-top img {
-    width: 72px;
-    height: 72px;
+    width: 104px;
+    height: 104px;
+    flex: none;
     border-radius: 14px;
     object-fit: cover;
     border: 3px solid var(--bbb-accent);
@@ -1063,14 +1064,20 @@ input[type="number"] {
     text-align: center;
     z-index: 1;
 }
-.bbb-comic-rival svg {
+.bbb-comic-rival img {
     width: 40px;
     height: 40px;
     margin: 0 auto;
     border-radius: 50%;
     border: 2px solid #111;
-    filter: grayscale(1) contrast(1.2);
+    background: #e5e7eb;
+    object-fit: cover;
+    object-position: 50% 30%;
     display: block;
+}
+.bbb-comic-title.is-villain b {
+    color: #a3e635;
+    text-shadow: 2px 2px 0 #111;
 }
 .bbb-comic-rival span {
     display: inline-block;
@@ -2305,4 +2312,54 @@ input[type="number"] {
     justify-content: center;
     margin-top: 0.9rem;
     min-height: 2.5rem;
+}
+
+/* ---------- avatar builder ---------- */
+.bbb-face-editor-side {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.bbb-face-editor-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.bbb-avatar-parts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 6px 14px;
+    margin: 10px 0 12px;
+}
+.bbb-avatar-part {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.bbb-avatar-label {
+    width: 82px;
+    flex: none;
+    font-size: 0.8rem;
+    color: var(--bbb-muted);
+}
+.bbb-avatar-value {
+    flex: 1;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.bbb-avatar-part .button {
+    min-width: 30px;
+    font-weight: 800;
+}
+.bbb-lobby-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    object-fit: cover;
 }

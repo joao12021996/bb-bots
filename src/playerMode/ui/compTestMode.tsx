@@ -6,7 +6,7 @@ import { CompPlay, CompResult, CompResults, tiedForFirst } from "../comps/compRu
 import { CompDefinition, Opponent } from "../comps/compTypes";
 import { seededRand } from "../comps/random";
 import { botHide, HideTiebreakPlay, HideTiebreakResults, hideOutcome, tiebreakHouse, VetoHide } from "../comps/hideTiebreak";
-import { initialsAvatar } from "./avatar";
+import { cartoonFor } from "../../cartoon/cartoon";
 import { BigButton, Panel, Subtle, Title } from "./common";
 
 // Test mode: play any single comp against a few bots, outside a season. Nothing is saved.
@@ -27,7 +27,7 @@ export function testSeason(cast: PlayerProfile[], stage: TestStage): { gameState
     const players: PlayerProfile[] = [...cast];
     for (let i = players.length; i < 12; i++) {
         const name = `Houseguest ${i + 1}`;
-        players.push({ name, imageURL: initialsAvatar(name) } as PlayerProfile);
+        players.push({ name, imageURL: cartoonFor(name) } as PlayerProfile);
     }
     const gs = new GameState({ players, jury: defaultJurySize(players.length) });
     const evictions = stage === "jury" ? Math.min(players.length - 4, 2 + 3) : Math.min(players.length - 4, 2);

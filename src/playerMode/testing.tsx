@@ -106,7 +106,14 @@ export function answer(controller: PlayerModeController, p: Prompt, strategy: St
             const free = p.deck.map((_, i) => i).filter((i) => p.matched[i] === undefined && !p.open.includes(i));
             // humans who win: they know where every card is
             const twin = p.open.length ? free.find((i) => p.deck[i] === p.deck[p.open[0]]) : undefined;
-            const best = humansWin === true && twin !== undefined ? twin : free[Math.floor(Math.random() * free.length)];
+            // humans who lose: never make a pair
+            const misses = free.filter((i) => !p.open.length || p.deck[i] !== p.deck[p.open[0]]);
+            const best =
+                humansWin === true && twin !== undefined
+                    ? twin
+                    : humansWin === false && misses.length
+                    ? misses[Math.floor(Math.random() * misses.length)]
+                    : free[Math.floor(Math.random() * free.length)];
             p.onFlip!(best);
         }
     } else if (p.kind === "hideTiebreak") {

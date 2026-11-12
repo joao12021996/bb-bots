@@ -9,7 +9,7 @@ import { ALL_POWERS, PowerId, POWERS } from "../social/powers";
 import { clearSave, inlineBlobImages, readSave } from "../save/serialize";
 import { buildSeason } from "../setupGame";
 import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
-import { initialsAvatar } from "./avatar";
+import { cartoonFor } from "../../cartoon/cartoon";
 import { FaceEditor, Look } from "./faceEditor";
 import { PlayerModeScreen } from "./playerModeScreen";
 
@@ -110,7 +110,7 @@ export function PlayerSetup() {
     const addYourself = () => {
         const name = newName.trim();
         if (!name) return;
-        const profile: PlayerProfile = { name, imageURL: newPhoto || initialsAvatar(name), social: 5, comp: 5 };
+        const profile: PlayerProfile = { name, imageURL: newPhoto || cartoonFor(name), social: 5, comp: 5 };
         const index = total + customs.length;
         setCustoms([...customs, profile]);
         setNewName("");
@@ -121,6 +121,8 @@ export function PlayerSetup() {
             setPlayerCount(selected.length + 1);
             setSelected([...selected, index]);
         }
+        // straight into designing their avatar
+        if (!newPhoto) setEditing(index);
     };
 
     const start = async () => {

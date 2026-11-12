@@ -4,7 +4,7 @@ import { getCast, pushToMainContentStream } from "../../subjects/subjects";
 import styled from "styled-components";
 import { ColorTheme } from "../../theme/theme";
 import { Box } from "../layout/box";
-import { DeckScreen } from "../deckScreen/deckScreen";
+import { dealNewCast } from "../../cartoon/newCast";
 import { SeasonEditorPage } from "../seasonEditor/seasonEditorPage";
 import { BehaviorSubject, Subscription } from "rxjs";
 
@@ -58,17 +58,9 @@ export function EditSeasonLink(): JSX.Element {
     );
 }
 
+// A new cast of cartoon houseguests.
 export function ChooseCastLink(): JSX.Element {
-    const LinkStyle = activeScreen$.value === Screens.Deck ? ActiveTopbarLink : TopbarLink;
-    return (
-        <LinkStyle
-            onClick={() => {
-                pushToMainContentStream(<DeckScreen />, Screens.Deck);
-            }}
-        >
-            Choose Cast
-        </LinkStyle>
-    );
+    return <TopbarLink onClick={() => dealNewCast()}>New Cast</TopbarLink>;
 }
 
 export class Topbar extends React.Component<{ style?: any }, { tab: Screens }> {

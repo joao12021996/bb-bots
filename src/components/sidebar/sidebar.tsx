@@ -1,15 +1,12 @@
 import React from "react";
 import { SidebarController } from "./sidebarController";
-import { PregameEpisode } from "../episode/pregameEpisode";
-import { defaultJurySize, Episode, GameState, PlayerProfile } from "../../model";
+import { Episode } from "../../model";
 import { Scene } from "../episode/scenes/scene";
-import { mainContentStream$, newEpisode, overwriteCast, pushToMainContentStream } from "../../subjects/subjects";
+import { mainContentStream$, pushToMainContentStream } from "../../subjects/subjects";
 import { Box } from "../layout/box";
 import { HasText } from "../layout/text";
-import { shuffle } from "lodash";
 import { activeScreen$, Screens } from "../topbar/topBar";
-import { baseUrl } from "../deckScreen/deckScreen";
-import { lookupStats } from "../../data/houseguestStats";
+import { dealNewCast } from "../../cartoon/newCast";
 interface SidebarState {
     episodes: Episode[];
     selectedScene: number;
@@ -33,25 +30,8 @@ export class Sidebar extends React.Component<{}, SidebarState> {
         }
         // what's on screen before the cast loads: only replace it if nothing else (like an invite link's join screen) has since
         const startScreen = mainContentStream$.value;
-        let data = await (await fetch(`${baseUrl}/bb.json`)).json();
-        const cast: PlayerProfile[] = [];
-        data = shuffle(data).slice(0, 16);
-        for (const player of data) {
-            let name = player.substr(0, player.lastIndexOf(".")) || player;
-            name = name.substr(name.indexOf("/") + 1) || name;
-            const season = player.substr(0, player.indexOf("/"));
-            cast.push({
-                name,
-                imageURL: `${baseUrl}Big Brother ${player}.png`,
-                ...lookupStats(`Big Brother ${season}`, name),
-            });
-        }
-
-        const episode: Episode = new PregameEpisode(
-            new GameState({ players: cast, jury: defaultJurySize(cast.length) })
-        );
-        newEpisode(episode);
-        overwriteCast(cast);
+        // a cast of cartoon houseguests, different every time
+        const episode = dealNewCast(false);
         if (activeScreen$.value === Screens.Ingame && mainContentStream$.value === startScreen) {
             pushToMainContentStream(episode.render, Screens.Ingame);
         }

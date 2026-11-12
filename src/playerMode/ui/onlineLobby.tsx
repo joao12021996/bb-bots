@@ -8,7 +8,8 @@ import { cleanRoomCode, joinLink, newRoomCode, openRoom, parseInvite } from "../
 import { buildOnlineSeason, defaultSetup, houseOf, maxHouse, minHouse } from "../net/lobby";
 import { inlineBlobImages, readOnlineSave } from "../save/serialize";
 import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
-import { initialsAvatar } from "./avatar";
+import { cartoonFor } from "../../cartoon/cartoon";
+import { FaceEditor } from "./faceEditor";
 import { castSource, launch, showSeasonSoFar, Stepper } from "./playerSetup";
 
 // ---------- starting and joining ----------
@@ -177,8 +178,8 @@ function saveName(name: string) {
 }
 
 // a photo, shrunk to a small data URL so it can be sent to everyone
-async function photoURL(file: File): Promise<string> {
-    const hg = { imageURL: URL.createObjectURL(file) };
+async function photoURLFromBlob(url: string): Promise<string> {
+    const hg = { imageURL: url };
     await inlineBlobImages([hg], 128);
     return hg.imageURL.startsWith("data:") ? hg.imageURL : "";
 }
@@ -201,6 +202,7 @@ function LobbyRoom(props: { session: NetSession; status: NetStatus }) {
     const [photo, setPhoto] = React.useState<string | null>(mine && mine.castIndex === null ? mine.imageURL : null);
     const [starting, setStarting] = React.useState(false);
     const [startError, setStartError] = React.useState<string | null>(null);
+    const [designing, setDesigning] = React.useState(false);
     const house = houseOf(setup, cast);
     const players = setup.seats.length;
     const bots = house.length - players;
@@ -210,7 +212,7 @@ function LobbyRoom(props: { session: NetSession; status: NetStatus }) {
         const clean = name.trim();
         if (!clean) return;
         saveName(clean);
-        session.takeSeat({ name: clean, imageURL: photo || initialsAvatar(clean), castIndex: null });
+        session.takeSeat({ name: clean, imageURL: photo || cartoonFor(clean), castIndex: null });
     };
 
     const joinAs = (castIndex: number) => {
@@ -272,22 +274,26 @@ function LobbyRoom(props: { session: NetSession; status: NetStatus }) {
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                             />
-                            <label className="button is-light" title="Optional photo">
-                                {photo ? "📷 ✓" : "📷"}
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    style={{ display: "none" }}
-                                    onChange={async (e) => {
-                                        const file = e.target.files && e.target.files[0];
-                                        if (file) setPhoto((await photoURL(file)) || null);
-                                    }}
-                                />
-                            </label>
+                            <button type="button" className="button is-light" title="Design your avatar" onClick={() => setDesigning(!designing)}>
+                                {photo ? <img className="bbb-lobby-avatar" src={photo} alt="" /> : "🎨"}
+                            </button>
                             <button type="submit" className="button is-warning" disabled={!name.trim()}>
                                 🎮 Join
                             </button>
                         </form>
+                        {designing && (
+                            <FaceEditor
+                                original={{ name: name.trim() || "You", imageURL: cartoonFor(name.trim() || "You") }}
+                                current={{ name: name.trim() || "You", imageURL: photo || cartoonFor(name.trim() || "You") }}
+                                onSave={async (look) => {
+                                    setName(look.name);
+                                    // a photo goes to the other devices inline
+                                    setPhoto(look.imageURL.startsWith("blob:") ? (await photoURLFromBlob(look.imageURL)) || null : look.imageURL);
+                                    setDesigning(false);
+                                }}
+                                onCancel={() => setDesigning(false)}
+                            />
+                        )}
                         <Subtle>…or tap a houseguest below to play as them.</Subtle>
                     </>
                 )}

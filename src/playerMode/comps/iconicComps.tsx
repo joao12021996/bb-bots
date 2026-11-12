@@ -6,6 +6,7 @@ import { BigButton, Face, Grid, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { AnswerReveal, Keypad, Reveal, revealRows, rightSoFar, sumSoFar, useQuizClock } from "./compUi";
 import { answerQuestion, chance, clamp, gaussian, pick, Rand, randInt, sample, seededRand, shuffled } from "./random";
+import { cartoonURL, lookOf, skinColor } from "../../cartoon/cartoon";
 
 // Comps in the style of the show's best-known formats: the oracle that sends you hunting for answers,
 // hiding your veto somewhere in the house, comic book covers, counting, the days quiz and the face morph.
@@ -292,6 +293,7 @@ const COMIC_FAKES = 1; // forgeries of each real cover: one real, one fake per h
 const COMIC_LIMIT = 900; // seconds: 15 minutes. Time up: the most covers in the right place wins
 const COMIC_PASS = 1.6; // seconds per column of covers (two rows) rolling across the screen
 const COMIC_ADJECTIVES = ["Amazing", "Incredible", "Uncanny", "Mighty", "Invincible", "Savage", "Sneaky", "Fearless"];
+const VILLAIN_ADJECTIVES = ["Sinister", "Wicked", "Diabolical", "Dastardly", "Menacing", "Treacherous", "Nefarious", "Vile"];
 const COMIC_PROPS = ["⚡", "🔥", "💎", "🛡️", "☄️", "🐍", "👁️", "🌪️", "🔑", "🏆"];
 const COMIC_COLORS = ["#b91c1c", "#1d4ed8", "#047857", "#7e22ce", "#c2410c", "#0f766e", "#be185d"];
 const COMIC_SFX = ["KAPOW!", "ZAP!", "BOOM!", "WHAM!", "SPLAT!", "CRASH!", "BAM!"];
@@ -304,6 +306,16 @@ const COMIC_QUOTES = [
     "Expect the unexpected!",
     "Not in my alliance!",
     "Pawn? Me?!",
+];
+const VILLAIN_QUOTES = [
+    "Your game ends tonight!",
+    "I've got the votes!",
+    "Bow to the Head of House!",
+    "The backdoor is OPEN!",
+    "Who needs friends?",
+    "Mwahaha! Blindside!",
+    "Your alliance is MINE!",
+    "Nobody is safe!",
 ];
 
 // A comic book cover starring a houseguest, drawn comic style: the hero (their hair and skin, in a costume),
@@ -324,28 +336,16 @@ interface Cover {
     mask: "none" | "eyes" | "cowl";
     emblem: string;
     scene: "burst" | "city" | "space" | "speed";
+    villain: boolean; // their comic makes them the villain: the same on the real cover and its fake
 }
 
-const COMIC_SUITS = ["#dc2626", "#2563eb", "#16a34a", "#9333ea", "#ea580c", "#0891b2", "#111827", "#db2777"];
+const COMIC_SUITS = ["#dc2626", "#2563eb", "#16a34a", "#9333ea", "#ea580c", "#0891b2", "#facc15", "#db2777"];
+const VILLAIN_SUITS = ["#111827", "#4c1d95", "#14532d", "#7f1d1d", "#1e1b4b", "#3f3f46", "#365314", "#701a75"];
 const COMIC_CAPES = ["none", "#991b1b", "#1e3a8a", "#facc15", "#4c1d95", "#f8fafc"];
 const COMIC_MASKS: Cover["mask"][] = ["none", "eyes", "cowl"];
 const COMIC_EMBLEMS = ["★", "⚡", "♥", "◆", "☾", "✚", "BB", "?"];
 const COMIC_SCENES: Cover["scene"][] = ["burst", "city", "space", "speed"];
 const COMIC_PRICES = ["10¢", "12¢", "25¢", "35¢", "50¢", "$1"];
-
-// What a houseguest looks like in the comics: the same on every cover (and as anyone's rival).
-interface ComicLook {
-    skin: string;
-    hair: string;
-    style: number; // 0 short, 1 spiky, 2 long, 3 bun, 4 curly
-}
-const COMIC_SKINS = ["#fde0c5", "#f5c9a0", "#e0a676", "#c68650", "#8d5a3b", "#5c3a24"];
-const COMIC_HAIR = ["#111827", "#4a2c17", "#8b5a2b", "#e5b54a", "#b45309", "#9ca3af", "#7c3aed"];
-
-function comicLook(hgId: number): ComicLook {
-    const rand = seededRand(hgId * 7919 + 17);
-    return { skin: pick(rand, COMIC_SKINS), hair: pick(rand, COMIC_HAIR), style: randInt(rand, 0, 4) };
-}
 
 const INK = "#111";
 
@@ -406,64 +406,12 @@ function ComicScene(props: { scene: Cover["scene"] }) {
     }
 }
 
-// A head: the hair, the face, and the mask (if any). Heroes look determined; rivals scowl.
-function ComicHead(props: { look: ComicLook; mask: Cover["mask"]; suit: string; villain?: boolean }) {
-    const { look, mask, suit } = props;
-    const hair = { fill: look.hair, stroke: INK, strokeWidth: 1.4 };
-    const cowl = mask === "cowl";
-    return (
-        <g>
-            {look.style === 2 && !cowl && <path d="M36 50 Q33 76 40 77 L60 77 Q67 76 64 50 Z" {...hair} />}
-            <ellipse cx="50" cy="52" rx="13" ry="15" fill={look.skin} stroke={INK} strokeWidth="1.5" />
-            {cowl ? (
-                <path d="M36.5 56 Q35 36 50 36 Q65 36 63.5 56 Q57 51 50 52 Q43 51 36.5 56 Z M38 42 L36 31 L43 38 Z M62 42 L64 31 L57 38 Z" fill={suit} stroke={INK} strokeWidth="1.4" />
-            ) : look.style === 1 ? (
-                <path d="M37 50 L35 40 L41 42 L41 33 L47 39 L50 30 L53 39 L59 33 L59 42 L65 40 L63 50 Q50 41 37 50 Z" {...hair} />
-            ) : look.style === 4 ? (
-                <g {...hair}>
-                    {[[39, 45], [42, 39], [50, 36], [58, 39], [61, 45]].map(([x, y], i) => (
-                        <circle key={i} cx={x} cy={y} r="6" />
-                    ))}
-                </g>
-            ) : (
-                <g>
-                    {look.style === 3 && <circle cx="50" cy="33" r="6" {...hair} />}
-                    <path d="M37 51 Q36 36 50 36 Q64 36 63 51 Q58 42 50 43 Q42 42 37 51 Z" {...hair} />
-                </g>
-            )}
-            {mask === "eyes" && <path d="M35 49 Q50 44 65 49 L65 56 Q50 52 35 56 Z" fill={INK} />}
-            {mask === "none" ? (
-                <g fill={INK}>
-                    <circle cx="45" cy="53" r="1.8" />
-                    <circle cx="55" cy="53" r="1.8" />
-                </g>
-            ) : (
-                <g fill="#fff" stroke={INK} strokeWidth="0.6">
-                    <ellipse cx="45" cy="53" rx="3" ry="1.8" />
-                    <ellipse cx="55" cy="53" rx="3" ry="1.8" />
-                </g>
-            )}
-            <g stroke={INK} strokeWidth="1.6" strokeLinecap="round" fill="none">
-                {props.villain ? (
-                    <>
-                        <path d="M40 46 L48 50" />
-                        <path d="M60 46 L52 50" />
-                        <path d="M45 62 Q50 58 55 62" />
-                    </>
-                ) : (
-                    <>
-                        <path d="M41 48 L48 49" />
-                        <path d="M52 49 L59 48" />
-                        <path d="M45 59 Q50 63 55 59" />
-                    </>
-                )}
-            </g>
-        </g>
-    );
-}
-
-function ComicHero(props: { cover: Cover; look: ComicLook }) {
-    const { cover, look } = props;
+// The cover star: their own cartoon face (masked, if the cover says so), in a costume. Villains scowl.
+function ComicHero(props: { cover: Cover; hg: Houseguest }) {
+    const { cover } = props;
+    const look = lookOf(props.hg);
+    const skin = skinColor(look);
+    const face = cartoonURL(look, { headOnly: true, mask: cover.mask, maskColor: cover.suit, villain: cover.villain });
     const limb = (d: string) => (
         <>
             <path d={d} stroke={INK} strokeWidth="8.5" strokeLinecap="round" fill="none" />
@@ -476,15 +424,15 @@ function ComicHero(props: { cover: Cover; look: ComicLook }) {
             <g transform={cover.flipped ? "translate(100 0) scale(-1 1)" : undefined}>
                 {cover.cape !== "none" && <path d="M34 76 Q50 68 66 76 L84 110 L16 110 Z" fill={cover.cape} stroke={INK} strokeWidth="1.5" />}
                 {limb("M63 80 L79 60")}
-                <circle cx="80" cy="57" r="4.5" fill={look.skin} stroke={INK} strokeWidth="1.5" />
+                <circle cx="80" cy="57" r="4.5" fill={skin} stroke={INK} strokeWidth="1.5" />
                 {limb("M37 81 L31 101")}
                 <path d="M34 110 L36 81 Q50 71 64 81 L66 110 Z" fill={cover.suit} stroke={INK} strokeWidth="1.5" />
                 <circle cx="50" cy="93" r="8" fill="#fde047" stroke={INK} strokeWidth="1.5" />
                 <text x="50" y={cover.emblem === "BB" ? 95.5 : 96.5} textAnchor="middle" fontSize={cover.emblem === "BB" ? 7 : 10} fontWeight="900" fill={INK}>
                     {cover.emblem}
                 </text>
-                <rect x="46" y="64" width="8" height="10" fill={look.skin} stroke={INK} strokeWidth="1.2" />
-                <ComicHead look={look} mask={cover.mask} suit={cover.suit} />
+                <rect x="46" y="64" width="8" height="10" fill={skin} stroke={INK} strokeWidth="1.2" />
+                <image href={face} x="31.9" y="25.4" width="36.2" height="46.3" />
             </g>
         </svg>
     );
@@ -505,14 +453,14 @@ function forgery(rand: Rand, real: Cover, rivals: number[]): Cover {
         ...(rivals.length > 1 ? ["rivalId"] : []),
     ];
     const detail = pick(rand, details);
-    if (detail === "adjective") return { ...real, adjective: otherThan(rand, COMIC_ADJECTIVES, real.adjective) };
+    if (detail === "adjective") return { ...real, adjective: otherThan(rand, real.villain ? VILLAIN_ADJECTIVES : COMIC_ADJECTIVES, real.adjective) };
     if (detail === "prop") return { ...real, prop: otherThan(rand, COMIC_PROPS, real.prop) };
     if (detail === "color") return { ...real, color: otherThan(rand, COMIC_COLORS, real.color) };
     if (detail === "price") return { ...real, price: otherThan(rand, COMIC_PRICES, real.price) };
     if (detail === "sfx") return { ...real, sfx: otherThan(rand, COMIC_SFX, real.sfx) };
-    if (detail === "quote") return { ...real, quote: otherThan(rand, COMIC_QUOTES, real.quote) };
+    if (detail === "quote") return { ...real, quote: otherThan(rand, real.villain ? VILLAIN_QUOTES : COMIC_QUOTES, real.quote) };
     if (detail === "flipped") return { ...real, flipped: !real.flipped };
-    if (detail === "suit") return { ...real, suit: otherThan(rand, COMIC_SUITS, real.suit) };
+    if (detail === "suit") return { ...real, suit: otherThan(rand, real.villain ? VILLAIN_SUITS : COMIC_SUITS, real.suit) };
     if (detail === "cape") return { ...real, cape: otherThan(rand, COMIC_CAPES, real.cape) };
     if (detail === "mask") return { ...real, mask: otherThan(rand, COMIC_MASKS, real.mask) };
     if (detail === "emblem") return { ...real, emblem: otherThan(rand, COMIC_EMBLEMS, real.emblem) };
@@ -531,21 +479,19 @@ function ComicCover(props: { hg: Houseguest; rival?: Houseguest; cover: Cover; o
                 <span className="bbb-comic-brand">BB COMICS</span>
                 <span>{cover.price}</span>
             </div>
-            <div className="bbb-comic-title">
+            <div className={"bbb-comic-title" + (cover.villain ? " is-villain" : "")}>
                 The {cover.adjective}
                 <b>{hg.name}</b>
             </div>
             <div className="bbb-comic-panel">
-                <ComicHero cover={cover} look={comicLook(hg.id)} />
+                <ComicHero cover={cover} hg={hg} />
                 <div className="bbb-comic-bubble">{cover.quote}</div>
                 <div className="bbb-comic-sfx">{cover.sfx}</div>
                 <div className="bbb-comic-prop">{cover.prop}</div>
                 {rival && rival.id !== hg.id && (
                     <div className="bbb-comic-rival">
-                        <svg viewBox="34 34 32 34" aria-hidden="true">
-                            <rect x="34" y="34" width="32" height="34" fill="#e5e7eb" />
-                            <ComicHead look={comicLook(rival.id)} mask="none" suit="#111" villain={true} />
-                        </svg>
+                        {/* the rival is the villain of a hero's comic, and the hero of a villain's */}
+                        <img src={cartoonURL(lookOf(rival), { headOnly: true, villain: !cover.villain })} alt="" />
                         <span>VS {rival.name}</span>
                     </div>
                 )}
@@ -567,17 +513,20 @@ export function comicPile(gs: GameState, _history: WeekRecord[], rand: Rand): Co
     const covers: ComicPile["covers"] = [];
     cast.forEach((hg, of) => {
         const rivals = gs.houseguests.filter((h) => h.id !== hg.id).map((h) => h.id);
+        // about a third of the house are the villains of their own comics
+        const villain = rand() < 0.35;
         const real: Cover = {
-            adjective: pick(rand, COMIC_ADJECTIVES),
+            villain,
+            adjective: pick(rand, villain ? VILLAIN_ADJECTIVES : COMIC_ADJECTIVES),
             prop: pick(rand, COMIC_PROPS),
             color: pick(rand, COMIC_COLORS),
             issue: randInt(rand, 3, 98),
             sfx: pick(rand, COMIC_SFX),
-            quote: pick(rand, COMIC_QUOTES),
+            quote: pick(rand, villain ? VILLAIN_QUOTES : COMIC_QUOTES),
             rivalId: rivals.length > 0 ? pick(rand, rivals) : hg.id,
             flipped: rand() < 0.5,
             price: pick(rand, COMIC_PRICES),
-            suit: pick(rand, COMIC_SUITS),
+            suit: pick(rand, villain ? VILLAIN_SUITS : COMIC_SUITS),
             cape: pick(rand, COMIC_CAPES),
             mask: pick(rand, COMIC_MASKS),
             emblem: pick(rand, COMIC_EMBLEMS),

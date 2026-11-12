@@ -193,7 +193,7 @@ export class CastingScreen extends React.Component<CastingScreenProps, CastingSc
                         <br />
                         <br />
                         <HelpLink
-                            href="https://github.com/spaulmark/bb-bots/blob/master/README.md#choose-a-cast-of-characters"
+                            href="https://github.com/spaulmark/bb-bots/blob/master/README.md#upload-your-own-characters"
                             target="_blank"
                             rel="noopener noreferrer"
                         >
