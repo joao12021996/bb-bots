@@ -2983,3 +2983,175 @@ body.bbb-reduce-motion *::after {
 .bbb-select:disabled {
     opacity: 0.5;
 }
+
+/* ==========================================================================
+   Polish pass: one set of tokens for status colors, radii and shadows; dark form controls that match the
+   cards; consistent button variants; tidier text and numbers. Later rules here win over earlier ones.
+   ========================================================================== */
+:root {
+    color-scheme: dark; /* native controls (dropdowns, scrollbars, date pickers) in dark */
+    --bbb-success: #34d399;
+    --bbb-danger: #fb7185;
+    --bbb-info: #38bdf8;
+    --bbb-radius-sm: 10px;
+    --bbb-radius-md: 12px;
+    --bbb-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    --bbb-ring: 0 0 0 3px rgba(139, 92, 246, 0.45);
+}
+
+::selection {
+    background: rgba(139, 92, 246, 0.55);
+    color: #fff;
+}
+
+/* thin, quiet scrollbars */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(196, 181, 253, 0.35) transparent;
+}
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(196, 181, 253, 0.3);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(196, 181, 253, 0.5);
+}
+
+/* text: balanced headings, no lonely last words in paragraphs */
+h1,
+h2,
+h3,
+.title {
+    text-wrap: balance;
+}
+p,
+li {
+    text-wrap: pretty;
+}
+
+/* checkboxes, radios and sliders in the accent color */
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
+    accent-color: var(--bbb-accent);
+}
+
+/* form controls: dark, like the cards they sit on */
+.input,
+.textarea,
+.select select,
+input[type="text"],
+input[type="number"],
+input[type="search"],
+input[type="url"],
+textarea {
+    background-color: rgba(255, 255, 255, 0.06);
+    color: var(--bbb-text);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: var(--bbb-radius-sm);
+    box-shadow: none;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.input::placeholder,
+.textarea::placeholder,
+input::placeholder,
+textarea::placeholder {
+    color: rgba(169, 163, 199, 0.75);
+}
+.input:hover,
+.textarea:hover,
+input[type="text"]:hover,
+textarea:hover {
+    border-color: rgba(196, 181, 253, 0.35);
+}
+.input:focus,
+.textarea:focus,
+.select select:focus,
+input[type="text"]:focus,
+input[type="number"]:focus,
+textarea:focus {
+    border-color: var(--bbb-accent);
+    box-shadow: var(--bbb-ring);
+    outline: none;
+}
+.input[readonly] {
+    background-color: rgba(255, 255, 255, 0.03);
+    color: var(--bbb-muted);
+}
+.select select option {
+    background: var(--bbb-card-2);
+    color: var(--bbb-text);
+}
+
+/* buttons */
+.button {
+    border-radius: var(--bbb-radius-md) !important;
+    min-height: 2.25em;
+}
+.button[disabled] {
+    cursor: not-allowed;
+}
+.button.is-small {
+    border-radius: var(--bbb-radius-sm) !important;
+}
+/* soft variants: a tint of the color, not the full gradient */
+.button.is-info.is-light {
+    background: rgba(56, 189, 248, 0.14) !important;
+    color: #bae6fd !important;
+    border: 1px solid rgba(56, 189, 248, 0.35) !important;
+    box-shadow: none;
+}
+.button.is-link.is-light {
+    background: rgba(139, 92, 246, 0.16) !important;
+    color: #ddd6fe !important;
+    border: 1px solid rgba(139, 92, 246, 0.4) !important;
+}
+.button.is-text {
+    background: transparent !important;
+    color: var(--bbb-muted) !important;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    border: none !important;
+    box-shadow: none !important;
+}
+.button.is-text:hover:not([disabled]) {
+    color: var(--bbb-text) !important;
+    transform: none;
+}
+/* bigger tap targets on phones */
+@media (max-width: 600px) {
+    .button:not(.is-small) {
+        min-height: 2.75em;
+    }
+}
+
+/* focus: the gold ring everywhere, including Bulma's own focus styles */
+.button:focus:not(:focus-visible) {
+    box-shadow: none;
+}
+.button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+    outline: 3px solid var(--bbb-gold) !important;
+    outline-offset: 2px;
+}
+
+/* numbers that change (scores, timers, counts) don't jiggle */
+.bbb-score,
+.bbb-timer,
+.bbb-setup-summary,
+.bbb-stepper,
+table td {
+    font-variant-numeric: tabular-nums;
+}
+
+/* cards: one shadow */
+.box {
+    box-shadow: var(--bbb-shadow) !important;
+}
