@@ -135,3 +135,10 @@ export function useElapsed(running: boolean = true): number {
     }, [running]);
     return (now - start) / 1000;
 }
+
+// Online, a move made on a guest's device takes effect once the host has put it in order, so what the
+// controller gives back can be a promise: runs `then` with the result either way.
+export function whenDone<T>(value: T | Promise<T>, then: (result: T) => void) {
+    if (value && typeof (value as any).then === "function") (value as Promise<T>).then(then);
+    else then(value as T);
+}

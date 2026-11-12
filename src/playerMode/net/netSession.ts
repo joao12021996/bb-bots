@@ -14,9 +14,12 @@ import { canJoin, CastCard, LobbySeat, LobbySetup, normalizeSetup } from "./lobb
 // of the controller methods the screens call directly. Prompts themselves hold closures and JSX and never
 // leave the device.
 //
-// Only one device may act at a time: the one whose player the current prompt belongs to, or the host for
-// screens everyone watches (scenes, results). Inputs carry a sequence number, so they're applied in order
-// even if they arrive out of order.
+// Several devices can act at once: besides the screen everyone shares, the controller can give players their own
+// screens at the same time (votes, comps...). The host puts every input in one order: other devices propose
+// their inputs to the host, which checks them, numbers them and sends them to everyone, the proposer included.
+// So every device applies the same inputs in the same order, even when players act at the same moment. A device
+// may act on the shared screen when it belongs to its player (or, for screens everyone watches, when it's the
+// host), and on its own player's screen.
 //
 // The host is the source of truth. It sends a hash of the season after inputs; a device that disagrees asks
 // for a snapshot (the last save plus the inputs since) and rebuilds from it, the same way a reload resumes.
@@ -49,7 +52,18 @@ export interface Input {
     name: string;
     args: any[];
     promptKind?: string;
+    // the player acting (null: a screen everyone watches): who may send it, and who a method acts for
+    owner: number | null;
+    // prompt inputs: which screen, the shared one (null) or a player's own; and when it was shown (see promptAt)
+    slot?: number | null;
+    at?: number;
+    // set by the host: the device that proposed it, and its number for the proposal
+    by?: string;
+    pid?: number;
 }
+
+// what a device sends the host
+type Proposal = Omit<Input, "seq" | "by">;
 
 export interface Slot {
     id: number;
@@ -88,6 +102,20 @@ interface Snapshot {
     log: Input[];
     seq: number;
     hard?: boolean;
+    stamps?: Stamps;
+}
+
+// When the screens up were shown (see Stamp), for a device catching up from a snapshot to take on.
+interface Stamps {
+    shared: number;
+    personal: { [playerId: number]: number };
+}
+
+// When a screen was shown: the number of the input that showed it, the same on every device, so the host can
+// tell an input meant for an earlier screen of the same kind. Its buttons hold on to it, so a device catching
+// up can take on the host's numbers for the screens it has up, while older screens stay old.
+interface Stamp {
+    at: number;
 }
 
 // ---------- hashing ----------
@@ -183,8 +211,18 @@ export class NetSession {
     private wantPlayerId: number | null = null; // a returning player claims their old seat automatically
     private fallbackJson: string | null = null; // a returning device's own copy of the season
 
+    // the screens being shown, unwrapped: the one everyone shares, and players' own (by player id)
     private rawPrompt: Prompt | null = null;
-    private promptSeq = 0;
+    private rawPersonal: { [playerId: number]: Prompt } = {};
+    // when each was shown: the number of the input that showed it. The same on every device, so the host can
+    // tell an input meant for an earlier screen of the same kind
+    private sharedStamp: Stamp = { at: 0 };
+    private personalStamp: { [playerId: number]: Stamp } = {};
+    // which player's own screen this device is showing (methods called from it act for that player)
+    private focusOwner: number | null = null;
+    // this device's inputs waiting for the host to send them back
+    private pidSeq = 0;
+    private proposals: { [pid: number]: { settle: (result: any) => void } } = {};
     private rawMethods: { [name: string]: (...args: any[]) => any } = {};
     private applied = 0; // inputs applied so far
     private buffer: { [seq: number]: Input } = {};
@@ -259,12 +297,8 @@ export class NetSession {
     }
 
     // Whether this device makes the decision on a prompt belonging to `actor` (null: a screen everyone watches).
-    // The host also plays for any player whose device isn't connected, so the season never gets stuck.
     public mayActFor(actor: number | null): boolean {
-        if (!this.started) return false;
-        if (actor === null) return this.isHost;
-        if (this.claims[actor] === this.room.selfId) return true;
-        return this.isHost && !this.connected(this.claims[actor]);
+        return this.allowed(actor, this.room.selfId);
     }
 
     public isConnected(playerId: number): boolean {
@@ -420,6 +454,7 @@ export class NetSession {
             // the host left: the device with the smallest id takes over
             const next = [this.room.selfId, ...this.room.peers()].filter((id) => id !== peerId).sort()[0];
             this.hostId = next;
+            this.settleAllProposals();
             this.notice = "The host left.";
             if (next === this.room.selfId) {
                 this.isHost = true;
@@ -478,7 +513,11 @@ export class NetSession {
                 }
                 return;
             case "input":
-                return this.receiveInput(data as Input);
+                return this.receiveInput(data as Input, from);
+            case "propose":
+                return this.receiveProposal(data as Input, from);
+            case "rejected":
+                return this.settleProposal(data && data.pid);
             case "hash":
                 if (!this.isHost && from === this.hostId) {
                     this.pendingHash = data;
@@ -492,7 +531,7 @@ export class NetSession {
             case "snap":
                 if (from === this.hostId) {
                     const snap = data as Snapshot;
-                    this.loadSnapshot(snap.json, snap.log.map(fromWireInput), snap.seq);
+                    this.loadSnapshot(snap.json, snap.log.map(fromWireInput), snap.seq, snap.stamps);
                 }
                 return;
         }
@@ -531,12 +570,19 @@ export class NetSession {
         this.emit();
     }
 
+    private stamps(): Stamps {
+        const personal: { [playerId: number]: number } = {};
+        Object.keys(this.personalStamp).forEach((id) => (personal[Number(id)] = this.personalStamp[Number(id)].at));
+        return { shared: this.sharedStamp.at, personal };
+    }
+
     private currentSnapshot(): Snapshot {
-        return { json: this.lastSavedJson, log: this.log.map(toWireInput), seq: this.applied, hard: true };
+        return { json: this.lastSavedJson, log: this.log.map(toWireInput), seq: this.applied, hard: true, stamps: this.stamps() };
     }
 
     private sendSnapshot(peerId: string) {
-        this.room.send("snap", { json: this.lastSavedJson, log: this.log.map(toWireInput), seq: this.applied } as Snapshot, peerId);
+        const snap: Snapshot = { json: this.lastSavedJson, log: this.log.map(toWireInput), seq: this.applied, stamps: this.stamps() };
+        this.room.send("snap", snap, peerId);
     }
 
     // Everyone (the host too) rebuilds from the host's last save, so every device takes exactly the same path.
@@ -554,7 +600,7 @@ export class NetSession {
         const snap = this.currentSnapshot();
         this.lastHard = snap;
         this.room.send("snap", snap);
-        this.loadSnapshot(snap.json, log, snap.seq);
+        this.loadSnapshot(snap.json, log, snap.seq, snap.stamps);
     }
 
     // This device disagrees with the host: fetch the season again. Twice in a row, and everyone reloads.
@@ -569,7 +615,7 @@ export class NetSession {
 
     // ---------- the season ----------
 
-    private loadSnapshot(json: string, log: Input[], seq: number) {
+    private loadSnapshot(json: string, log: Input[], seq: number, stamps?: Stamps) {
         const save = migrateSave(deserialize<any>(json));
         if (!save) return;
         if (this.controller) this.controller.net = null;
@@ -581,6 +627,8 @@ export class NetSession {
         this.applied = seq - log.length;
         this.pendingHash = null;
         this.rawPrompt = null;
+        this.rawPersonal = {};
+        this.personalStamp = {};
         Object.keys(this.buffer).forEach((s) => {
             if (Number(s) <= seq) delete this.buffer[Number(s)];
         });
@@ -594,6 +642,14 @@ export class NetSession {
             this.depth--;
         }
         log.forEach((input) => this.exec(input));
+        // the screens up now are the host's: take on when it showed them. Resuming shows them again, later
+        if (stamps && this.applied === seq) {
+            if (this.rawPrompt) this.sharedStamp.at = stamps.shared;
+            Object.keys(this.personalStamp).forEach((id) => {
+                const at = stamps.personal[Number(id)];
+                if (at !== undefined) this.personalStamp[Number(id)].at = at;
+            });
+        }
         this.drain();
         this.emit();
     }
@@ -601,7 +657,11 @@ export class NetSession {
     private attach(controller: PlayerModeController) {
         this.controller = controller;
         controller.net = {
-            wrapPrompt: (p) => this.wrapPrompt(p),
+            wrapPrompt: (p, owner) => this.wrapPrompt(p, owner),
+            dropPersonal: (owner) => {
+                delete this.rawPersonal[owner];
+                delete this.personalStamp[owner];
+            },
             saved: (state) => this.saved(state),
             ended: () => clearOnlineSave(),
         };
@@ -617,13 +677,21 @@ export class NetSession {
         });
     }
 
-    private wrapPrompt(prompt: Prompt): Prompt {
-        this.rawPrompt = prompt;
-        const seq = ++this.promptSeq;
+    // owner: a player's own screen (undefined: the screen everyone shares)
+    private wrapPrompt(prompt: Prompt, owner?: number): Prompt {
+        const slot = owner === undefined ? null : owner;
+        const stamp: Stamp = { at: this.applied };
+        if (slot === null) {
+            this.rawPrompt = prompt;
+            this.sharedStamp = stamp;
+        } else {
+            this.rawPersonal[slot] = prompt;
+            this.personalStamp[slot] = stamp;
+        }
         const copy: any = { ...prompt };
         Object.keys(prompt).forEach((key) => {
             const value = (prompt as any)[key];
-            if (typeof value === "function") copy[key] = this.wrap("prompt", key, value, prompt.kind, seq);
+            if (typeof value === "function") copy[key] = this.wrap("prompt", key, value, prompt.kind, slot, stamp);
         });
         return copy;
     }
@@ -636,42 +704,131 @@ export class NetSession {
         writeOnlineSave({ code: this.code, playerId: this.localPlayerId, json });
     }
 
-    private mayAct(): boolean {
-        return !!this.rawPrompt && this.mayActFor(actorOf(this.rawPrompt));
+    // The screen showing a player's own screen says so: methods called from it act for that player.
+    public focus(owner: number | null) {
+        this.focusOwner = owner;
     }
 
-    // A player input made on this device: sent to everyone, then run here.
-    private wrap(kind: "prompt" | "method", name: string, raw: (...args: any[]) => any, promptKind?: string, promptSeq?: number) {
+    // Whether the device `peerId` may act for `owner` (null: a screen everyone watches, the host's job).
+    // The host also plays for any player whose device isn't connected, so the season never gets stuck.
+    private allowed(owner: number | null, peerId: string): boolean {
+        if (!this.started) return false;
+        const hostPeer = this.isHost ? this.room.selfId : this.hostId;
+        if (owner === null) return peerId === hostPeer;
+        if (this.claims[owner] === peerId) return true;
+        return peerId === hostPeer && !this.connected(this.claims[owner]);
+    }
+
+    // Whether an input can be applied now: sent by a device allowed to, for a screen that's still showing.
+    private valid(p: Proposal, from: string): boolean {
+        if (!this.allowed(p.owner, from)) return false;
+        if (p.kind === "method") {
+            if (!this.rawMethods[p.name]) return false;
+            // a method acts for a player who has a screen up: the shared one, or their own
+            const shared = this.rawPrompt ? actorOf(this.rawPrompt) : null;
+            return p.owner === shared || (p.owner !== null && !!this.rawPersonal[p.owner]);
+        }
+        const slot = p.slot === undefined ? null : p.slot;
+        const prompt: any = slot === null ? this.rawPrompt : this.rawPersonal[slot];
+        const stamp = slot === null ? this.sharedStamp : this.personalStamp[slot];
+        const at = stamp ? stamp.at : -1;
+        if (!prompt || prompt.kind !== p.promptKind || at !== p.at || typeof prompt[p.name] !== "function") return false;
+        return slot === null ? actorOf(prompt) === p.owner : slot === p.owner;
+    }
+
+    // A player input made on this device. The host applies it and sends it to everyone; any other device
+    // proposes it to the host and applies it when the host sends it back. Returns the result when it's
+    // already been applied, otherwise a promise of it.
+    private wrap(kind: "prompt" | "method", name: string, raw: (...args: any[]) => any, promptKind?: string, slot?: number | null, stamp?: Stamp) {
         return (...args: any[]) => {
             if (this.depth > 0) return raw(...args); // the controller calling itself
-            if (promptSeq !== undefined && promptSeq !== this.promptSeq) return undefined; // an old screen
-            if (!this.mayAct()) return undefined;
+            let owner: number | null;
+            if (kind === "prompt") {
+                const prompt = slot === null || slot === undefined ? this.rawPrompt : this.rawPersonal[slot];
+                owner = slot === null || slot === undefined ? (prompt ? actorOf(prompt) : null) : slot;
+            } else {
+                const focused = this.focusOwner !== null && this.rawPersonal[this.focusOwner] ? this.focusOwner : null;
+                owner = focused !== null ? focused : this.rawPrompt ? actorOf(this.rawPrompt) : null;
+            }
+            const proposal: Proposal = { kind, name, args: wireCopy(args), promptKind, owner, slot, at: stamp ? stamp.at : undefined };
+            if (!this.valid(proposal, this.room.selfId)) return undefined; // not ours, or an old screen
             if (name === "onReport") {
-                // a comp's score so far: only needed in case the player drops out, so not too often
+                // a comp's score so far: not too often
                 const now = Date.now();
                 if (now - this.lastReport < 1500) return undefined;
                 this.lastReport = now;
             }
-            const input: Input = { seq: this.applied + 1, kind, name, args: wireCopy(args), promptKind };
-            this.room.send("input", toWireInput(input));
-            return this.exec(input);
+            if (this.isHost) return this.sequence(proposal, this.room.selfId);
+            if (!this.hostId) return undefined;
+            const pid = ++this.pidSeq;
+            let done = false;
+            let result: any;
+            let settle: (value: any) => void = (value) => {
+                done = true;
+                result = value;
+            };
+            this.proposals[pid] = { settle: (value) => settle(value) };
+            this.room.send("propose", toWireInput({ ...proposal, pid, seq: 0 }), this.hostId);
+            // the host answered straight away (it does in tests): no need for a promise
+            if (done) return result;
+            return new Promise((resolve) => {
+                settle = resolve;
+            });
         };
+    }
+
+    // The host: numbers an input, sends it to everyone and applies it.
+    private sequence(p: Proposal, from: string): any {
+        const input: Input = { ...p, seq: this.applied + 1, by: from };
+        this.room.send("input", toWireInput(input));
+        return this.exec(input);
+    }
+
+    // The host: another device's input.
+    private receiveProposal(wire: Input, from: string) {
+        if (!this.isHost || !this.controller) return;
+        const { seq, ...p } = fromWireInput(wire);
+        if (!this.valid(p, from)) {
+            // too late (another input changed the screen first) or not theirs: tell them, so they stop waiting
+            this.room.send("rejected", { pid: p.pid }, from);
+            return;
+        }
+        this.sequence(p, from);
+    }
+
+    // A proposal this device made has been applied (with its result) or turned down (nothing).
+    private settleProposal(pid: number | undefined, result?: any) {
+        if (pid === undefined) return;
+        const waiting = this.proposals[pid];
+        if (!waiting) return;
+        delete this.proposals[pid];
+        waiting.settle(result);
+    }
+
+    // The host changed: proposals sent to the old one will never come back.
+    private settleAllProposals() {
+        Object.keys(this.proposals).forEach((pid) => this.settleProposal(Number(pid)));
     }
 
     private exec(input: Input): any {
         let result: any;
         let lost = false;
         this.savedDuringInput = false;
+        // numbered before it runs, so screens it shows are stamped with this input (see Stamp)
+        this.applied = Math.max(this.applied, input.seq);
         this.depth++;
         // the controller reseeds before its decisions, but not quite everywhere: start every input from the same
         // random state on every device, whatever else used the generator in between
         seedRng(`net:${input.seq}`);
+        const controller = this.controller!;
         try {
             if (input.kind === "method") {
                 const method = this.rawMethods[input.name];
+                controller.actingFor = input.owner;
                 if (method) result = method(...input.args);
             } else {
-                const prompt: any = this.rawPrompt;
+                const slot = input.slot === undefined ? null : input.slot;
+                const prompt: any = slot === null ? this.rawPrompt : this.rawPersonal[slot];
                 if (!prompt || prompt.kind !== input.promptKind || typeof prompt[input.name] !== "function") {
                     console.warn(`Online: got ${input.promptKind}.${input.name} but showing ${prompt ? prompt.kind : "nothing"}`);
                     lost = true;
@@ -682,17 +839,19 @@ export class NetSession {
         } catch (e) {
             console.error("Online: an input failed", e);
         } finally {
+            controller.actingFor = null;
             this.depth--;
         }
-        this.applied = Math.max(this.applied, input.seq);
         if (!this.savedDuringInput) this.log.push(input);
+        if (input.by === this.room.selfId) this.settleProposal(input.pid, result);
         if (lost) this.outOfSync();
         else if (this.isHost) this.scheduleHash();
         else this.checkHash();
         return result;
     }
 
-    private receiveInput(wire: Input) {
+    private receiveInput(wire: Input, from: string) {
+        if (from !== this.hostId) return; // only the host numbers inputs
         const input = fromWireInput(wire);
         if (input.seq <= this.applied) return;
         this.buffer[input.seq] = input;
@@ -723,11 +882,16 @@ export class NetSession {
         this.room.send("hash", { seq: this.applied, hash: this.signature() });
     }
 
-    // The season's hash, and which screen it's on: a device resumed from a save can have the same season but
+    // The season's hash, and which screens are up: a device resumed from a save can have the same season but
     // be a screen ahead (a reload skips the scene the host is still looking at).
     private signature(): string {
         const p = this.rawPrompt;
-        return `${stateHash(this.controller!.state)}|${p ? `${p.kind}:${actorOf(p)}` : "-"}`;
+        const own = Object.keys(this.rawPersonal)
+            .map(Number)
+            .sort((a, b) => a - b)
+            .map((id) => `${id}:${this.rawPersonal[id].kind}`)
+            .join(",");
+        return `${stateHash(this.controller!.state)}|${p ? `${p.kind}:${actorOf(p)}` : "-"}|${own}`;
     }
 
     private checkHash() {

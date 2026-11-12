@@ -1,5 +1,5 @@
 import React from "react";
-import { BehaviorSubject } from "rxjs";
+import { BehaviorSubject, Subject } from "rxjs";
 import {
     Episode,
     EpisodeType,
@@ -423,7 +423,9 @@ export type Prompt =
     | { kind: "ownMoves"; actorId: number; moves: Move[]; onDone: (ids: string[]) => void }
     | { kind: "juryQuestion"; actorId: number; jurorId: number; question: JuryQuestion; onAnswer: (a: Answer) => void }
     | { kind: "juryReveal"; votes: { jurorId: number; finalistId: number }[]; onDone: () => void }
-    | { kind: "gameOver"; content: JSX.Element };
+    | { kind: "gameOver"; content: JSX.Element }
+    // online: players are deciding on their own screens at the same time (see gather)
+    | { kind: "waiting"; title: string; waitingOn: number[] };
 
 // Upgrades older saves to the current format.
 export function migrateSave(save: any): PlayerSave | null {
@@ -500,7 +502,9 @@ export function actorOf(prompt: Prompt): number | null {
 // Online play (see net/netSession.ts): every device runs its own controller, and these hooks let the session
 // send each player's inputs to the other devices and keep its own copy of the save.
 export interface NetHooks {
-    wrapPrompt(prompt: Prompt): Prompt;
+    // owner: a player's own screen (left out: the screen everyone shares)
+    wrapPrompt(prompt: Prompt, owner?: number): Prompt;
+    dropPersonal(owner: number): void;
     saved(state: PlayerSave): void;
     ended(): void;
 }
@@ -508,7 +512,13 @@ export interface NetHooks {
 export class PlayerModeController {
     public state: PlayerSave;
     public readonly prompt$ = new BehaviorSubject<Prompt | null>(null);
+    // online: players' own screens, shown at the same time as the shared one (see gather)
+    public readonly personal$ = new BehaviorSubject<{ [playerId: number]: Prompt }>({});
+    // the season changed (saved): screens showing live information re-render
+    public readonly changed$ = new Subject<void>();
     public net: NetHooks | null = null;
+    // online: the player an input from another device acts for, while it runs
+    public actingFor: number | null = null;
     private weekScenes: Scene[] = [];
 
     constructor(save: PlayerSave) {
@@ -639,6 +649,7 @@ export class PlayerModeController {
     private save() {
         if (this.net) this.net.saved(this.state);
         else writeSave(this.state);
+        this.changed$.next();
     }
 
     // ---------- comp progress (see WeekProgress.locks) ----------
@@ -687,6 +698,74 @@ export class PlayerModeController {
     private privately(playerId: number, reason: string, prompt: () => void) {
         if (!this.multiplayer || this.net) return prompt();
         this.show({ kind: "handoff", playerId, reason, next: prompt });
+    }
+
+    // Online: a screen of a player's own, up at the same time as the shared one and other players' own screens.
+    private showPersonal(playerId: number, prompt: Prompt) {
+        const shown = this.net ? this.net.wrapPrompt(prompt, playerId) : prompt;
+        this.personal$.next({ ...this.personal$.value, [playerId]: shown });
+    }
+
+    private clearPersonal(playerId: number) {
+        if (!(playerId in this.personal$.value)) return;
+        if (this.net) this.net.dropPersonal(playerId);
+        const rest = { ...this.personal$.value };
+        delete rest[playerId];
+        this.personal$.next(rest);
+    }
+
+    // Several players decide something on their own. Online, they all do it at the same time, each on their own
+    // screen, while the shared screen says who's still deciding. On one device, they take turns (passing it).
+    // Each answer is saved as it comes in (as `${key}:${id}`), so after a reload only those who haven't answered
+    // are asked. `done` gets everyone's answers once they're all in, whatever order they came in.
+    private gather<T>(
+        key: string,
+        players: Houseguest[],
+        waitingTitle: string,
+        reason: (player: Houseguest) => string,
+        ask: (player: Houseguest, moreToPlay: boolean, answer: (value: T) => void) => Prompt,
+        done: (answers: { [playerId: number]: T }) => void
+    ) {
+        const keyOf = (id: number) => `${key}:${id}`;
+        const finish = () => {
+            const answers: { [playerId: number]: T } = {};
+            players.forEach((p) => (answers[p.id] = this.locked<T>(keyOf(p.id)) as T));
+            done(answers);
+        };
+        const pending = players.filter((p) => this.locked(keyOf(p.id)) === undefined);
+        if (pending.length === 0) return finish();
+        if (!this.net) {
+            const turn = (i: number): void => {
+                if (i >= pending.length) return finish();
+                const player = pending[i];
+                this.privately(player.id, reason(player), () =>
+                    this.show(
+                        ask(player, i + 1 < pending.length, (value) => {
+                            this.lock(keyOf(player.id), value);
+                            turn(i + 1);
+                        })
+                    )
+                );
+            };
+            return turn(0);
+        }
+        const left = pending.map((p) => p.id);
+        const showWaiting = () => this.show({ kind: "waiting", title: waitingTitle, waitingOn: [...left] });
+        showWaiting();
+        pending.forEach((player) =>
+            this.showPersonal(
+                player.id,
+                ask(player, false, (value) => {
+                    const at = left.indexOf(player.id);
+                    if (at < 0) return; // answered already
+                    left.splice(at, 1);
+                    this.clearPersonal(player.id);
+                    this.lock(keyOf(player.id), value);
+                    if (left.length === 0) finish();
+                    else showWaiting();
+                })
+            )
+        );
     }
 
     private showScene(scene: Scene, next: Step) {
@@ -1400,19 +1479,16 @@ export class PlayerModeController {
                 );
                 nextPick(winner);
             };
-            const turn = (i: number): void => {
-                if (i >= humans.length) return settle();
-                const player = humans[i];
-                const rival = pair.find((hg) => hg.id !== player.id)!;
-                const guessKey = `ko:${duelSeed}:${player.id}`;
-                const saved = this.locked<number>(guessKey);
-                if (saved !== undefined) {
-                    guesses.push({ id: player.id, guess: saved });
-                    return turn(i + 1);
-                }
-                board(() =>
-                    this.privately(player.id, `${player.name}'s knockout duel`, () =>
-                        this.show({
+            const key = `ko:${duelSeed}`;
+            const guessAll = () =>
+                this.gather<number>(
+                    key,
+                    humans,
+                    "Knockout duel",
+                    (player) => `${player.name}'s knockout duel`,
+                    (player, moreToPlay, onGuess) => {
+                        const rival = pair.find((hg) => hg.id !== player.id)!;
+                        return {
                             kind: "tiebreak",
                             title,
                             heading: "Knockout duel",
@@ -1423,17 +1499,18 @@ export class PlayerModeController {
                             question,
                             tied: pair,
                             playerId: player.id,
-                            moreToPlay: i + 1 < humans.length,
-                            onGuess: (guess) => {
-                                this.lock(guessKey, guess);
-                                guesses.push({ id: player.id, guess });
-                                turn(i + 1);
-                            },
-                        })
-                    )
+                            moreToPlay,
+                            onGuess,
+                        };
+                    },
+                    (answers) => {
+                        humans.forEach((h) => guesses.push({ id: h.id, guess: answers[h.id] }));
+                        settle();
+                    }
                 );
-            };
-            turn(0);
+            // the board first, unless every guess is already in (resuming)
+            if (humans.every((h) => this.locked(`${key}:${h.id}`) !== undefined)) guessAll();
+            else board(guessAll);
         };
 
         const nextPick = (pickerId: number) => {
@@ -1658,8 +1735,14 @@ export class PlayerModeController {
                 guess: botGuess(question, this.botSkill(hg), seededRand(hashcode(`${seed}:tiebreak:${round}:${hg.id}`))),
             }));
         const humans = this.playingHumans(tied);
-        const turn = (i: number): void => {
-            if (i >= humans.length) {
+        this.gather<number>(
+            `tb:${seed}:${round}`,
+            humans,
+            title,
+            (player) => `${player.name}'s turn at the tiebreaker`,
+            (player, moreToPlay, onGuess) => ({ kind: "tiebreak", title, question, tied, playerId: player.id, moreToPlay, onGuess }),
+            (answers) => {
+                humans.forEach((h) => guesses.push({ id: h.id, guess: answers[h.id] }));
                 const closest = closestGuesses(question.answer, guesses);
                 const again = closest.length > 1;
                 this.show({
@@ -1672,32 +1755,8 @@ export class PlayerModeController {
                     sealed: this.sealed(),
                     onDone: () => (again ? this.tiebreak(title, closest, seed, done, round + 1) : done(closest[0])),
                 });
-                return;
             }
-            const player = humans[i];
-            const guessKey = `tb:${seed}:${round}:${player.id}`;
-            const saved = this.locked<number>(guessKey);
-            if (saved !== undefined) {
-                guesses.push({ id: player.id, guess: saved });
-                return turn(i + 1);
-            }
-            this.privately(player.id, `${player.name}'s turn at the tiebreaker`, () =>
-                this.show({
-                    kind: "tiebreak",
-                    title,
-                    question,
-                    tied,
-                    playerId: player.id,
-                    moreToPlay: i + 1 < humans.length,
-                    onGuess: (guess) => {
-                        this.lock(guessKey, guess);
-                        guesses.push({ id: player.id, guess });
-                        turn(i + 1);
-                    },
-                })
-            );
-        };
-        turn(0);
+        );
     }
 
     // The day of the season (1 to 90) for whatever is happening now.
@@ -1729,26 +1788,21 @@ export class PlayerModeController {
         return dayLabel(s.gameState, week, part === undefined ? DAY_PART.eviction : part);
     }
 
-    // Asks one or more players to vote privately, one after another.
+    // Asks one or more players to vote privately: all at once online, one after another on one device.
     private collectVotes(
+        key: string,
         voters: Houseguest[],
         makePrompt: (voter: Houseguest, record: (id: number) => void) => Prompt,
         onDone: (votes: { [voterId: number]: number }) => void
     ) {
-        const votes: { [voterId: number]: number } = {};
-        const ask = (i: number) => {
-            if (i >= voters.length) return onDone(votes);
-            const voter = voters[i];
-            this.privately(voter.id, `${voter.name}, it's time to vote`, () =>
-                this.show(
-                    makePrompt(voter, (id) => {
-                        votes[voter.id] = id;
-                        ask(i + 1);
-                    })
-                )
-            );
-        };
-        ask(0);
+        this.gather<number>(
+            key,
+            voters,
+            "Voting",
+            (voter) => `${voter.name}, it's time to vote`,
+            (voter, _more, record) => makePrompt(voter, record),
+            onDone
+        );
     }
 
     private pushEpisode(type: EpisodeType, title?: string) {
@@ -3728,6 +3782,7 @@ export class PlayerModeController {
         };
 
         this.collectVotes(
+            `evict:${s.step}:${noms.map((n) => n.id).join(",")}`,
             this.playingHumans(voters),
             (voter, record) => ({
                 kind: "choose",
@@ -3933,6 +3988,7 @@ export class PlayerModeController {
         }
         if (!s.week.roundtable) {
             this.collectVotes(
+                "roundtable",
                 playerJurors,
                 (juror, record) => ({
                     kind: "choose",
@@ -3982,6 +4038,7 @@ export class PlayerModeController {
             return;
         }
         this.collectVotes(
+            "juryVote",
             playerJurors,
             (juror, record) => ({
                 kind: "choose",

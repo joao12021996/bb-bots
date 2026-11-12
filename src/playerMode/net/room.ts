@@ -12,7 +12,8 @@ export interface NetRoom {
     leave(): void;
 }
 
-const APP_ID = "bb-bots-online-1";
+// bumped when devices on different versions can't play together, so they never meet in a room
+const APP_ID = "bb-bots-online-2";
 
 // Room codes: easy to read out loud (no 0/O, 1/I/L).
 const CODE_LETTERS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -166,11 +167,19 @@ export class FakeHub {
         Object.keys(this.rooms).forEach((other) => this.queue.push(() => this.rooms[other] && this.rooms[other].left(id)));
     }
 
+    // instant: messages arrive the moment they're sent (a player's move goes to the host and back within the
+    // call, as if the network took no time)
+    public instant = false;
+
     deliver(from: string, type: string, data: any, to?: string) {
         // copied, like sending over the wire
         const copy = data === undefined ? undefined : JSON.parse(JSON.stringify(data));
         const targets = to ? [to] : Object.keys(this.rooms).filter((id) => id !== from);
-        targets.forEach((id) => this.queue.push(() => this.rooms[id] && this.rooms[id].receive(type, copy, from)));
+        targets.forEach((id) => {
+            const arrive = () => this.rooms[id] && this.rooms[id].receive(type, copy, from);
+            if (this.instant) arrive();
+            else this.queue.push(arrive);
+        });
     }
 
     peersOf(id: string): string[] {

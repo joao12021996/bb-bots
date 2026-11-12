@@ -12,17 +12,56 @@ function prompt(s: NetSession): Prompt {
     return s.controller!.prompt$.value!;
 }
 
-// One move by whichever device's turn it is, then deliver everything. Returns false once the season is over.
+// One round of moves, then deliver everything. Like the real screens, each device looks at its own prompts:
+// players answer their own screens (all of them, at the same time), otherwise whoever the shared screen belongs to
+// answers it. Moves reach the host and come back instantly, as the automatic player reads the season right after
+// each move. Returns false once the season is over.
 function step(hub: FakeHub, sessions: NetSession[]): boolean {
     const live = sessions.filter((s) => s.controller);
     const p = prompt(live[0]);
     if (p.kind === "gameOver") return false;
-    // like the real screens: each device looks at its own prompt
-    const mover = live.find((s) => s.mayActFor(actorOf(prompt(s))));
-    if (!mover) throw new Error(`Nobody can answer ${p.kind} for ${actorOf(p)}`);
-    answer(mover.controller!, prompt(mover), "random", "random");
+    hub.instant = true;
+    try {
+        let acted = false;
+        for (let guard = 0; guard < 50; guard++) {
+            const next = ownScreens(live)[0];
+            if (!next) break;
+            answer(next.session.controller!, next.prompt, "random", "random");
+            acted = true;
+        }
+        if (!acted) {
+            const mover = live.find((s) => s.mayActFor(actorOf(prompt(s))));
+            if (!mover) throw new Error(`Nobody can answer ${p.kind} for ${actorOf(p)}`);
+            answer(mover.controller!, prompt(mover), "random", "random");
+        }
+    } finally {
+        hub.instant = false;
+    }
     hub.flush();
     return true;
+}
+
+// players' own screens that a device may answer
+function ownScreens(sessions: NetSession[]): { session: NetSession; owner: number; prompt: Prompt }[] {
+    const found: { session: NetSession; owner: number; prompt: Prompt }[] = [];
+    sessions.forEach((session) => {
+        const own = session.controller!.personal$.value;
+        Object.keys(own)
+            .map(Number)
+            .filter((owner) => session.mayActFor(owner))
+            .forEach((owner) => found.push({ session, owner, prompt: own[owner] }));
+    });
+    return found;
+}
+
+// Plays on until at least `count` players have their own screens up at the same time.
+function untilOwnScreens(hub: FakeHub, sessions: NetSession[], count: number): boolean {
+    for (let guard = 0; guard < 5000; guard++) {
+        const owners = new Set(ownScreens(sessions.filter((s) => s.controller)).map((o) => o.owner));
+        if (owners.size >= count) return true;
+        if (!step(hub, sessions)) return false;
+    }
+    return false;
 }
 
 // A few rounds of the host's sync check: a device that's off reloads, and if it's still off, everyone does.
@@ -85,6 +124,80 @@ describe("online play", () => {
         expectInSync(all);
         // nobody ever needed the season sent again
         all.forEach((s) => expect(s.resyncs).toBe(0));
+    });
+
+    it("lets players decide at the same time", () => {
+        const { hub, host, all } = setup(10, [1, 4, 7], 23);
+        expect(untilOwnScreens(hub, all, 2)).toBe(true);
+        expect(prompt(host).kind).toBe("waiting");
+        const screens = ownScreens(all);
+        const before = host.appliedInputs;
+        // everyone answers before any of it reaches anyone else
+        screens.forEach(({ session, prompt: p }) => answer(session.controller!, p, "first", "random"));
+        hub.flush();
+        expect(host.appliedInputs).toBe(before + screens.length);
+        all.forEach((s) => expect(Object.keys(s.controller!.personal$.value)).toEqual([]));
+        settle(hub, host);
+        expectInSync(all);
+        all.forEach((s) => expect(s.resyncs).toBe(0));
+    });
+
+    it("ignores an answer to a screen that's already been answered", () => {
+        const { hub, host, clients, all } = setup(10, [1, 4, 7], 23);
+        expect(untilOwnScreens(hub, all, 2)).toBe(true);
+        const mine = ownScreens(clients).find((o) => o.session !== host)!;
+        const before = host.appliedInputs;
+        // a double tap: both reach the host, which only takes the first
+        answer(mine.session.controller!, mine.prompt, "first", "random");
+        answer(mine.session.controller!, mine.prompt, "first", "random");
+        hub.flush();
+        expect(host.appliedInputs).toBe(before + 1);
+        expect(mine.session.controller!.personal$.value[mine.owner]).toBeUndefined();
+        settle(hub, host);
+        expectInSync(all);
+        all.forEach((s) => expect(s.resyncs).toBe(0));
+    });
+
+    it("keeps the answers already given when a player reloads mid-vote", () => {
+        const { hub, host, clients, all } = setup(10, [1, 4, 7], 23);
+        expect(untilOwnScreens(hub, all, 2)).toBe(true);
+        const [first, second] = ownScreens(all);
+        hub.instant = true;
+        answer(first.session.controller!, first.prompt, "first", "random");
+        hub.instant = false;
+        hub.flush();
+        // the other player's device reloads
+        const leaving = second.session;
+        expect(leaving).not.toBe(host);
+        leaving.leave();
+        hub.flush();
+        const back = NetSession.join(hub.join("c9"), "TEST", opts, { playerId: second.owner, json: "{}" });
+        hub.flush();
+        const now = [host, ...clients.filter((c) => c !== leaving), back];
+        // resuming from the last save can leave it a screen behind the host: the sync check sorts that out
+        settle(hub, host);
+        expectInSync(now);
+        // then only they are asked: the answer already given still stands
+        let answered = false;
+        for (let guard = 0; guard < 50 && !answered; guard++) {
+            const owners = ownScreens(now).map((o) => o.owner);
+            expect(owners).not.toContain(first.owner);
+            const theirs = ownScreens(now).find((o) => o.owner === second.owner);
+            hub.instant = true;
+            if (theirs) {
+                answer(theirs.session.controller!, theirs.prompt, "first", "random");
+                answered = true;
+            } else {
+                const mover = now.find((s) => s.mayActFor(actorOf(prompt(s))))!;
+                answer(mover.controller!, prompt(mover), "first", "random");
+            }
+            hub.instant = false;
+            hub.flush();
+        }
+        expect(answered).toBe(true);
+        settle(hub, host);
+        expectInSync(now);
+        now.forEach((s) => expect(s.resyncs).toBeLessThanOrEqual(2));
     });
 
     it("only lets the player a prompt belongs to answer it", () => {

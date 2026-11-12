@@ -2,7 +2,7 @@ import React from "react";
 import { nonEvictedHouseguests } from "../../model";
 import { PlayerModeController } from "../playerModeController";
 import { Alliance, aliveMembers, botBackup, botSuggestion, chemistryLabel, meetingSplit, positionsOf } from "../social/alliances";
-import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
+import { BigButton, Face, Grid, Panel, Subtle, Title, whenDone } from "./common";
 
 interface AllianceScreenProps {
     controller: PlayerModeController;
@@ -37,7 +37,7 @@ function TalkItOut(props: { controller: PlayerModeController; alliance: Alliance
                             type="button"
                             className="button is-warning is-small"
                             style={{ margin: 4 }}
-                            onClick={() => props.onDone(controller.allianceDiscuss(a.id, { kind: "argue", targetId: side.targetId }))}
+                            onClick={() => whenDone(controller.allianceDiscuss(a.id, { kind: "argue", targetId: side.targetId }), props.onDone)}
                         >
                             Argue for {controller.player(side.targetId).name}
                         </button>
@@ -47,7 +47,7 @@ function TalkItOut(props: { controller: PlayerModeController; alliance: Alliance
                         type="button"
                         className="button is-light is-small"
                         style={{ margin: 4 }}
-                        onClick={() => props.onDone(controller.allianceDiscuss(a.id, { kind: "concede" }))}
+                        onClick={() => whenDone(controller.allianceDiscuss(a.id, { kind: "concede" }), props.onDone)}
                     >
                         Go along with {controller.player(a.target).name}
                     </button>
@@ -248,8 +248,10 @@ function AllianceCard(props: { controller: PlayerModeController; alliance: Allia
                             className="button is-warning"
                             disabled={picked === null}
                             onClick={() => {
-                                setResult(controller.allianceSuggest(a.id, picked, backup));
-                                props.onChange();
+                                whenDone(controller.allianceSuggest(a.id, picked, backup), (out) => {
+                                    setResult(out);
+                                    props.onChange();
+                                });
                             }}
                         >
                             🎯 Suggest {picked !== null ? controller.player(picked).name : "a target"}
@@ -259,8 +261,10 @@ function AllianceCard(props: { controller: PlayerModeController; alliance: Allia
                             type="button"
                             className="button is-light"
                             onClick={() => {
-                                setResult(controller.allianceSuggest(a.id, null));
-                                props.onChange();
+                                whenDone(controller.allianceSuggest(a.id, null), (out) => {
+                                    setResult(out);
+                                    props.onChange();
+                                });
                             }}
                         >
                             No suggestion
@@ -283,11 +287,12 @@ function AllianceCard(props: { controller: PlayerModeController; alliance: Allia
                         className="button is-danger"
                         disabled={leakTo === null}
                         onClick={() => {
-                            const out = controller.leak(a.id, leakTo!);
-                            setResult(out.map((o) => `${o.good ? "👍" : "👎"} ${o.text}`));
-                            setPanel("target");
-                            if (!a.memberIds.includes(me.id)) setGone(true);
-                            props.onChange();
+                            whenDone(controller.leak(a.id, leakTo!), (out) => {
+                                setResult((out || []).map((o) => `${o.good ? "👍" : "👎"} ${o.text}`));
+                                setPanel("target");
+                                if (!a.memberIds.includes(me.id)) setGone(true);
+                                props.onChange();
+                            });
                         }}
                     >
                         🐍 Leak to {leakTo !== null ? controller.player(leakTo).name : "…"}
@@ -296,10 +301,11 @@ function AllianceCard(props: { controller: PlayerModeController; alliance: Allia
                         type="button"
                         className="button is-light"
                         onClick={() => {
-                            const out = controller.leave(a.id);
-                            if (out) setResult([out.text]);
-                            setGone(true);
-                            props.onChange();
+                            whenDone(controller.leave(a.id), (out) => {
+                                if (out) setResult([out.text]);
+                                setGone(true);
+                                props.onChange();
+                            });
                         }}
                     >
                         🚪 Leave {a.name}

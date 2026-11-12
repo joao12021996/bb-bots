@@ -7,7 +7,7 @@ import { RUMOURS } from "../social/drama";
 import { Approach, SocialAction, SocialOutcome } from "../social/socialActions";
 import { suggestAllianceName } from "../social/alliances";
 import { PITCH_REASONS, reasonLine } from "../social/pitch";
-import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
+import { BigButton, Face, Grid, Panel, Subtle, Title, whenDone } from "./common";
 
 interface SocialScreenProps {
     controller: PlayerModeController;
@@ -212,7 +212,7 @@ export function SocialScreen(props: SocialScreenProps) {
     };
 
     const act = (action: SocialAction) => {
-        record(controller.socialAct(action));
+        whenDone(controller.socialAct(action), record);
         setMode({ kind: "pickBot" });
     };
 
@@ -365,12 +365,13 @@ export function SocialScreen(props: SocialScreenProps) {
                             <BigButton
                                 kind="light"
                                 onClick={() => {
-                                    const said = controller.askVote(bot.id);
-                                    if (said !== null)
-                                        record({
-                                            text: `${bot.name}: "${controller.say(bot.id, "voteAnswer", "ask", controller.player(said).name)}"`,
-                                            good: true,
-                                        });
+                                    whenDone(controller.askVote(bot.id), (said) => {
+                                        if (said !== null && said !== undefined)
+                                            record({
+                                                text: `${bot.name}: "${controller.say(bot.id, "voteAnswer", "ask", controller.player(said).name)}"`,
+                                                good: true,
+                                            });
+                                    });
                                 }}
                             >
                                 🗳️ Ask about the vote (free)
@@ -568,8 +569,8 @@ export function SocialScreen(props: SocialScreenProps) {
                             key={`${a.kind}-${a.fromId}-${i}`}
                             approach={a}
                             controller={controller}
-                            onAnswer={(accept) => record(controller.respondApproach(i, accept))}
-                            onSides={(side) => record(controller.respondSides(i, side))}
+                            onAnswer={(accept) => whenDone(controller.respondApproach(i, accept), record)}
+                            onSides={(side) => whenDone(controller.respondSides(i, side), record)}
                         />
                     ))}
                 </div>

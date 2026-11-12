@@ -1668,6 +1668,33 @@ input[type="number"] {
         opacity: 0.4;
     }
 }
+.bbb-waiting-on {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 12px;
+}
+.bbb-waiting-on > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px 2px 2px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.07);
+}
+.bbb-waiting-on img {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.bbb-playing-for {
+    text-align: center;
+    margin: 6px 0;
+    font-weight: 600;
+    opacity: 0.85;
+}
 @media (prefers-reduced-motion: reduce) {
     .bbb-waiting-pulse {
         animation: none;

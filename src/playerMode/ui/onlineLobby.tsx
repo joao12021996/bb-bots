@@ -582,6 +582,34 @@ function activity(prompt: Prompt): string {
     }
 }
 
+// Shown while several players decide at the same time, once this device's player has (or isn't asked).
+export function WaitingOnPlayers(props: { session: NetSession; controller: PlayerModeController; title: string; waitingOn: number[] }) {
+    useStatus(props.session); // re-render when people come and go
+    const me = props.session.localPlayerId;
+    return (
+        <Panel>
+            <div className="bbb-handoff">
+                <div className="bbb-handoff-icon bbb-waiting-pulse">⏳</div>
+                <Title>{props.title}</Title>
+                <Subtle>Waiting for {props.waitingOn.length === 1 ? "one player" : `${props.waitingOn.length} players`}…</Subtle>
+                <div className="bbb-waiting-on">
+                    {props.waitingOn.map((id) => {
+                        const hg = getById(props.controller.gameState, id);
+                        const away = !props.session.isConnected(id);
+                        return (
+                            <span key={id} title={away ? `${hg.name} isn't connected, so the host is playing for them` : undefined}>
+                                <img src={hg.imageURL} alt="" />
+                                {id === me ? "You" : hg.name}
+                                {away && " (away)"}
+                            </span>
+                        );
+                    })}
+                </div>
+            </div>
+        </Panel>
+    );
+}
+
 // Shown while another player makes a decision.
 export function WaitingFor(props: { session: NetSession; controller: PlayerModeController; prompt: Prompt }) {
     useStatus(props.session); // re-render when people come and go

@@ -1,6 +1,6 @@
 import React from "react";
 import { Houseguest } from "../../model";
-import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
+import { BigButton, Face, Grid, Panel, Subtle, Title, whenDone } from "./common";
 
 // One way to give a speech. Some tones are aimed at people: `pick` says who can be chosen, and how many.
 export interface SpeechTone {
@@ -28,7 +28,7 @@ export function SpeechPrompt(props: SpeechPromptProps) {
 
     const give = (t: SpeechTone, ids: number[]) => {
         if (lines) return;
-        setLines(props.deliver(t.id, ids));
+        whenDone(props.deliver(t.id, ids), (lines) => lines && setLines(lines));
     };
 
     if (lines) {

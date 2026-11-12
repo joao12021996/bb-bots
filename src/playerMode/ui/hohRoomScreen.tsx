@@ -3,7 +3,7 @@ import { Houseguest, nonEvictedHouseguests } from "../../model";
 import { PlayerModeController } from "../playerModeController";
 import { HohVisitor, RoomOutcome, VisitPitch } from "../social/hohRoom";
 import { PITCH_REASONS, reasonLine } from "../social/pitch";
-import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
+import { BigButton, Face, Grid, Panel, Subtle, Title, whenDone } from "./common";
 
 interface HohRoomProps {
     controller: PlayerModeController;
@@ -64,9 +64,10 @@ export function HohRoomScreen(props: HohRoomProps) {
     const allies = controller.allyIds(hoh.id);
 
     const answer = (accept: boolean) => {
-        const outcome = controller.hohAnswer(accept);
-        if (outcome) setOutcomes((prev) => [outcome, ...prev]);
-        rerender((n) => n + 1);
+        whenDone(controller.hohAnswer(accept), (outcome) => {
+            if (outcome) setOutcomes((prev) => [outcome, ...prev]);
+            rerender((n) => n + 1);
+        });
     };
 
     let body: JSX.Element;
@@ -179,8 +180,9 @@ export function HohVisitScreen(props: HohRoomProps) {
     const allies = controller.allyIds(me.id);
 
     const go = (pitch: VisitPitch | null) => {
-        const outcome = controller.hohVisit(actorId, pitch);
-        if (outcome) setMode({ kind: "done", outcome });
+        whenDone(controller.hohVisit(actorId, pitch), (outcome) => {
+            if (outcome) setMode({ kind: "done", outcome });
+        });
     };
 
     const hohFace = (
