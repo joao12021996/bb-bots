@@ -84,6 +84,9 @@ export const isFullscreen$ = new BehaviorSubject<boolean>(false);
 
 // Player mode: when set, "Continue" buttons inside scenes call this instead of moving the sidebar.
 export const continueOverride$ = new BehaviorSubject<(() => void) | null>(null);
+// Online: this device pressed Continue on a screen everyone watches, and is waiting for the others to. What the
+// pressed button says meanwhile ("⏳ Waiting for Sam"), or null.
+export const continueWaiting$ = new BehaviorSubject<string | null>(null);
 
 // Player mode: when set, the season is being played by a human. Moving past the last scene in the
 // sidebar returns to the player mode screen instead of auto-generating the next episode.

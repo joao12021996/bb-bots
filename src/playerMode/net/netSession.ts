@@ -1,4 +1,5 @@
 import { BehaviorSubject } from "rxjs";
+import { continueWaiting$ } from "../../subjects/subjects";
 import { getById } from "../../model";
 import { actorOf, migrateSave, PlayerModeController, PlayerSave, Prompt } from "../playerModeController";
 import { clearOnlineSave, deserialize, serialize, writeOnlineSave } from "../save/serialize";
@@ -231,6 +232,11 @@ export class NetSession {
     private depth = 0; // > 0 while the controller is running: calls inside it aren't new inputs
     private savedDuringInput = false;
     private lastReport = 0;
+    // Continue on a screen everyone watches: everyone presses it, then it happens (see ready)
+    private readyAt = -1; // which screen (its stamp) the presses are for
+    private readyIds: number[] = []; // players who pressed it
+    private readyProposal: Proposal | null = null; // the host: what to do once everyone has
+    private myReadyAt = -1; // this device pressed it (before the host has said so)
     private reportTimer: any = undefined;
     private pendingHash: { seq: number; hash: string } | null = null; // hash: see signature()
     private hashTimer: any = null;
@@ -326,6 +332,8 @@ export class NetSession {
 
     private emit() {
         this.status$.next(this.status());
+        this.updateWaiting();
+        if (this.isHost) this.checkReady();
     }
 
     // ---------- lobby ----------
@@ -418,6 +426,7 @@ export class NetSession {
         clearTimeout(this.gapTimer);
         clearTimeout(this.reportTimer);
         clearTimeout(this.hostWaitTimer);
+        continueWaiting$.next(null);
         if (this.controller) this.controller.net = null;
         this.room.leave();
         if (active === this) active = null;
@@ -457,6 +466,11 @@ export class NetSession {
             const next = [this.room.selfId, ...this.room.peers()].filter((id) => id !== peerId).sort()[0];
             this.hostId = next;
             this.settleAllProposals();
+            // Continue presses went to the old host: everyone presses again
+            this.myReadyAt = -1;
+            this.readyAt = -1;
+            this.readyIds = [];
+            this.readyProposal = null;
             this.notice = "The host left.";
             if (next === this.room.selfId) {
                 this.isHost = true;
@@ -520,6 +534,15 @@ export class NetSession {
                 return this.receiveProposal(data as Input, from);
             case "rejected":
                 return this.settleProposal(data && data.pid);
+            case "ready":
+                return this.receiveReady(data as Input, from);
+            case "readyState":
+                if (from === this.hostId && data) {
+                    this.readyAt = data.at;
+                    this.readyIds = data.ids || [];
+                    this.updateWaiting();
+                }
+                return;
             case "hash":
                 if (!this.isHost && from === this.hostId) {
                     this.pendingHash = data;
@@ -688,6 +711,8 @@ export class NetSession {
         if (slot === null) {
             this.rawPrompt = prompt;
             this.sharedStamp = stamp;
+            if (this.depth > 0) Promise.resolve().then(() => this.updateWaiting());
+            else this.updateWaiting();
         } else {
             this.rawPersonal[slot] = prompt;
             this.personalStamp[slot] = stamp;
@@ -769,6 +794,7 @@ export class NetSession {
                 owner = focused !== null ? focused : this.rawPrompt ? actorOf(this.rawPrompt) : null;
             }
             const proposal: Proposal = { kind, name, args: wireCopy(args), promptKind, owner, slot, at: stamp ? stamp.at : undefined };
+            if (this.isContinue(proposal) && this.everyoneContinues) return this.pressContinue(proposal);
             if (!this.valid(proposal, this.room.selfId)) return undefined; // not ours, or an old screen
             if (name === "onReport") {
                 // a comp's score so far: not too often, but the latest one always gets sent
@@ -799,6 +825,106 @@ export class NetSession {
             });
         };
         return wrapped;
+    }
+
+    // ---------- Continue, together ----------
+
+    // Moving on from a screen everyone watches (a scene's Continue, a results screen's button...).
+    private isContinue(p: Proposal): boolean {
+        if (p.owner !== null) return false;
+        if (p.kind === "prompt") return p.slot === null || p.slot === undefined;
+        return p.name === "continue" && !!this.rawPrompt && actorOf(this.rawPrompt) === null;
+    }
+
+    // The players whose Continue is waited for: everyone connected (an expelled player only watches).
+    private continuers(): number[] {
+        return Object.keys(this.claims)
+            .map(Number)
+            .filter((id) => this.connected(this.claims[id]) && !(this.controller && this.controller.isRuleBreaker(id)));
+    }
+
+    // Whether a screen everyone watches waits for everyone's Continue (with one player there's nobody to wait for).
+    public get everyoneContinues(): boolean {
+        return this.started && this.localPlayerId !== null && this.continuers().length > 1;
+    }
+
+    // A shared screen's Continue, the same as any input on it except that any player's device may press it.
+    // `from` null: the host, moving on once everyone has pressed it.
+    private validContinue(p: Proposal, from: string | null): boolean {
+        if (from !== null && !Object.keys(this.claims).some((id) => this.claims[Number(id)] === from)) return false;
+        const prompt: any = this.rawPrompt;
+        if (!prompt || actorOf(prompt) !== null || p.at !== this.sharedStamp.at) return false;
+        if (p.kind === "method") return p.name === "continue";
+        return prompt.kind === p.promptKind && typeof prompt[p.name] === "function";
+    }
+
+    // This device pressed Continue: it tells the host, and waits for everyone else.
+    private pressContinue(pressed: Proposal): undefined {
+        const at = this.sharedStamp.at;
+        const p = { ...pressed, at }; // for the screen it was pressed on
+        if (!this.validContinue(p, this.room.selfId)) return undefined;
+        if (this.myReadyAt === at && !this.isHost) return undefined; // pressed already
+        this.myReadyAt = at;
+        if (this.isHost) this.receiveReady(toWireInput({ ...p, seq: 0 }), this.room.selfId);
+        else if (this.hostId) this.room.send("ready", toWireInput({ ...p, seq: 0 }), this.hostId);
+        this.updateWaiting();
+        return undefined;
+    }
+
+    // The host: a player pressed Continue. Once everyone has, it happens.
+    private receiveReady(wire: Input, from: string) {
+        if (!this.isHost || !this.controller) return;
+        const { seq, ...p } = fromWireInput(wire);
+        if (!this.validContinue(p, from)) return;
+        const at = this.sharedStamp.at;
+        const playerId = Number(Object.keys(this.claims).find((id) => this.claims[Number(id)] === from));
+        if (p.at !== at) return;
+        if (this.readyAt !== at) {
+            this.readyAt = at;
+            this.readyIds = [];
+            this.readyProposal = null;
+        }
+        if (!this.readyIds.includes(playerId)) this.readyIds = [...this.readyIds, playerId];
+        // the host's own press, if it made one: it's what the host's screen showed
+        if (from === this.room.selfId || !this.readyProposal) this.readyProposal = p;
+        this.room.send("readyState", { at, ids: this.readyIds });
+        this.updateWaiting();
+        this.checkReady();
+    }
+
+    // The host: everyone who's here has pressed Continue (someone leaving can make that true too).
+    private checkReady() {
+        if (!this.isHost || !this.readyProposal || this.readyAt !== this.sharedStamp.at) return;
+        if (this.depth > 0) {
+            // in the middle of an input: once it's done
+            Promise.resolve().then(() => this.checkReady());
+            return;
+        }
+        const waiting = this.continuers().filter((id) => !this.readyIds.includes(id));
+        if (waiting.length > 0 && this.everyoneContinues) return;
+        const p = this.readyProposal;
+        this.readyProposal = null;
+        this.readyIds = [];
+        this.readyAt = -1;
+        if (this.validContinue(p, null)) this.sequence(p, this.room.selfId);
+    }
+
+    // What this device's pressed Continue button says while it waits for the others (null: it isn't waiting).
+    public get waitingText(): string | null {
+        const me = this.localPlayerId;
+        const at = this.sharedStamp.at;
+        const pressed = me !== null && (this.myReadyAt === at || (this.readyAt === at && this.readyIds.includes(me)));
+        if (!this.started || !this.controller || !pressed || !this.rawPrompt || actorOf(this.rawPrompt) !== null) return null;
+        const done = this.readyAt === at ? this.readyIds : [];
+        const names = this.continuers()
+            .filter((id) => id !== me && !done.includes(id))
+            .map((id) => this.playerName(id));
+        return names.length === 0 ? "⏳ Moving on…" : `⏳ Waiting for ${names.join(" and ")}`;
+    }
+
+    private updateWaiting() {
+        const text = this.waitingText;
+        if (continueWaiting$.value !== text) continueWaiting$.next(text);
     }
 
     // The host: numbers an input, sends it to everyone and applies it.

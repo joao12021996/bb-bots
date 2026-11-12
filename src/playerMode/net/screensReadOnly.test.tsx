@@ -53,7 +53,10 @@ it("drawing the screens never changes the season", () => {
         hub.instant = true;
         const ownS = [host, guest].map((s) => ({ s, p: s.controller!.personal$.value[s.localPlayerId!] })).filter((x) => x.p);
         if (ownS.length) ownS.forEach(({ s, p }) => answer(s.controller!, p, "random", "random"));
-        else {
+        else if (actorOf(host.controller!.prompt$.value!) === null) {
+            // a screen everyone watches: both press Continue (the host last)
+            [guest, host].forEach((s) => answer(s.controller!, s.controller!.prompt$.value!, "random", "random"));
+        } else {
             const mover = [host, guest].find((s) => s.mayActFor(actorOf(s.controller!.prompt$.value!)))!;
             answer(mover.controller!, mover.controller!.prompt$.value!, "random", "random");
         }

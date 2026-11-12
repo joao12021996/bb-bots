@@ -1,16 +1,20 @@
 import React from "react";
-import { continueOverride$, switchSceneRelative } from "../../subjects/subjects";
+import { continueOverride$, continueWaiting$, switchSceneRelative } from "../../subjects/subjects";
+import { useContinueWaiting } from "../../playerMode/ui/common";
 
 export function NextEpisodeButton(): JSX.Element {
+    const waiting = useContinueWaiting();
     return (
         <button
-            className="button is-primary"
+            className={`button is-primary ${waiting.text ? "bbb-continue-waiting" : ""}`}
             onClick={() => {
+                if (waiting.text) return;
                 const override = continueOverride$.value;
                 override ? override() : switchSceneRelative(1);
+                waiting.pressed(continueWaiting$.value !== null);
             }}
         >
-            Continue
+            {waiting.text || "Continue"}
         </button>
     );
 }

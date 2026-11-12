@@ -1779,3 +1779,20 @@ input[type="number"] {
     border-color: rgba(239, 68, 68, 0.45);
     color: #fecaca;
 }
+
+/* online: a Continue that's been pressed, waiting for the other players to press theirs */
+.button.bbb-continue-waiting {
+    opacity: 0.75;
+    cursor: default;
+    animation: bbb-pulse-soft 1.6s ease-in-out infinite;
+}
+@keyframes bbb-pulse-soft {
+    50% {
+        opacity: 0.5;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .button.bbb-continue-waiting {
+        animation: none;
+    }
+}

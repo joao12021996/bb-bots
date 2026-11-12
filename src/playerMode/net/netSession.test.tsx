@@ -29,16 +29,27 @@ function step(hub: FakeHub, sessions: NetSession[]): boolean {
             answer(next.session.controller!, next.prompt, "random", "random");
             acted = true;
         }
-        if (!acted) {
-            const mover = live.find((s) => s.mayActFor(actorOf(prompt(s))));
-            if (!mover) throw new Error(`Nobody can answer ${p.kind} for ${actorOf(p)}`);
-            answer(mover.controller!, prompt(mover), "random", "random");
-        }
+        if (!acted) moveOn(live);
     } finally {
         hub.instant = false;
     }
     hub.flush();
     return true;
+}
+
+// The shared screen: whoever it belongs to answers it. One everyone watches waits for every player to press
+// Continue (the host last, as its press is what happens).
+function moveOn(live: NetSession[]) {
+    const p = prompt(live[0]);
+    if (actorOf(p) === null && live.some((s) => s.everyoneContinues)) {
+        const pressers = live.filter((s) => s.localPlayerId !== null);
+        const host = pressers.filter((s) => s.amHost);
+        [...pressers.filter((s) => !s.amHost), ...host].forEach((s) => answer(s.controller!, prompt(s), "random", "random"));
+        return;
+    }
+    const mover = live.find((s) => s.mayActFor(actorOf(prompt(s))));
+    if (!mover) throw new Error(`Nobody can answer ${p.kind} for ${actorOf(p)}`);
+    answer(mover.controller!, prompt(mover), "random", "random");
 }
 
 // players' own screens that a device may answer
@@ -188,8 +199,7 @@ describe("online play", () => {
                 answer(theirs.session.controller!, theirs.prompt, "first", "random");
                 answered = true;
             } else {
-                const mover = now.find((s) => s.mayActFor(actorOf(prompt(s))))!;
-                answer(mover.controller!, prompt(mover), "first", "random");
+                moveOn(now);
             }
             hub.instant = false;
             hub.flush();
@@ -357,6 +367,53 @@ describe("online play", () => {
             }
             expect(tries).toBe(1);
         }
+    });
+
+    it("a screen everyone watches moves on once every player has pressed Continue", () => {
+        const { hub, host, clients, all } = setup(10, [1, 4, 7], 23);
+        const [a, b] = clients;
+        for (let guard = 0; guard < 2000 && prompt(host).kind !== "scene"; guard++) step(hub, all);
+        expect(prompt(host).kind).toBe("scene");
+        const before = host.appliedInputs;
+        hub.instant = true;
+        a.controller!.continue();
+        a.controller!.continue(); // a second tap changes nothing
+        hub.instant = false;
+        hub.flush();
+        expect(host.appliedInputs).toBe(before);
+        expect(a.waitingText).toBe(`⏳ Waiting for ${host.playerName(1)} and ${host.playerName(7)}`);
+        expect(b.waitingText).toBeNull(); // they haven't pressed theirs
+        hub.instant = true;
+        host.controller!.continue();
+        hub.instant = false;
+        hub.flush();
+        expect(host.appliedInputs).toBe(before);
+        expect(a.waitingText).toBe(`⏳ Waiting for ${host.playerName(7)}`);
+        hub.instant = true;
+        b.controller!.continue();
+        hub.instant = false;
+        hub.flush();
+        expect(host.appliedInputs).toBe(before + 1);
+        all.forEach((s) => expect(s.waitingText).toBeNull());
+        settle(hub, host);
+        expectInSync(all);
+    });
+
+    it("stops waiting for a player who leaves", () => {
+        const { hub, host, clients, all } = setup(10, [1, 4, 7], 23);
+        for (let guard = 0; guard < 2000 && prompt(host).kind !== "scene"; guard++) step(hub, all);
+        const before = host.appliedInputs;
+        hub.instant = true;
+        host.controller!.continue();
+        clients[0].controller!.continue();
+        hub.instant = false;
+        hub.flush();
+        expect(host.appliedInputs).toBe(before);
+        clients[1].leave();
+        hub.flush();
+        expect(host.appliedInputs).toBe(before + 1);
+        settle(hub, host);
+        expectInSync([host, clients[0]]);
     });
 
     it("only lets the player a prompt belongs to answer it", () => {

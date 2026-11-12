@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import { ColorTheme } from "../../theme/theme";
+import { continueWaiting$ } from "../../subjects/subjects";
 
 // Shared building blocks for player mode screens. Everything is tap-friendly and fits a 400px-wide phone.
 
@@ -99,21 +100,41 @@ export function Face(props: {
     );
 }
 
+// Online: a Continue button that's been pressed shows who it's waiting for, until everyone has pressed theirs
+// (see continueWaiting$). `pressed` is told, after the button's action, whether that started a wait.
+export function useContinueWaiting(): { text: string | null; pressed: (waiting: boolean) => void } {
+    const [mine, setMine] = React.useState(false);
+    const [text, setText] = React.useState<string | null>(continueWaiting$.value);
+    React.useEffect(() => {
+        const sub = continueWaiting$.subscribe((t) => {
+            setText(t);
+            if (t === null) setMine(false); // moved on
+        });
+        return () => sub.unsubscribe();
+    }, []);
+    return { text: mine ? text : null, pressed: (waiting) => waiting && setMine(true) };
+}
+
 export function BigButton(props: {
     onClick: () => void;
     children: React.ReactNode;
     kind?: "primary" | "success" | "danger" | "warning" | "info" | "light";
     disabled?: boolean;
 }) {
+    const waiting = useContinueWaiting();
     return (
         <button
             type="button"
-            className={`button is-medium is-${props.kind || "primary"}`}
+            className={`button is-medium is-${props.kind || "primary"} ${waiting.text ? "bbb-continue-waiting" : ""}`}
             style={{ margin: 5, minWidth: 130, touchAction: "manipulation" }}
-            onClick={props.onClick}
+            onClick={() => {
+                if (waiting.text) return;
+                props.onClick();
+                waiting.pressed(continueWaiting$.value !== null);
+            }}
             disabled={props.disabled}
         >
-            {props.children}
+            {waiting.text || props.children}
         </button>
     );
 }

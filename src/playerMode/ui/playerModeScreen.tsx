@@ -429,7 +429,7 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                 {session && owner !== null && owner !== session.localPlayerId && (
                     <div className="bbb-playing-for">🎮 Playing for {controller.player(owner).name}, who isn't connected</div>
                 )}
-                {session && owner === null && actor === null && !session.amHost && prompt.kind !== "gameOver" && prompt.kind !== "waiting" && (
+                {session && owner === null && actor === null && !session.amHost && !session.everyoneContinues && prompt.kind !== "gameOver" && prompt.kind !== "waiting" && (
                     <div className="bbb-online-note">⏩ The host moves the show along from here.</div>
                 )}
                 {body}
