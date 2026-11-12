@@ -908,9 +908,11 @@ export class PlayerModeController {
     }
 
     // A bot's comp performance, adjusted for difficulty.
-    private botSkill(hg: Houseguest): number {
+    // `seed`: the same skill every time for this seed (a comp that's replayed after a reload must come out the same)
+    private botSkill(hg: Houseguest, seed?: string): number {
         const shift = { easy: -0.12, normal: 0, hard: 0.08 }[this.difficulty];
-        return Math.max(0, Math.min(1, botPercentile(hg) + shift));
+        const rand = seed === undefined ? undefined : seededRand(hashcode(`${seed}:skill:${hg.id}`));
+        return Math.max(0, Math.min(1, botPercentile(hg, rand) + shift));
     }
 
     // How strategically bots play: going after threats with their votes and nominations, or voting on feelings.
@@ -1705,9 +1707,14 @@ export class PlayerModeController {
         let lines: string[] = [KNOCKOUT_RULES];
         let round = 0;
 
-        // shows what happened since the players last looked, then carries on
-        const board = (next: () => void, winnerId?: number) => {
+        // shows what happened since the players last looked, then carries on. `stage`: a board shown after each
+        // duel, so everyone watches the comp one duel at a time; once seen, a reload doesn't show it again.
+        const board = (next: () => void, winnerId?: number, stage?: string) => {
             if (lines.length === 0 && winnerId === undefined) return next();
+            if (stage && this.locked(stage) !== undefined) {
+                lines = [];
+                return next();
+            }
             const shown = lines;
             lines = [];
             this.show({
@@ -1717,7 +1724,10 @@ export class PlayerModeController {
                 remaining: remaining.map((id) => this.player(id)),
                 out: out.map((id) => this.player(id)),
                 winnerId,
-                onDone: next,
+                onDone: () => {
+                    if (stage) this.lock(stage, true);
+                    next();
+                },
             });
         };
 
@@ -1736,7 +1746,7 @@ export class PlayerModeController {
             const pair = [a, b].map((id) => this.player(id));
             const guesses: TiebreakGuess[] = pair
                 .filter((hg) => !this.isHuman(hg))
-                .map((hg) => ({ id: hg.id, guess: botGuess(question, this.botSkill(hg), seededRand(hashcode(`${duelSeed}:${hg.id}`))) }));
+                .map((hg) => ({ id: hg.id, guess: botGuess(question, this.botSkill(hg, `${duelSeed}`), seededRand(hashcode(`${duelSeed}:${hg.id}`))) }));
             const humans = this.playingHumans(pair);
             const settle = () => {
                 const closest = closestGuesses(question.answer, guesses);
@@ -1754,7 +1764,9 @@ export class PlayerModeController {
                         `There were ${question.answer} ${question.noun}. ${name(winner)} guessed ${guessOf(winner)}, ${name(loser)} guessed ${guessOf(loser)}. ` +
                         `${name(loser)} is out.`
                 );
-                nextPick(winner);
+                // one duel at a time (the last one is shown with the winner)
+                if (remaining.length > 1) board(() => nextPick(winner), undefined, `koSeen:${duelSeed}`);
+                else nextPick(winner);
             };
             const key = `ko:${duelSeed}`;
             const guessAll = () =>
@@ -1784,7 +1796,7 @@ export class PlayerModeController {
                         humans.forEach((h) => guesses.push({ id: h.id, guess: answers[h.id] }));
                         settle();
                     },
-                    (player) => botGuess(question, this.botSkill(player), seededRand(hashcode(`${duelSeed}:${player.id}`)))
+                    (player) => botGuess(question, this.botSkill(player, `${duelSeed}`), seededRand(hashcode(`${duelSeed}:${player.id}`)))
                 );
             // the board first, unless every guess is already in (resuming)
             if (humans.every((h) => this.locked(`${key}:${h.id}`) !== undefined)) guessAll();
@@ -1868,15 +1880,20 @@ export class PlayerModeController {
         const offered: { pourerId: number; targetId: number }[] = [];
         let lines: string[] = [TAINTED_WINE_RULES];
         let round = 0;
-        const skillOf = (id: number) => (this.isHuman({ id }) ? 0.5 : this.botSkill(this.player(id)));
+        const skillOf = (id: number) => (this.isHuman({ id }) ? 0.5 : this.botSkill(this.player(id), `${seed}`));
 
         const captions = () => {
             const c: { [id: number]: string } = {};
             remaining.forEach((id) => (c[id] = strikes[id] === 0 ? "🍷 no sips" : `☠️ ${strikes[id]}/${STRIKES_OUT}`));
             return c;
         };
-        const board = (next: () => void, winnerId?: number) => {
+        // as in the knockout: `stage` boards come after every glass, and are shown once
+        const board = (next: () => void, winnerId?: number, stage?: string) => {
             if (lines.length === 0 && winnerId === undefined) return next();
+            if (stage && this.locked(stage) !== undefined) {
+                lines = [];
+                return next();
+            }
             const shown = lines;
             lines = [];
             this.show({
@@ -1889,7 +1906,10 @@ export class PlayerModeController {
                 out: out.map((id) => this.player(id)),
                 captions: captions(),
                 winnerId,
-                onDone: next,
+                onDone: () => {
+                    if (stage) this.lock(stage, true);
+                    next();
+                },
             });
         };
 
@@ -1920,7 +1940,8 @@ export class PlayerModeController {
             }
             lines.push(line);
             if (remaining.length === 1) return finish();
-            pourTurn(remaining.includes(victim) ? victim : other);
+            // one glass at a time
+            board(() => pourTurn(remaining.includes(victim) ? victim : other), undefined, `wine:${seed}:${round}:seen`);
         };
 
         const offer = (pourerId: number, targetId: number) => {
@@ -2010,7 +2031,7 @@ export class PlayerModeController {
             .filter((hg) => !this.isHuman(hg))
             .map((hg) => ({
                 id: hg.id,
-                guess: botGuess(question, this.botSkill(hg), seededRand(hashcode(`${seed}:tiebreak:${round}:${hg.id}`))),
+                guess: botGuess(question, this.botSkill(hg, `${seed}:tiebreak:${round}`), seededRand(hashcode(`${seed}:tiebreak:${round}:${hg.id}`))),
             }));
         const humans = this.playingHumans(tied);
         this.gather<number>(
@@ -2034,7 +2055,7 @@ export class PlayerModeController {
                     onDone: () => (again ? this.tiebreak(title, closest, seed, done, round + 1) : done(closest[0])),
                 });
             },
-            (player) => botGuess(question, this.botSkill(player), seededRand(hashcode(`${seed}:tiebreak:${round}:${player.id}`)))
+            (player) => botGuess(question, this.botSkill(player, `${seed}:tiebreak:${round}`), seededRand(hashcode(`${seed}:tiebreak:${round}:${player.id}`)))
         );
     }
 

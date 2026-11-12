@@ -337,6 +337,7 @@ export const DigitSpanComp: CompDefinition = {
 // ---------------- Count 'Em ----------------
 
 const COUNT_ROUNDS = 5;
+const COUNT_LOOK_SECONDS = 5; // how long each pile stays up
 
 // The piles and the questions, the same for every player and bot.
 export function generateCountRounds(rand: Rand) {
@@ -358,7 +359,7 @@ function CountEm(props: CompProps) {
 
     React.useEffect(() => {
         if (phase !== "show") return;
-        const t = setTimeout(() => setPhase("answer"), 3000);
+        const t = setTimeout(() => setPhase("answer"), COUNT_LOOK_SECONDS * 1000);
         return () => clearTimeout(t);
     }, [phase]);
 
@@ -431,7 +432,7 @@ export const CountEmComp: CompDefinition = {
     name: "Count 'Em",
     emoji: "🧮",
     kind: "memory",
-    rules: `${COUNT_ROUNDS} rounds. A pile of items flashes for 3 seconds, then you're asked how many of one kind there were. The smallest total error wins.`,
+    rules: `${COUNT_ROUNDS} rounds. A pile of items flashes for ${COUNT_LOOK_SECONDS} seconds, then you're asked how many of one kind there were. The smallest total error wins.`,
     maxSeconds: 150,
     Component: CountEm,
     simulate: simulateCountEm,

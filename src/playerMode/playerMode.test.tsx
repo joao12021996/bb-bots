@@ -1103,7 +1103,7 @@ describe("wine cellar", () => {
 
 describe("knockout comps", () => {
     // Plays seasons until a knockout HoH comes up, recording what the players were asked during it.
-    function findKnockout(humansWin: boolean) {
+    function findKnockout(humansWin: boolean, onBoard?: (controller: PlayerModeController, board: Extract<Prompt, { kind: "knockout" }>, n: number) => void) {
         for (let id = 0; id < 12; id++) {
             const controller = new PlayerModeController(newPlayerSave(newGame(12), [id]));
             controller.state.seed = 900 + id;
@@ -1116,7 +1116,10 @@ describe("knockout comps", () => {
             for (let guard = 0; guard < 1500; guard++) {
                 const p = prompt as Prompt | null;
                 if (!p || p.kind === "gameOver") break;
-                if (p.kind === "knockout") boards.push(p);
+                if (p.kind === "knockout") {
+                    boards.push(p);
+                    if (onBoard) onBoard(controller, p, boards.length);
+                }
                 if (p.kind === "tiebreak" && p.heading === "Knockout duel") {
                     // win or lose the duel on purpose
                     p.onGuess(humansWin ? p.question.answer : 999);
@@ -1147,6 +1150,25 @@ describe("knockout comps", () => {
         expect(last.out.length).toBeGreaterThanOrEqual(4);
         expect(boards.flatMap((b) => b.lines).some((line) => line.includes("is out."))).toBe(true);
         expect(controller.state.usedComps.filter((c) => c === KNOCKOUT_ID).length).toBe(1);
+        // one duel at a time, so a player who's out (or waiting) can watch it play out
+        boards.forEach((b) => expect(b.lines.filter((line) => line.includes("is out.")).length).toBeLessThanOrEqual(1));
+        expect(boards.length).toBeGreaterThanOrEqual(last.out.length);
+    });
+
+    it("a reload in the middle shows the duel you were looking at, not the ones you've already seen", () => {
+        let checked = 0;
+        findKnockout(false, (controller, board, n) => {
+            if (n !== 3) return;
+            const restored = new PlayerModeController(migrateSave(deserialize<any>(serialize(controller.state)))!);
+            let first: Prompt | null = null;
+            restored.prompt$.subscribe((p) => (first = first || p));
+            restored.start();
+            const shown = first as Prompt | null;
+            expect(shown && shown.kind).toBe("knockout");
+            if (shown && shown.kind === "knockout") expect(shown.lines).toEqual(board.lines);
+            checked++;
+        });
+        expect(checked).toBe(1);
     });
 
     it("the duel winner picks the next pair, and the picks cost them with whoever they picked", () => {
@@ -1193,6 +1215,8 @@ describe("tainted wine", () => {
         outLines.forEach((l) => expect(l).toContain(`(${STRIKES_OUT}/${STRIKES_OUT})`));
         expect(asked.length).toBeGreaterThan(0);
         expect(controller.state.usedComps.filter((c) => c === TAINTED_WINE_ID).length).toBe(1);
+        // one glass at a time
+        boards.forEach((b) => expect(b.lines.filter((line) => line.includes("drank the tainted wine")).length).toBeLessThanOrEqual(1));
     });
 
     it("bots read tells, and sharper bots read the pourer better", () => {

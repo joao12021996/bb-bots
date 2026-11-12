@@ -7,7 +7,7 @@ import { gaussian, pick, Rand, randInt, seededRand } from "./random";
 // The tiebreaker: when a comp ends in a tie for first, the tied houseguests answer one closest-number question.
 // A box of things flashes on screen, far too many to count in time. Closest guess wins.
 
-export const TIEBREAK_LOOK_SECONDS = 5;
+export const TIEBREAK_LOOK_SECONDS = 8;
 
 const THINGS: [string, string][] = [
     ["🔑", "keys"],
