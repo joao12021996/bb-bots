@@ -3,7 +3,7 @@ import { GameState } from "../../model";
 import { WeekRecord } from "../history";
 import { Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
-import { AnswerReveal, QuizScoreboard, Reveal, revealRows, useQuizClock, wrongOption } from "./compUi";
+import { AnswerReveal, QuizScoreboard, Reveal, revealRows, rightSoFar, useQuizClock, wrongOption } from "./compUi";
 import { answerQuestion, chance, clamp, gaussian, pick, Rand, sample, seededRand, shuffled } from "./random";
 
 // Comps about the houseguests themselves. Scored as correct * 100 + a speed bonus, with a live scoreboard.
@@ -151,6 +151,7 @@ export const ZoomInComp: CompDefinition = {
         return c * 100 + c * (99 / ZOOM_ROUNDS) * (0.3 + 0.5 * p);
     },
     format: (s) => `${Math.floor(s / 100)}/${ZOOM_ROUNDS} right`,
+    progress: (r, n) => rightSoFar(r, n) * 100,
 };
 
 // ---------------- Fact or Fiction ----------------
@@ -329,6 +330,7 @@ export const FactOrFictionComp: CompDefinition = {
     simulate: simulateFactOrFiction,
     botScore: (p) => Math.min(FACTS, Math.round(FACTS * (0.45 + 0.5 * p))) * 100 + p * 60,
     format: (s) => `${Math.floor(s / 100)}/${FACTS} right`,
+    progress: (r, n) => rightSoFar(r, n) * 100,
     // a late-game comp: there have to be enough former houseguests to ask about
     available: (gs) => gs.houseguests.filter((hg) => hg.isEvicted).length >= FACT_MIN_EVICTED,
 };

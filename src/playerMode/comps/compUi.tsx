@@ -1,6 +1,6 @@
 import React from "react";
 import { BigButton, Subtle, Title } from "../ui/common";
-import { CompProps } from "./compTypes";
+import { CompDefinition, CompProps, RoundData, SimContext } from "./compTypes";
 import { hashcode } from "../../utils";
 
 // Shared controls for competitions.
@@ -197,6 +197,79 @@ export function revealRows(
     ];
 }
 
+// ---------- the score so far, between stages ----------
+
+type Face = { id: number; name: string; imageURL: string };
+
+// What the screens between a comp's rounds need to show everyone's score so far (given by CompPlay).
+export interface StageInfo {
+    comp: CompDefinition;
+    ctx: SimContext;
+    human: Face;
+    mine: () => RoundData; // the player's rounds so far
+    opponents: { hg: Face; score: number; answers?: boolean[]; picks?: (number | string)[]; live?: { done: boolean } }[]; // bots, and players done
+    playing: { hg: Face; score: number | null; answers?: boolean[]; picks?: (number | string)[] }[]; // online: other players still playing
+}
+
+export const StageContext = React.createContext<StageInfo | null>(null);
+
+// Online: other players are still playing (so there's someone to compare with even before anyone's done).
+export function useRivalsPlaying(): boolean {
+    const info = React.useContext(StageContext);
+    return !!info && info.playing.length > 0;
+}
+
+// For comps' progress(): right answers, and the sum of the picks, in the first n rounds.
+export const rightSoFar = (r: RoundData, n: number) => (r.answers || []).slice(0, n).filter(Boolean).length;
+export const sumSoFar = (r: RoundData, n: number) => (r.picks || []).slice(0, n).reduce<number>((a, b) => a + (Number(b) || 0), 0);
+const roundsPlayed = (r: RoundData) => Math.max(r.answers ? r.answers.length : 0, r.picks ? r.picks.length : 0);
+
+// Everyone's score so far, bots included, between a comp's rounds: after the first `done` rounds, or, in
+// knockout comps, once the player has cleared round `cleared` (everyone else: the last round they got through).
+export function StageScores(props: { done: number } | { cleared: number }) {
+    const info = React.useContext(StageContext);
+    if (!info) return null;
+    const { comp, ctx } = info;
+    const rows: { hg: Face; value: number | null; you?: boolean; note?: string }[] = [];
+    if ("done" in props) {
+        const progress = comp.progress;
+        if (!progress) return null;
+        const n = props.done;
+        rows.push({ hg: info.human, value: progress(info.mine(), n, ctx), you: true });
+        info.opponents.forEach((o) => (o.answers || o.picks) && rows.push({ hg: o.hg, value: progress(o, n, ctx) }));
+        info.playing.forEach((p) => {
+            // they may not be this far yet: their score so far
+            const k = Math.min(n, roundsPlayed(p));
+            rows.push({ hg: p.hg, value: k > 0 ? progress(p, k, ctx) : null, note: k < n ? `⏳ round ${k + 1}` : "⏳" });
+        });
+    } else {
+        const n = props.cleared;
+        rows.push({ hg: info.human, value: n, you: true });
+        // bots: how far they've got by this round; players done: how far they got
+        info.opponents.forEach((o) => rows.push({ hg: o.hg, value: o.live ? o.score : Math.min(o.score, n) }));
+        info.playing.forEach((p) => rows.push({ hg: p.hg, value: p.score, note: "⏳" }));
+    }
+    if (rows.length < 2) return null;
+    rows.sort((x, y) => (y.value ?? -Infinity) - (x.value ?? -Infinity));
+    return (
+        <div className="bbb-stage-scores">
+            <Subtle>🏆 Current score</Subtle>
+            <ol className="bbb-leaderboard">
+                {rows.map((r) => (
+                    <li key={r.hg.id} className={r.you ? "is-human" : ""}>
+                        <img src={r.hg.imageURL} alt="" />
+                        <span className="bbb-lb-name">
+                            {r.you ? "You" : r.hg.name}
+                            {r.note ? ` ${r.note}` : ""}
+                        </span>
+                        <span className="bbb-lb-score">{r.value === null ? "playing…" : comp.format(r.value)}</span>
+                    </li>
+                ))}
+            </ol>
+        </div>
+    );
+}
+
 // The pause after an answer: the right answer, and what everyone else said.
 export function AnswerReveal(props: { reveal: Reveal; last: boolean; onNext: () => void }) {
     const { reveal } = props;
@@ -217,6 +290,7 @@ export function AnswerReveal(props: { reveal: Reveal; last: boolean; onNext: () 
                     </div>
                 ))}
             </div>
+            <StageScores done={reveal.index + 1} />
             <BigButton kind="success" onClick={props.onNext}>
                 {props.last ? "See how I did" : "Next question"}
             </BigButton>
@@ -261,6 +335,7 @@ export function KnockoutPause(props: {
                 {out.map((o) => face(o, true))}
                 {still.map((o) => face(o, false))}
             </div>
+            <StageScores cleared={props.cleared} />
             <BigButton kind="success" onClick={props.onNext}>
                 Next round
             </BigButton>

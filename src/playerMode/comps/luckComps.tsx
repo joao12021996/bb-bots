@@ -2,6 +2,7 @@ import React from "react";
 import { rng } from "../../utils";
 import { BigButton, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
+import { rightSoFar, StageScores, sumSoFar } from "./compUi";
 import { chance, gaussian, Rand, randInt, seededRand } from "./random";
 
 // Luck comps: like Big Brother's "Pandora's box" style comps, skill only matters a little.
@@ -27,6 +28,7 @@ function HigherOrLower(props: CompProps) {
         const right = next === cur || (higher ? next > cur : next < cur);
         const c = correct + (right ? 1 : 0);
         setCorrect(c);
+        if (props.recordAnswer) props.recordAnswer(i, right);
         props.report(c);
         setLast(right ? "✅ Right!" : "❌ Wrong!");
         if (i + 1 >= HL_GUESSES) {
@@ -70,6 +72,7 @@ function HigherOrLower(props: CompProps) {
                     </BigButton>
                 </div>
             )}
+            {i > 0 && <StageScores done={i} />}
         </div>
     );
 }
@@ -78,14 +81,14 @@ function simulateHigherOrLower(ctx: SimContext, skill: number, noise: Rand): Sim
     // the exact same cards; better bots play the odds more consistently
     const rand = seededRand(ctx.seed);
     const deck = Array.from({ length: HL_GUESSES + 1 }, () => randInt(rand, 1, 13));
-    let right = 0;
+    const answers: boolean[] = [];
     for (let i = 0; i < HL_GUESSES; i++) {
         const playOdds = chance(noise, 0.65 + 0.35 * skill);
         const higher = playOdds ? deck[i] <= 7 : noise() < 0.5;
         const next = deck[i + 1];
-        if (next === deck[i] || (higher ? next > deck[i] : next < deck[i])) right++;
+        answers.push(next === deck[i] || (higher ? next > deck[i] : next < deck[i]));
     }
-    return { score: right };
+    return { score: answers.filter(Boolean).length, answers };
 }
 
 export const HigherOrLowerComp: CompDefinition = {
@@ -110,6 +113,7 @@ export const HigherOrLowerComp: CompDefinition = {
         return right;
     },
     format: (s) => `${s} right`,
+    progress: (r, n) => rightSoFar(r, n),
 };
 
 // ---------------- Bank or Bust ----------------
@@ -121,14 +125,24 @@ function BankOrBust(props: CompProps) {
     const [pot, setPot] = React.useState(0);
     const [total, setTotal] = React.useState(0);
     const [last, setLast] = React.useState<number | null>(null);
-    const [busted, setBusted] = React.useState(false);
+    const [between, setBetween] = React.useState<"bust" | "banked" | null>(null); // the scores after a round
+    const [banked, setBanked] = React.useState(0);
 
-    const endRound = (newTotal: number) => {
+    // the round's over: true if that was the last one
+    const endRound = (newTotal: number, got: number) => {
+        if (props.recordAnswer) props.recordAnswer(round, got > 0, got);
         props.report(newTotal);
         if (round + 1 >= BANK_ROUNDS) {
             props.finish(newTotal);
-            return;
+            return true;
         }
+        if (props.pauseClock) props.pauseClock(true);
+        return false;
+    };
+    const nextRound = () => {
+        if (props.pauseClock) props.pauseClock(false);
+        setBetween(null);
+        setLast(null);
         setRound(round + 1);
         setPot(0);
     };
@@ -136,8 +150,8 @@ function BankOrBust(props: CompProps) {
         const die = randInt(props.rand, 1, 6);
         setLast(die);
         if (die === 1) {
-            setBusted(true);
             setPot(0);
+            if (!endRound(total, 0)) setBetween("bust");
             return;
         }
         setPot(pot + die);
@@ -148,20 +162,21 @@ function BankOrBust(props: CompProps) {
                 Round {round + 1} of {BANK_ROUNDS}, banked {total}
             </Title>
             <div style={{ fontSize: "4rem", margin: "8px 0" }}>{last === null ? "🎲" : ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"][last - 1]}</div>
-            {busted ? (
+            {between ? (
                 <div>
                     <p>
-                        <b>BUST!</b> You rolled a 1 and lost this round's pot.
+                        {between === "bust" ? (
+                            <>
+                                <b>BUST!</b> You rolled a 1 and lost this round's pot.
+                            </>
+                        ) : (
+                            <>
+                                You banked <b>{banked}</b>.
+                            </>
+                        )}
                     </p>
-                    <BigButton
-                        onClick={() => {
-                            setBusted(false);
-                            setLast(null);
-                            endRound(total);
-                        }}
-                    >
-                        Next round
-                    </BigButton>
+                    <StageScores done={round + 1} />
+                    <BigButton onClick={nextRound}>Next round</BigButton>
                 </div>
             ) : (
                 <div>
@@ -177,8 +192,8 @@ function BankOrBust(props: CompProps) {
                         onClick={() => {
                             const t = total + pot;
                             setTotal(t);
-                            setLast(null);
-                            endRound(t);
+                            setBanked(pot);
+                            if (!endRound(t, pot)) setBetween("banked");
                         }}
                     >
                         💰 Bank {pot}
@@ -193,7 +208,7 @@ function simulateBankOrBust(ctx: SimContext, skill: number, noise: Rand): SimRes
     // the exact same dice rolls in the same order; better bots stop closer to the best point (~20)
     const rand = seededRand(ctx.seed);
     const threshold = 10 + Math.round(10 * skill + 2 * gaussian(noise));
-    let total = 0;
+    const picks: number[] = [];
     for (let r = 0; r < BANK_ROUNDS; r++) {
         let pot = 0;
         while (pot < threshold) {
@@ -204,9 +219,9 @@ function simulateBankOrBust(ctx: SimContext, skill: number, noise: Rand): SimRes
             }
             pot += die;
         }
-        total += pot;
+        picks.push(pot);
     }
-    return { score: total };
+    return { score: picks.reduce((a, b) => a + b, 0), answers: picks.map((p) => p > 0), picks };
 }
 
 export const BankOrBustComp: CompDefinition = {
@@ -237,4 +252,5 @@ export const BankOrBustComp: CompDefinition = {
         return total;
     },
     format: (s) => `${s} banked`,
+    progress: (r, n) => sumSoFar(r, n),
 };

@@ -5,7 +5,7 @@ import { WeekRecord } from "../history";
 import { Face, Grid, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { answerQuestion, clamp, gaussian, Rand, sample, seededRand, shuffled } from "./random";
-import { AnswerReveal, QuizScoreboard, Reveal, revealRows, useQuizClock, wrongOption } from "./compUi";
+import { AnswerReveal, QuizScoreboard, Reveal, revealRows, rightSoFar, useQuizClock, wrongOption } from "./compUi";
 
 const MAX_QUESTIONS = 8;
 const SECONDS_PER_QUESTION = 15;
@@ -211,6 +211,7 @@ export const BeforeOrAfterComp: CompDefinition = {
         return c * 100 + Math.max(0, 99 - (30 + (1 - p) * 70) * 0.66);
     },
     format: (s) => `${Math.floor(s / 100)} correct`,
+    progress: (r, n) => rightSoFar(r, n) * 100,
     available: (_gs, history) => history.filter((w) => w.evictedIds.length > 0).length >= 2,
 };
 

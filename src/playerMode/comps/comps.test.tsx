@@ -6,6 +6,7 @@ import { prepareNextWeek } from "../../components/episode/episodeFactory";
 import { BigBrotherVanilla } from "../../components/episode/bigBrotherEpisode";
 import { ALL_COMPS } from ".";
 import { seededRand } from "./random";
+import { StageContext, StageInfo, StageScores } from "./compUi";
 
 // Mounts every competition, clicks around a bit, and checks nothing throws.
 
@@ -312,5 +313,86 @@ describe("ties", () => {
         expect(tiedForFirst(wall, [{ id: 1, score: 42.5 }, { id: 2, score: 42.52 }, { id: 3, score: 30 }])).toEqual([2]);
         // both lasted the full time: that's a real tie
         expect(tiedForFirst(wall, [{ id: 1, score: 300 }, { id: 2, score: 300 }])).toEqual([1, 2]);
+    });
+});
+
+describe("the score between stages", () => {
+    const face = (id: number, name: string) => ({ id, name, imageURL: "" });
+    const count = ALL_COMPS.find((c) => c.id === "count-em")!;
+    const simon = ALL_COMPS.find((c) => c.id === "simon-says")!;
+    const ctx = () => {
+        const gs = game();
+        return { seed: 5, gameState: gs, history, participants: nonEvictedHouseguests(gs) };
+    };
+    const draw = (info: StageInfo, el: React.ReactElement) => {
+        const div = document.createElement("div");
+        syncAct(() => {
+            ReactDOM.render(<StageContext.Provider value={info}>{el}</StageContext.Provider>, div);
+        });
+        const rows = Array.from(div.querySelectorAll("li")).map(
+            (r) => `${r.querySelector(".bbb-lb-name")!.textContent}: ${r.querySelector(".bbb-lb-score")!.textContent}`
+        );
+        ReactDOM.unmountComponentAtNode(div);
+        return rows;
+    };
+
+    it("shows everyone's score after the rounds played so far, bots and players still playing included", () => {
+        const info: StageInfo = {
+            comp: count,
+            ctx: ctx(),
+            human: face(1, "Me"),
+            mine: () => ({ picks: [1, 0] }),
+            opponents: [{ hg: face(2, "Bot"), score: -9, picks: [3, 3, 1, 1, 1] }],
+            playing: [
+                { hg: face(3, "Ann"), score: -10, picks: [0] },
+                { hg: face(4, "Cal"), score: null },
+            ],
+        };
+        expect(draw(info, <StageScores done={2} />)).toEqual([
+            "Ann ⏳ round 2: 0 off in total",
+            "You: 1 off in total",
+            "Bot: 6 off in total",
+            "Cal ⏳ round 1: playing…",
+        ]);
+    });
+
+    it("shows how far everyone got in a knockout", () => {
+        const info: StageInfo = {
+            comp: simon,
+            ctx: ctx(),
+            human: face(1, "Me"),
+            mine: () => ({}),
+            opponents: [
+                { hg: face(2, "Bot"), score: 9 },
+                { hg: face(4, "Out"), score: 4 },
+                { hg: face(5, "Done"), score: 7, live: { done: true } },
+            ],
+            playing: [{ hg: face(3, "Ann"), score: null }],
+        };
+        expect(draw(info, <StageScores cleared={5} />)).toEqual([
+            "Done: sequence of 7",
+            "You: sequence of 5",
+            "Bot: sequence of 5",
+            "Out: sequence of 4",
+            "Ann ⏳: playing…",
+        ]);
+    });
+
+    it("every comp played in rounds can work out a bot's score after each round, adding up to its result", () => {
+        const staged = ALL_COMPS.filter((c) => c.progress);
+        expect(staged.length).toBeGreaterThanOrEqual(15);
+        staged.forEach((comp) => {
+            for (let seed = 1; seed <= 5; seed++) {
+                const c = { ...ctx(), seed };
+                if (comp.available && !comp.available(c.gameState, c.history)) continue;
+                const r = comp.simulate(c, 0.6, seededRand(seed));
+                expect(r.answers || r.picks).toBeTruthy();
+                const rounds = Math.max(r.answers ? r.answers.length : 0, r.picks ? r.picks.length : 0);
+                const end = comp.progress!(r, rounds, c);
+                // speed bonuses aside, the last round's score is the result
+                expect([comp.id, Math.abs(end - r.score) < 100]).toEqual([comp.id, true]);
+                expect([comp.id, comp.progress!(r, 0, c) === 0]).toEqual([comp.id, true]);
+            }
+        });
     });
 });

@@ -4,7 +4,7 @@ import { WeekRecord } from "../history";
 import { DAY_PART, dayLabel, dayOf } from "../days";
 import { BigButton, Face, Grid, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
-import { AnswerReveal, Keypad, Reveal, revealRows, useQuizClock, wrongOption } from "./compUi";
+import { AnswerReveal, Keypad, Reveal, revealRows, rightSoFar, sumSoFar, useQuizClock, wrongOption } from "./compUi";
 import { answerQuestion, chance, clamp, gaussian, pick, Rand, randInt, sample, seededRand, shuffled } from "./random";
 
 // Comps in the style of the show's best-known formats: the oracle that sends you hunting for answers,
@@ -163,6 +163,7 @@ export const OtevComp: CompDefinition = {
     simulate: simulateOtev,
     botScore: (p) => -(OTEV_ROUNDS * (4 + (1 - p) * 9)),
     format: (s) => `${(-s).toFixed(1)}s`,
+    progress: (r, n) => -sumSoFar(r, n),
     available: (gs, history) => otevFacts(gs, history).length >= OTEV_ROUNDS,
 };
 
@@ -485,6 +486,7 @@ export const BBComicsComp: CompDefinition = {
     simulate: simulateBBComics,
     botScore: (p) => quizScore(Math.round(COMIC_ROUNDS * (0.3 + 0.65 * p)), COMIC_ROUNDS * (COMIC_STUDY + 2 + (1 - p) * 5), 0.9),
     format: formatQuiz,
+    progress: (r, n) => rightSoFar(r, n) * 100,
 };
 
 // ---------------- Over or Under (counting) ----------------
@@ -611,6 +613,7 @@ export const OverOrUnderComp: CompDefinition = {
     simulate: simulateOverOrUnder,
     botScore: (p) => quizScore(Math.round(COUNT_ROUNDS * (0.5 + 0.45 * p)), COUNT_ROUNDS * (COUNT_LOOK + 1.5 + (1 - p) * 3), 1.2),
     format: formatQuiz,
+    progress: (r, n) => rightSoFar(r, n) * 100,
 };
 
 // ---------------- The Days Quiz ----------------
@@ -719,6 +722,10 @@ export const DaysQuizComp: CompDefinition = {
     simulate: simulateDaysQuiz,
     botScore: (p) => -Math.round(DAYS_QUESTIONS * (1 + (1 - p) * 7)),
     format: (s) => (s === 0 ? "perfect!" : `${-s} days off`),
+    progress: (r, n, ctx) => {
+        const questions = dayQuestions(ctx.gameState, ctx.history, seededRand(ctx.seed));
+        return -(r.picks || []).slice(0, n).reduce<number>((sum, p, i) => sum + Math.abs(Number(p) - questions[i].answer), 0);
+    },
     available: (gs, history) => dayFacts(gs, history).length >= DAYS_QUESTIONS,
 };
 
@@ -839,5 +846,6 @@ export const FaceMorphComp: CompDefinition = {
     simulate: simulateFaceMorph,
     botScore: (p) => quizScore(Math.round(MORPH_ROUNDS * 2 * clamp(0.3 + 0.65 * p, 0, 1)), MORPH_ROUNDS * (3 + (1 - p) * 8), 1),
     format: (s) => `${Math.floor(s / 100)} faces`,
+    progress: (r, n) => sumSoFar(r, n) * 100,
     available: (gs) => gs.houseguests.length >= 4,
 };

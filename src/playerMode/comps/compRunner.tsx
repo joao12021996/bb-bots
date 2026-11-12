@@ -2,8 +2,9 @@ import React from "react";
 import { GameState, Houseguest } from "../../model";
 import { WeekRecord } from "../history";
 import { BigButton, Face, formatSeconds, Grid, Panel, Subtle, Title } from "../ui/common";
-import { CompDefinition, EnduranceDeals, Opponent } from "./compTypes";
+import { CompDefinition, EnduranceDeals, isStaged, Opponent } from "./compTypes";
 import { seededRand } from "./random";
+import { StageContext, StageInfo } from "./compUi";
 import { compsInPlay$ } from "../../subjects/subjects";
 
 export interface CompResult {
@@ -48,7 +49,7 @@ interface CompPlayProps {
     onStart?: () => void;
     // the player's score so far (and answers, in question comps), saved now and then: reloading mid-comp
     // leaves them with it. Online, the other players see it come in.
-    onReport?: (score: number, answers?: boolean[]) => void;
+    onReport?: (score: number, answers?: boolean[], picks?: (number | string)[]) => void;
     // online: the other players in it, playing at the same time
     live?: LiveScore[];
     // they left in the middle of their turn: no do-overs, this is their score
@@ -127,13 +128,20 @@ export function CompPlay(props: CompPlayProps) {
             pausedAt.current = null;
         }
     }, []);
-    const recordAnswer = React.useCallback((index: number, correct: boolean, pick?: number | string) => {
-        answers.current[index] = correct;
-        if (pick !== undefined) picks.current[index] = pick;
-    }, []);
     const done = React.useRef(false);
 
     const { onReport, onStart, onScore, autoSubmit } = props;
+    const sofar = () => [answers.current.length ? [...answers.current] : undefined, picks.current.length ? [...picks.current] : undefined] as const;
+    const recordAnswer = React.useCallback(
+        (index: number, correct: boolean, pick?: number | string) => {
+            answers.current[index] = correct;
+            if (pick !== undefined) picks.current[index] = pick;
+            // online: the others see the round come in
+            if (onReport && lastReported.current !== null) onReport(lastReported.current, ...sofar());
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [onReport]
+    );
     const submit = React.useCallback(
         (s: number) => onScore(s, answers.current.length ? [...answers.current] : undefined, picks.current.length ? [...picks.current] : undefined),
         [onScore]
@@ -151,18 +159,38 @@ export function CompPlay(props: CompPlayProps) {
     const report = React.useCallback(
         (s: number) => {
             lastReported.current = s;
-            if (onReport) onReport(s, answers.current.length ? [...answers.current] : undefined);
+            if (onReport) onReport(s, ...sofar());
         },
         [onReport]
     );
-    // the other players, as opponents the comp can show (only changes when their scores do)
-    const liveKey = JSON.stringify(props.live || []);
+    // the other players, as opponents the comp can show (only changes when their scores do). A comp played in
+    // one go shows nobody's score until everyone's done (endurance: who's still up is the comp itself).
+    const staged = isStaged(props.comp);
+    const showLive = staged || props.comp.kind === "endurance";
+    const liveKey = JSON.stringify((showLive && props.live) || []);
     const baseOpponents = props.opponents;
     const opponents = React.useMemo(
         () => [...baseOpponents, ...liveOpponents(props.comp, props.participants, JSON.parse(liveKey))],
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [baseOpponents, liveKey]
     );
+
+    // for the screens between stages: everyone's score so far
+    const stage = React.useMemo<StageInfo>(() => {
+        const playing = (JSON.parse(liveKey) as LiveScore[])
+            .filter((l) => !l.done)
+            .map((l) => ({ hg: props.participants.find((p) => p.id === l.id)!, score: l.score, answers: l.answers }))
+            .filter((p) => !!p.hg);
+        return {
+            comp: props.comp,
+            ctx: { seed: props.seed, gameState: props.gameState, history: props.history, participants: props.participants },
+            human: props.player,
+            mine: () => ({ answers: answers.current, picks: picks.current }),
+            opponents,
+            playing,
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [opponents, liveKey, props.player, props.comp, props.seed]);
 
     React.useEffect(() => {
         if (phase !== "countdown") return;
@@ -251,20 +279,22 @@ export function CompPlay(props: CompPlayProps) {
                         <span className={`bbb-timer ${remaining < 15 ? "is-low" : ""}`}>⏳ {formatSeconds(remaining)}</span>
                     )}
                 </div>
-                {props.live && <LiveStrip comp={props.comp} participants={props.participants} live={props.live} />}
-                <Component
-                    participants={props.participants}
-                    human={props.player}
-                    gameState={props.gameState}
-                    history={props.history}
-                    rand={rand}
-                    opponents={opponents}
-                    report={report}
-                    finish={finish}
-                    pauseClock={pauseClock}
-                    recordAnswer={recordAnswer}
-                    deals={props.deals}
-                />
+                {staged && props.live && <LiveStrip comp={props.comp} participants={props.participants} live={props.live} />}
+                <StageContext.Provider value={stage}>
+                    <Component
+                        participants={props.participants}
+                        human={props.player}
+                        gameState={props.gameState}
+                        history={props.history}
+                        rand={rand}
+                        opponents={opponents}
+                        report={report}
+                        finish={finish}
+                        pauseClock={pauseClock}
+                        recordAnswer={recordAnswer}
+                        deals={props.deals}
+                    />
+                </StageContext.Provider>
             </Panel>
         );
     }

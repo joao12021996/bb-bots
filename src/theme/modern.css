@@ -1774,6 +1774,10 @@ input[type="number"] {
 .bbb-live-standings {
     margin-top: 12px;
 }
+/* between a comp's stages: everyone's score so far */
+.bbb-stage-scores {
+    margin: 12px 0;
+}
 .bbb-banner.bbb-rule-breaker {
     background: rgba(239, 68, 68, 0.12);
     border-color: rgba(239, 68, 68, 0.45);

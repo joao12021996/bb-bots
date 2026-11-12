@@ -3,7 +3,7 @@ import { GameState, nonEvictedHouseguests } from "../../model";
 import { BigButton, Face, Grid, Subtle, Title, useElapsed } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { answerQuestion, chance, clamp, gaussian, Rand, sample, seededRand, shuffled } from "./random";
-import { AnswerReveal, QuizScoreboard, Reveal, revealRows, useQuizClock, wrongOption } from "./compUi";
+import { AnswerReveal, QuizScoreboard, Reveal, revealRows, rightSoFar, useQuizClock, wrongOption } from "./compUi";
 
 const ITEMS = ["🍕", "🎸", "👑", "🔑", "🐍", "💎", "🎲", "🧸", "🍩", "🚀", "🌵", "🎩"];
 const QUESTIONS = 8;
@@ -212,4 +212,5 @@ export const MemoryWallComp: CompDefinition = {
         return correct * 100 + Math.max(0, 99 - (25 + (1 - p) * 80));
     },
     format: (s) => `${Math.floor(s / 100)}/${QUESTIONS} correct`,
+    progress: (r, n) => rightSoFar(r, n) * 100,
 };

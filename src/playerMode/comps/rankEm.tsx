@@ -3,6 +3,7 @@ import { Houseguest } from "../../model";
 import { BigButton, Face, Grid, Subtle, Title } from "../ui/common";
 import { GameState } from "../../model";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
+import { StageScores, sumSoFar } from "./compUi";
 import { gaussian, pick, Rand, sample, seededRand, shuffled } from "./random";
 
 const ROUNDS = 3;
@@ -64,6 +65,7 @@ export function generateRankRounds(rand: Rand, gs: GameState) {
 function simulateRankEm(ctx: SimContext, skill: number, noise: Rand): SimResult {
     const rounds = generateRankRounds(seededRand(ctx.seed), ctx.gameState);
     let total = 0;
+    const picks: number[] = [];
     rounds.forEach(({ hgs, criterion }) => {
         // start from the right order, then make some mistakes (adjacent swaps); weaker bots make more
         const order = [...hgs].sort((a, b) => (criterion.key(a) < criterion.key(b) ? -1 : criterion.key(a) > criterion.key(b) ? 1 : 0));
@@ -72,11 +74,13 @@ function simulateRankEm(ctx: SimContext, skill: number, noise: Rand): SimResult 
             const i = Math.floor(noise() * (order.length - 1));
             [order[i], order[i + 1]] = [order[i + 1], order[i]];
         }
-        total += pairScore(order, criterion);
+        const score = pairScore(order, criterion);
+        picks.push(score);
+        total += score;
     });
     const pct = (total / ROUNDS) * 100;
     const seconds = 40 + (1 - skill) * 100;
-    return { score: pct + Math.max(0, 1 - seconds / 180) * 0.99 };
+    return { score: pct + Math.max(0, 1 - seconds / 180) * 0.99, picks };
 }
 
 function RankEm(props: CompProps) {
@@ -86,6 +90,9 @@ function RankEm(props: CompProps) {
     const [picked, setPicked] = React.useState<number | null>(null);
     const [scores, setScores] = React.useState<number[]>([]);
     const [start] = React.useState(Date.now());
+    const [between, setBetween] = React.useState(false); // the scores after a round
+    const pausedAt = React.useRef(0);
+    const paused = React.useRef(0); // time spent on the scores between rounds doesn't count
 
     const tap = (i: number) => {
         if (picked === null) {
@@ -99,20 +106,43 @@ function RankEm(props: CompProps) {
     };
 
     const lockIn = () => {
-        const newScores = [...scores, pairScore(order, rounds[round].criterion)];
+        const score = pairScore(order, rounds[round].criterion);
+        const newScores = [...scores, score];
         setScores(newScores);
+        if (props.recordAnswer) props.recordAnswer(round, score === 1, score);
         const pct = (newScores.reduce((a, b) => a + b, 0) / ROUNDS) * 100;
         props.report(pct);
         if (round + 1 >= ROUNDS) {
-            const secs = (Date.now() - start) / 1000;
+            const secs = (Date.now() - start - paused.current) / 1000;
             props.finish(pct + Math.max(0, 1 - secs / 180) * 0.99);
             return;
         }
+        pausedAt.current = Date.now();
+        if (props.pauseClock) props.pauseClock(true);
+        setBetween(true);
+    };
+    const nextRound = () => {
+        paused.current += Date.now() - pausedAt.current;
+        if (props.pauseClock) props.pauseClock(false);
+        setBetween(false);
         setRound(round + 1);
         setOrder(shuffled(props.rand, rounds[round + 1].hgs));
         setPicked(null);
     };
 
+    if (between) {
+        return (
+            <div>
+                <Title>
+                    Round {round + 1} of {ROUNDS}: {Math.round(scores[scores.length - 1] * 100)}% right
+                </Title>
+                <StageScores done={round + 1} />
+                <BigButton kind="success" onClick={nextRound}>
+                    Next round
+                </BigButton>
+            </div>
+        );
+    }
     return (
         <div>
             <Title>
@@ -151,4 +181,5 @@ export const RankEmComp: CompDefinition = {
     simulate: simulateRankEm,
     botScore: (p) => Math.min(100, 45 + 55 * Math.pow(p, 0.8)) + p * 0.9,
     format: (s) => `${Math.floor(s)}% correct`,
+    progress: (r, n) => (sumSoFar(r, n) / ROUNDS) * 100,
 };

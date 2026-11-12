@@ -2,7 +2,7 @@ import React from "react";
 import { nonEvictedHouseguests } from "../../model";
 import { BigButton, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
-import { useAnimationFrame } from "./compUi";
+import { StageScores, sumSoFar, useAnimationFrame } from "./compUi";
 import { chance, clamp, gaussian, pick, Rand, randInt, seededRand, shuffled } from "./random";
 
 // ---------------- Whack-a-Houseguest ----------------
@@ -133,6 +133,7 @@ function ReactionLights(props: CompProps) {
     const record = (ms: number) => {
         const t = [...times, ms];
         setTimes(t);
+        if (props.recordAnswer) props.recordAnswer(t.length - 1, ms < 1000, ms);
         const avg = t.reduce((a, b) => a + b, 0) / t.length;
         props.report(-Math.round((avg * t.length + 1000 * (LIGHT_ROUNDS - t.length)) / LIGHT_ROUNDS));
         setPhase("done");
@@ -183,6 +184,7 @@ function ReactionLights(props: CompProps) {
             >
                 {phase === "wait" ? "Wait for green…" : phase === "go" ? "TAP!" : phase === "done" ? (last >= 1000 ? "Too early!" : `${last} ms`) : "Ready?"}
             </div>
+            {phase === "done" && <StageScores done={times.length} />}
             {(phase === "idle" || (phase === "done" && times.length < LIGHT_ROUNDS)) && (
                 <BigButton
                     kind="success"
@@ -205,7 +207,7 @@ function simulateReactionLights(ctx: SimContext, skill: number, noise: Rand): Si
     const times = delays.map((d) =>
         chance(noise, (1 - skill) * 0.05 * d) ? 1000 : Math.max(150, 190 + (1 - skill) * 300 + 40 * gaussian(noise))
     );
-    return { score: -Math.round(times.reduce((a, b) => a + b, 0) / times.length) };
+    return { score: -Math.round(times.reduce((a, b) => a + b, 0) / times.length), answers: times.map((t) => t < 1000), picks: times.map(Math.round) };
 }
 
 export const ReactionLightsComp: CompDefinition = {
@@ -219,6 +221,7 @@ export const ReactionLightsComp: CompDefinition = {
     simulate: simulateReactionLights,
     botScore: (p) => -Math.round(210 + (1 - p) * 330),
     format: (s) => `${-s} ms average`,
+    progress: (r, n) => (n > 0 ? -Math.round(sumSoFar(r, n) / Math.min(n, (r.picks || []).length || 1)) : 0),
 };
 
 // ---------------- Color Clash ----------------

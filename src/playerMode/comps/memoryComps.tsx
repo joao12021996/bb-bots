@@ -1,7 +1,7 @@
 import React from "react";
 import { BigButton, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
-import { AnswerReveal, KnockoutPause, Keypad, Reveal, revealRows, sleep, useQuizClock } from "./compUi";
+import { AnswerReveal, KnockoutPause, Keypad, Reveal, revealRows, sleep, rightSoFar, StageScores, sumSoFar, useQuizClock, useRivalsPlaying } from "./compUi";
 import { chance, clamp, gaussian, pick, Rand, randInt, sample, seededRand, shuffled } from "./random";
 
 const EMOJIS = ["🍕", "🎸", "👑", "🔑", "🐍", "💎", "🎲", "🧸", "🍩", "🚀", "🌵", "🎩"];
@@ -11,6 +11,7 @@ const EMOJIS = ["🍕", "🎸", "👑", "🔑", "🐍", "💎", "🎲", "🧸", 
 const PADS = ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f"];
 
 function SimonSays(props: CompProps) {
+    const rivals = useRivalsPlaying(); // online: other players still playing
     const [sequence] = React.useState(() => Array.from({ length: 40 }, () => randInt(props.rand, 0, 3)));
     const [level, setLevel] = React.useState(3);
     const [lit, setLit] = React.useState<number | null>(null);
@@ -52,7 +53,7 @@ function SimonSays(props: CompProps) {
         }
         if (input + 1 === level) {
             props.report(level);
-            if (props.opponents.length > 0) {
+            if (props.opponents.length > 0 || rivals) {
                 if (props.pauseClock) props.pauseClock(true);
                 setCleared(level);
             } else setLevel(level + 1);
@@ -118,6 +119,7 @@ export const SimonSaysComp: CompDefinition = {
     simulate: simulateSimonSays,
     botScore: (p) => 2 + Math.round(10 * p),
     format: (s) => `sequence of ${s}`,
+    staged: true,
 };
 
 // ---------------- Concentration ----------------
@@ -251,6 +253,7 @@ export const ConcentrationComp: CompDefinition = {
 // ---------------- Digit Span ----------------
 
 function DigitSpan(props: CompProps) {
+    const rivals = useRivalsPlaying(); // online: other players still playing
     const [length, setLength] = React.useState(4);
     const [digits, setDigits] = React.useState(() => Array.from({ length: 4 }, () => randInt(props.rand, 0, 9)).join(""));
     const [phase, setPhase] = React.useState<"show" | "enter">("show");
@@ -269,7 +272,7 @@ function DigitSpan(props: CompProps) {
             return;
         }
         props.report(length);
-        if (props.opponents.length > 0) {
+        if (props.opponents.length > 0 || rivals) {
             if (props.pauseClock) props.pauseClock(true);
             setCleared(length);
         } else nextRound();
@@ -328,6 +331,7 @@ export const DigitSpanComp: CompDefinition = {
     simulate: simulateDigitSpan,
     botScore: (p) => 4 + Math.round(6 * p),
     format: (s) => `${s} digits`,
+    staged: true,
 };
 
 // ---------------- Count 'Em ----------------
@@ -360,13 +364,17 @@ function CountEm(props: CompProps) {
 
     const r = rounds[round];
     const submit = () => {
-        const errs = [...errors, Math.abs(parseInt(value, 10) - r.answer)];
+        const miss = Math.abs(parseInt(value, 10) - r.answer);
+        const errs = [...errors, miss];
         setErrors(errs);
+        if (props.recordAnswer) props.recordAnswer(round, miss === 0, miss);
+        if (props.pauseClock) props.pauseClock(true);
         const total = errs.reduce((a, b) => a + b, 0);
         props.report(-(total + (COUNT_ROUNDS - errs.length) * 10));
         setPhase("feedback");
     };
     const next = () => {
+        if (props.pauseClock) props.pauseClock(false);
         if (round + 1 >= COUNT_ROUNDS) {
             props.finish(-errors.reduce((a, b) => a + b, 0));
             return;
@@ -403,6 +411,7 @@ function CountEm(props: CompProps) {
                     <p>
                         There were <b>{r.answer}</b>. You said {value}.
                     </p>
+                    <StageScores done={round + 1} />
                     <BigButton onClick={next}>{round + 1 >= COUNT_ROUNDS ? "Finish" : "Next round"}</BigButton>
                 </div>
             )}
@@ -413,11 +422,8 @@ function CountEm(props: CompProps) {
 function simulateCountEm(ctx: SimContext, skill: number, noise: Rand): SimResult {
     // same piles: bigger counts are harder to get exactly right
     const rounds = generateCountRounds(seededRand(ctx.seed));
-    const error = rounds.reduce(
-        (sum, r) => sum + Math.round(Math.abs(gaussian(noise)) * (0.3 + (1 - skill) * 2.5) * (r.answer / 6)),
-        0
-    );
-    return { score: -error };
+    const misses = rounds.map((r) => Math.round(Math.abs(gaussian(noise)) * (0.3 + (1 - skill) * 2.5) * (r.answer / 6)));
+    return { score: -misses.reduce((a, b) => a + b, 0), answers: misses.map((m) => m === 0), picks: misses };
 }
 
 export const CountEmComp: CompDefinition = {
@@ -431,6 +437,7 @@ export const CountEmComp: CompDefinition = {
     simulate: simulateCountEm,
     botScore: (p) => -Math.round((1 - p) * 14),
     format: (s) => `${-s} off in total`,
+    progress: (r, n) => -sumSoFar(r, n),
 };
 
 // ---------------- Find the Key ----------------
@@ -608,4 +615,5 @@ export const FindTheKeyComp: CompDefinition = {
     simulate: simulateFindTheKey,
     botScore: (p) => Math.round(1 + 4 * p),
     format: (s) => `${s} of ${KEY_ROUNDS} found`,
+    progress: (r, n) => rightSoFar(r, n),
 };

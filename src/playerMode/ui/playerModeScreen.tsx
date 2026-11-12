@@ -2,6 +2,7 @@ import React from "react";
 import { Subscription } from "rxjs";
 import { continueOverride$ } from "../../subjects/subjects";
 import { CompPlay, CompResults, LiveStandings } from "../comps/compRunner";
+import { isStaged } from "../comps/compTypes";
 import { actorOf, PlayerModeController, Prompt } from "../playerModeController";
 import { sessionFor } from "../net/netSession";
 import { watchForInspector } from "../net/inspectWatch";
@@ -163,7 +164,7 @@ export class PlayerModeScreen extends React.Component<Props, State> {
             case "waiting":
                 body = session ? (
                     <WaitingOnPlayers session={session} controller={controller} title={prompt.title} waitingOn={prompt.waitingOn}>
-                        {prompt.comp && (
+                        {prompt.comp && isStaged(prompt.comp.comp) && (
                             <LiveStandings
                                 comp={prompt.comp.comp}
                                 participants={prompt.comp.participants}

@@ -1,6 +1,7 @@
 import React from "react";
 import { BigButton, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
+import { StageScores, sumSoFar } from "./compUi";
 import { gaussian, Rand, randInt, seededRand } from "./random";
 
 const ROUNDS = 3;
@@ -14,11 +15,8 @@ export function generateTargets(rand: Rand): number[] {
 function simulateStopTheClock(ctx: SimContext, skill: number, noise: Rand): SimResult {
     const targets = generateTargets(seededRand(ctx.seed));
     // longer targets are harder to time
-    const error = targets.reduce(
-        (sum, t) => sum + Math.abs(gaussian(noise)) * (0.04 + (1 - skill) * 0.7) * (t / 7.5),
-        0
-    );
-    return { score: -error };
+    const misses = targets.map((t) => Math.abs(gaussian(noise)) * (0.04 + (1 - skill) * 0.7) * (t / 7.5));
+    return { score: -misses.reduce((a, b) => a + b, 0), picks: misses };
 }
 
 function StopTheClock(props: CompProps) {
@@ -42,13 +40,16 @@ function StopTheClock(props: CompProps) {
         if (startedAt === null || stoppedAt !== null) return;
         const now = Date.now();
         const elapsed = (now - startedAt) / 1000;
-        const newErrors = [...errors, Math.abs(elapsed - target)];
+        const miss = Math.abs(elapsed - target);
+        const newErrors = [...errors, miss];
         setStoppedAt(now);
         setErrors(newErrors);
+        if (props.recordAnswer) props.recordAnswer(round, miss < 0.1, miss);
+        if (props.pauseClock) props.pauseClock(true);
         const total = newErrors.reduce((a, b) => a + b, 0);
         // unplayed rounds count as a big miss if time runs out
         props.report(-(total + (ROUNDS - newErrors.length) * target));
-    }, [startedAt, stoppedAt, errors, target, props]);
+    }, [startedAt, stoppedAt, errors, target, props, round]);
 
     // auto-stop if the player waits far too long
     const elapsed = startedAt === null ? 0 : ((stoppedAt || Date.now()) - startedAt) / 1000;
@@ -57,6 +58,7 @@ function StopTheClock(props: CompProps) {
     }, [running, elapsed, target, stop]);
 
     const next = () => {
+        if (props.pauseClock) props.pauseClock(false);
         if (round + 1 >= ROUNDS) {
             props.finish(-errors.reduce((a, b) => a + b, 0));
             return;
@@ -97,6 +99,7 @@ function StopTheClock(props: CompProps) {
                     <p>
                         You were <b>{errors[errors.length - 1].toFixed(2)}s</b> off.
                     </p>
+                    <StageScores done={errors.length} />
                     <BigButton onClick={next}>{round + 1 >= ROUNDS ? "Finish" : "Next round"}</BigButton>
                 </div>
             )}
@@ -119,4 +122,5 @@ export const StopTheClockComp: CompDefinition = {
     simulate: simulateStopTheClock,
     botScore: (p) => -(0.06 + 3 * Math.pow(1 - p, 2)),
     format: (s) => `${(-s).toFixed(2)}s off`,
+    progress: (r, n) => -sumSoFar(r, n),
 };

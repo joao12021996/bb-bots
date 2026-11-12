@@ -340,7 +340,7 @@ export type Prompt =
           forfeitScore?: number;
           onScore: (score: number, answers?: boolean[], picks?: (number | string)[]) => void;
           onStart?: () => void;
-          onReport?: (score: number, answers?: boolean[]) => void;
+          onReport?: (score: number, answers?: boolean[], picks?: (number | string)[]) => void;
           // a deal on the wall: ask a bot to drop for safety (whether they did), or take a bot's offer
           onDeal?: (action: "ask" | "accept", botId: number, seconds: number) => boolean;
       }
@@ -1511,7 +1511,7 @@ export class PlayerModeController {
                         onScore: (score, answers, picks) => answer({ id: player.id, score, answers, picks }),
                         onStart: () => this.lock(startKey, { score: null }),
                         // the score so far: everyone sees it come in
-                        onReport: (score, answers) => this.lock(startKey, answers ? { score, answers } : { score }),
+                        onReport: (score, answers, picks) => this.lock(startKey, { score, ...(answers ? { answers } : {}), ...(picks ? { picks } : {}) }),
                     };
                 },
                 (answers) => {
@@ -1586,8 +1586,8 @@ export class PlayerModeController {
         return ids.map((id) => {
             const result = this.locked<CompResult>(`comp:${seed}:${id}`);
             if (result) return { id, score: result.score, answers: result.answers, picks: result.picks, done: true };
-            const sofar = this.locked<{ score: number | null; answers?: boolean[] }>(`compStart:${seed}:${id}`);
-            return { id, score: sofar ? sofar.score : null, answers: sofar && sofar.answers, done: false };
+            const sofar = this.locked<{ score: number | null; answers?: boolean[]; picks?: (number | string)[] }>(`compStart:${seed}:${id}`);
+            return { id, score: sofar ? sofar.score : null, answers: sofar && sofar.answers, picks: sofar && sofar.picks, done: false };
         });
     }
 

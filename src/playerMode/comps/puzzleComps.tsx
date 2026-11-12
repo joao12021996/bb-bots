@@ -1,7 +1,7 @@
 import React from "react";
 import { BigButton, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
-import { Keypad } from "./compUi";
+import { Keypad, StageScores, sumSoFar } from "./compUi";
 import { chance, clamp, gaussian, pick, Rand, randInt, sample, seededRand, shuffled } from "./random";
 
 // ---------------- Word Scramble ----------------
@@ -459,6 +459,8 @@ function GuessTheNumber(props: CompProps) {
     const [guesses, setGuesses] = React.useState(0);
     const [hint, setHint] = React.useState("Guess a number from 1 to 100.");
     const [range, setRange] = React.useState<[number, number]>([1, 100]);
+    const [before, setBefore] = React.useState(0); // guesses on the numbers already found
+    const [found, setFound] = React.useState<number | null>(null); // the scores after finding a number
 
     const submit = () => {
         const g = parseInt(value, 10);
@@ -467,14 +469,14 @@ function GuessTheNumber(props: CompProps) {
         setValue("");
         const secret = secrets[round];
         if (g === secret) {
+            if (props.recordAnswer) props.recordAnswer(round, true, total - before);
             if (round + 1 >= GUESS_ROUNDS) {
                 props.finish(-total);
                 return;
             }
             props.report(-(total + (GUESS_ROUNDS - round - 1) * 10));
-            setRound(round + 1);
-            setRange([1, 100]);
-            setHint(`Got it: ${secret}! New number, 1 to 100.`);
+            if (props.pauseClock) props.pauseClock(true);
+            setFound(secret);
         } else {
             props.report(-(total + (GUESS_ROUNDS - round) * 10));
             if (g < secret) {
@@ -486,6 +488,27 @@ function GuessTheNumber(props: CompProps) {
             }
         }
     };
+    const nextNumber = () => {
+        if (props.pauseClock) props.pauseClock(false);
+        setHint(`Got it: ${found}! New number, 1 to 100.`);
+        setFound(null);
+        setBefore(guesses);
+        setRound(round + 1);
+        setRange([1, 100]);
+    };
+    if (found !== null) {
+        return (
+            <div>
+                <Title>
+                    Got it: {found}, in {guesses - before} {guesses - before === 1 ? "guess" : "guesses"}!
+                </Title>
+                <StageScores done={round + 1} />
+                <BigButton kind="success" onClick={nextNumber}>
+                    Next number
+                </BigButton>
+            </div>
+        );
+    }
     return (
         <div>
             <Title>
@@ -505,7 +528,9 @@ function simulateGuessTheNumber(ctx: SimContext, skill: number, noise: Rand): Si
     const rand = seededRand(ctx.seed);
     const secrets = Array.from({ length: GUESS_ROUNDS }, () => randInt(rand, 1, 100));
     let guesses = 0;
+    const picks: number[] = [];
     secrets.forEach((secret) => {
+        const before = guesses;
         let lo = 1;
         let hi = 100;
         for (let k = 0; k < 30; k++) {
@@ -515,8 +540,9 @@ function simulateGuessTheNumber(ctx: SimContext, skill: number, noise: Rand): Si
             if (g < secret) lo = g + 1;
             else hi = g - 1;
         }
+        picks.push(guesses - before);
     });
-    return { score: -guesses };
+    return { score: -guesses, answers: picks.map(() => true), picks };
 }
 
 export const GuessTheNumberComp: CompDefinition = {
@@ -530,4 +556,5 @@ export const GuessTheNumberComp: CompDefinition = {
     simulate: simulateGuessTheNumber,
     botScore: (p) => -Math.round(16 + (1 - p) * 10),
     format: (s) => `${-s} guesses`,
+    progress: (r, n) => -sumSoFar(r, n),
 };

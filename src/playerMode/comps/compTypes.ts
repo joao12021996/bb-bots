@@ -55,6 +55,18 @@ export interface CompProps {
     deals?: EnduranceDeals; // endurance HoH comps only
 }
 
+// What's recorded of someone's rounds: right or wrong, and what they answered (or scored) each round.
+export interface RoundData {
+    answers?: boolean[];
+    picks?: (number | string)[];
+}
+
+// Played in rounds: everyone's score is shown between them. A comp played in one go shows nobody's score
+// until everyone is done.
+export function isStaged(comp: CompDefinition): boolean {
+    return !!comp.progress || !!comp.staged;
+}
+
 export type CompKind = "endurance" | "skill" | "memory" | "quiz" | "luck" | "reflex";
 
 export interface CompDefinition {
@@ -74,5 +86,9 @@ export interface CompDefinition {
     // A rough score for a given percentile, without playing; used as a fallback (e.g. time ran out with no score).
     botScore: (percentile: number, ctx: { gameState: GameState; history: WeekRecord[] }) => number;
     format: (score: number) => string;
+    // Comps played in rounds (or questions): anyone's score after their first `rounds` rounds, worked out from
+    // their answers and picks (players' and bots' alike). Shown between rounds; see StageScores.
+    progress?: (r: RoundData, rounds: number, ctx: SimContext) => number;
+    staged?: boolean; // played in rounds, with the scores between them worked out another way (knockouts)
     available?: (gameState: GameState, history: WeekRecord[]) => boolean;
 }
