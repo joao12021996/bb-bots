@@ -112,6 +112,7 @@ import {
 } from "./social/powers";
 import { FeedLine, houseFeed } from "./social/feed";
 import { evictionIntro, finaleIntro, previouslyOn } from "./social/narration";
+import { montageLines } from "./social/montage";
 import { MoveRecord, seasonAwards, seasonStats } from "./social/awards";
 import { listNames } from "../utils/listStrings";
 import { HOH } from "./terms";
@@ -4979,6 +4980,8 @@ export class PlayerModeController {
         if (!s.week.finaleIntro) {
             s.week.finaleIntro = true;
             this.announce("Finale Night", finaleIntro(finalists, jurorIds.length));
+            // the montage: each finalist's best moments, before the jury has its say
+            finalists.forEach((f) => this.announce(`🎞️ ${f.name}'s journey`, montageLines(gs, s.history, s.moves || [], f.id)));
             this.save();
             return this.run();
         }

@@ -249,6 +249,34 @@ describe("house rules and difficulty", () => {
     });
 });
 
+describe("finale montage", () => {
+    const { momentsFor, montageLines } = require("./social/montage");
+
+    it("before the jury votes, shows each finalist's journey", () => {
+        const { controller, scenes } = playSeason(8, [0], "random", "random");
+        const gs = controller.gameState;
+        const finalists = gs.houseguests.filter((hg) => !hg.isEvicted);
+        expect(finalists.length).toBe(2);
+        finalists.forEach((f) => expect(scenes.has(`🎞️ ${f.name}'s journey`)).toBe(true));
+    });
+
+    it("keeps the biggest moments, in order, and has something to say about a floater", () => {
+        const gs = newGame(6);
+        const history: any[] = [
+            { week: 1, hohId: 0, nomineeIds: [2, 3], evictedIds: [3] },
+            { week: 2, hohId: 1, povId: 0, nomineeIds: [0, 2], evictedIds: [2], votes: { 0: 1, 2: 2 } },
+            { week: 3, hohId: 4, blockbusterId: 0, nomineeIds: [1, 5], evictedIds: [5] },
+        ];
+        const moves = [{ week: 3, kind: "move", actorId: 0, targetId: 5, text: "HG0 flipped the house on HG5", weight: 1 }];
+        const m = momentsFor(gs, history, moves, 0);
+        expect(m.map((x: any) => x.week)).toEqual([...m.map((x: any) => x.week)].sort((a: number, b: number) => a - b));
+        expect(m.map((x: any) => x.emoji)).toEqual(["👑", "🛡️", "🎯", "🎬", "💣"]);
+        expect(m.find((x: any) => x.emoji === "🎯").text).toContain("by a whisker");
+        expect(montageLines(gs, history, moves, 0)[1]).toMatch(/^👑 Week 1: Won Head of House, and sent .+ packing\.$/);
+        expect(montageLines(gs, [], [], 3)[0]).toContain("kept their head down");
+    });
+});
+
 describe("week in review, and why they did it", () => {
     it("records the vote count and every bot's reasons, tells a nominated player why, and recaps each week", () => {
         const { controller } = playSeason(10, [4], "random", false);
