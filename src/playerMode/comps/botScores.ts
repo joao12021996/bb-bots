@@ -21,11 +21,21 @@ export function compLuck(rand?: () => number): number {
     return Math.min(2, Math.max(0, 1 + LUCK_SPREAD * gaussian(rand)));
 }
 
-// A bot's performance percentile in a competition, from its comp score (1-10) times its luck in this comp:
-// comp 5 with luck 2 plays like a comp 10; comp 8 with luck 0 plays like a comp 0.
+// Luck counts for this much on top of the comp score, whatever the score: a weak bot on its lucky day can still
+// beat a strong one (comp 2 with luck 2 plays like a comp 7), though the strong one wins most of the time.
+export const UNDERDOG_LUCK = 3;
+
+// How a bot plays in one comp, on the comp score's scale: its comp score (1-10) times its luck, plus the
+// underdog share of its luck. Comp 5 with luck 2 plays like a 13 (better than any comp 10 on an ordinary day);
+// comp 8 with luck 0 plays like a 0.
+export function luckyComp(comp: number, luck: number): number {
+    return Math.max(0, comp * luck + UNDERDOG_LUCK * (luck - 1));
+}
+
+// A bot's performance percentile in a competition, from its comp score and its luck in this comp.
 // A comp 5 bot on an ordinary day performs around the 50th percentile, which should roughly match an average human.
 // `rand`: for a result that has to come out the same when it's replayed (comps shown stage by stage).
 export function botPercentile(bot: { comp?: number }, rand?: () => number): number {
-    const comp = getComp(bot) * compLuck(rand);
+    const comp = luckyComp(getComp(bot), compLuck(rand));
     return Math.min(1, Math.max(0, 0.2 + 0.06 * comp + DIFFICULTY));
 }

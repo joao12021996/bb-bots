@@ -946,6 +946,12 @@ export class PlayerModeController {
         return this.state.difficulty || "normal";
     }
 
+    // A bot's hidden throwing score, 0 to 10, mostly around 5 (see throwing.ts): fixed for the season.
+    public throwScore(id: number): number {
+        const roll = (k: number) => hash01(`${this.state.seed}:throw:${k}:${id}`);
+        return Math.round((10 * (roll(1) + roll(2) + roll(3))) / 3);
+    }
+
     // A bot's comp performance, adjusted for difficulty.
     // `seed`: the same skill every time for this seed (a comp that's replayed after a reload must come out the same)
     private botSkill(hg: Houseguest, seed?: string): number {
@@ -1482,7 +1488,7 @@ export class PlayerModeController {
             .filter((hg) => !this.isHuman(hg))
             .map((hg) => {
                 const info = this.traitsOf(hg.id);
-                const throwing = throwChance(this.gameState, this.book, hg, role, this.state.week) * (info ? info.throws : 1);
+                const throwing = throwChance(this.gameState, this.book, hg, role, this.state.week, this.throwScore(hg.id)) * (info ? info.throws : 1);
                 const threw = Math.abs(rng().randomFloat()) < throwing;
                 const percentile = Math.max(0, Math.min(1, this.botSkill(hg) + this.compBoost(hg.id, comp, seed)));
                 const skill = percentile * (threw ? THROW_EFFORT : 1);
@@ -5154,6 +5160,7 @@ export class PlayerModeController {
                                 <b>{hg.name}</b>
                                 <span>
                                     🗣️ {getSocial(hg)} · 🏆 {getComp(hg)}
+                                    {!this.state.humanIds.includes(hg.id) && ` · 🏳️ ${this.throwScore(hg.id)}`}
                                 </span>
                             </div>
                         ))}

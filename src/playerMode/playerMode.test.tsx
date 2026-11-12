@@ -1,9 +1,9 @@
 import React from "react";
-import { GameState, getById, nonEvictedHouseguests, PlayerProfile, MutableGameState } from "../model";
+import { GameState, getById, inJury, nonEvictedHouseguests, PlayerProfile, MutableGameState } from "../model";
 import { rng } from "../utils";
 import { seedRng } from "./seeding";
 import { PlayerModeController, newPlayerSave, Prompt, Step, PlayerSave, migrateSave } from "./playerModeController";
-import { botPercentile, compLuck, LUCK_SPREAD } from "./comps/botScores";
+import { botPercentile, compLuck, luckyComp } from "./comps/botScores";
 import { botSocialTime, performSocialAction, SocialMemory } from "./social/socialActions";
 import { Alliance, betray, botNominate, createAlliance, emptyBook, holdMeeting } from "./social/alliances";
 import { openHohRoom, pComesUp, visitBotHoh } from "./social/hohRoom";
@@ -232,16 +232,21 @@ describe("bot scores", () => {
         expect(Math.max(...lucks)).toBeLessThanOrEqual(2);
         expect(share((l) => l >= 0.9 && l <= 1.1)).toBeGreaterThan(0.2); // everyday
         expect(share((l) => l <= 0.1 || l >= 1.9)).toBeLessThan(0.005); // hardly ever
-        // comp 5 with luck 2 plays like comp 10; comp 8 with luck 0 like comp 0
-        const at = (comp: number, luck: number) => {
-            // a rand that makes gaussian() come out at z = (luck - 1) / LUCK_SPREAD: u1 = exp(-z²/2), and u2 = 0 or ½ (cos = ±1)
-            const z = (luck - 1) / LUCK_SPREAD;
-            const draws = [1 - Math.exp((-z * z) / 2), z < 0 ? 0.5 : 1 - 1e-12];
-            let k = 0;
-            return botPercentile({ comp }, () => draws[k++ % 2]);
-        };
-        expect(at(5, 2)).toBeCloseTo(at(10, 1), 5);
-        expect(at(8, 0)).toBeCloseTo(0.2, 5);
+        // luck multiplies the comp score, plus an underdog share: comp 8 with luck 0 plays like a 0,
+        // comp 5 with luck 2 beats any ordinary comp 10, and comp 2 with luck 2 plays like a 7
+        expect(luckyComp(8, 0)).toBe(0);
+        expect(luckyComp(5, 1)).toBe(5);
+        expect(luckyComp(5, 2)).toBeGreaterThan(10);
+        expect(luckyComp(2, 2)).toBe(7);
+    });
+
+    it("a weak bot can have its lucky day against a strong one, but the strong one wins most", () => {
+        rng().seed(11);
+        let weakWins = 0;
+        const n = 20000;
+        for (let i = 0; i < n; i++) if (botPercentile({ comp: 2 }) > botPercentile({ comp: 9 })) weakWins++;
+        expect(weakWins / n).toBeGreaterThan(0.005);
+        expect(weakWins / n).toBeLessThan(0.1);
     });
 
     it("every comp turns bot percentiles into sensible, monotonic-ish scores", () => {
@@ -1449,6 +1454,37 @@ describe("bots throwing comps", () => {
         expect(throwChance(gs, emptyBook(), bot, "other", {})).toBe(0);
         const late = house(5);
         expect(throwChance(late, emptyBook(), getById(late, 1), "hoh", {})).toBe(0);
+    });
+
+    it("nobody throws once it's jury time; early on, throwing is likeliest, and a higher throwing score throws more", () => {
+        const gs = house(12);
+        const bot = getById(gs, 1);
+        const veto = { hohId: 0, nomineeIds: [2, 3] };
+        expect(throwChance(gs, emptyBook(), bot, "veto", veto, 0)).toBe(0);
+        expect(throwChance(gs, emptyBook(), bot, "veto", veto, 9)).toBeGreaterThan(throwChance(gs, emptyBook(), bot, "veto", veto, 3));
+        // comp beasts lie low more than weak competitors
+        const withComp = (comp: number) => throwChance(gs, emptyBook(), { ...bot, comp } as any, "veto", veto);
+        expect(withComp(9)).toBeGreaterThan(withComp(2));
+        // jury time: the evictee this week goes to the jury
+        const jury = new MutableGameState(gs);
+        while (!inJury(jury)) {
+            const next = nonEvictedHouseguests(jury).find((hg) => ![0, 1, 2, 3].includes(hg.id))!;
+            getById(jury, next.id).isEvicted = true;
+            jury.nonEvictedHouseguests.delete(next.id);
+            jury.remainingPlayers--;
+        }
+        expect(nonEvictedHouseguests(jury).length).toBeGreaterThan(5);
+        expect(throwChance(jury, emptyBook(), getById(jury, 1), "veto", veto, 10)).toBe(0);
+        // the week before jury throws less than the first week
+        const before = new MutableGameState(gs);
+        while (nonEvictedHouseguests(before).length > nonEvictedHouseguests(jury).length + 1) {
+            const next = nonEvictedHouseguests(before).find((hg) => ![0, 1, 2, 3].includes(hg.id))!;
+            getById(before, next.id).isEvicted = true;
+            before.nonEvictedHouseguests.delete(next.id);
+            before.remainingPlayers--;
+        }
+        expect(inJury(before)).toBe(false);
+        expect(throwChance(before, emptyBook(), getById(before, 1), "veto", veto)).toBeLessThan(throwChance(gs, emptyBook(), bot, "veto", veto));
     });
 
     it("a houseguest in someone's sights fights for HoH; a safe one may sit it out", () => {
