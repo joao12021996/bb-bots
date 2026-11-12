@@ -130,6 +130,29 @@ describe("player mode season", () => {
         expect(playSeason(8, [1, 4], "random", "random").seen.has("handoff")).toBe(true);
     });
 
+    it("players take their social turns in a random order, a new one each block", () => {
+        const controller = new PlayerModeController(newPlayerSave(newGame(10), [1, 4, 7]));
+        controller.state.seed = 99;
+        let prompt: Prompt | null = null;
+        controller.prompt$.subscribe((p) => (prompt = p));
+        controller.start();
+        const firsts = new Set<number>();
+        const orders = new Set<string>();
+        for (let guard = 0; guard < 5000; guard++) {
+            const p = prompt as Prompt | null;
+            if (!p || p.kind === "gameOver") break;
+            if (p.kind === "social" && controller.state.socialTurn === 0 && controller.state.socialStage === "social") {
+                firsts.add(p.actorId);
+                orders.add(controller.turnOrder.map((hg) => hg.id).join(","));
+                // the same order every time it's asked for in a block
+                expect(controller.turnOrder.map((hg) => hg.id)).toEqual(controller.turnOrder.map((hg) => hg.id));
+            }
+            answer(controller, p, "random", "random");
+        }
+        expect(firsts.size).toBeGreaterThan(1);
+        expect(orders.size).toBeGreaterThan(1);
+    });
+
     it("doesn't repeat a competition until every weekly comp has been played", () => {
         for (const ids of [[0], [3, 7]]) {
             const { controller } = playSeason(16, ids, "random", "random");

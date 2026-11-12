@@ -565,7 +565,14 @@ export class PlayerModeController {
 
     // The player currently taking their social turn.
     get socialActor(): Houseguest {
-        return this.alivePlayers[this.state.socialTurn];
+        return this.turnOrder[this.state.socialTurn];
+    }
+
+    // The order players take their turns in this block of social (or alliance) time: shuffled for each block,
+    // the same on every device and after a reload.
+    get turnOrder(): Houseguest[] {
+        const s = this.state;
+        return shuffled(seededRand(hashcode(`${s.seed}:turns:${s.gameState.phase}:${s.step}`)), this.alivePlayers);
     }
 
     public socialMemory(id: number): SocialMemory {
@@ -2059,7 +2066,7 @@ export class PlayerModeController {
 
     private social() {
         const s = this.state;
-        const alive = this.alivePlayers;
+        const alive = this.turnOrder;
         if (s.socialTurn >= alive.length) return this.finishSocialBlock();
         const actor = alive[s.socialTurn];
         const blockName = SOCIAL_BLOCK_NAMES[s.step];
@@ -2958,7 +2965,7 @@ export class PlayerModeController {
         a.suggestions[actor.id] = targetId;
         a.backupSuggestions = { ...(a.backupSuggestions || {}), [actor.id]: this.planBWeek && backupId !== targetId ? backupId : null };
         a.memberIds.forEach((m) => this.noteRead(actor.id, m)); // alliance time: you get a read on your allies
-        const later = this.alivePlayers.slice(s.socialTurn + 1).filter((p) => a.memberIds.includes(p.id));
+        const later = this.turnOrder.slice(s.socialTurn + 1).filter((p) => a.memberIds.includes(p.id));
         if (later.length > 0) {
             this.save();
             return [`Your pick is in. ${later.map((p) => p.name).join(" and ")} will weigh in before ${a.name} decides.`];
@@ -3167,7 +3174,7 @@ export class PlayerModeController {
     // alliances meet too. Whatever they settle on is what their HoH (or their pitch to the HoH) goes with.
     private allianceHoh(): void {
         const s = this.state;
-        const alive = this.alivePlayers;
+        const alive = this.turnOrder;
         if (this.allianceTimeOpen()) {
             while (s.socialTurn < alive.length && this.alliancesOf(alive[s.socialTurn].id).length === 0) s.socialTurn++;
             if (s.socialTurn < alive.length) {
