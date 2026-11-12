@@ -7,7 +7,8 @@ import { cast$, displayMode$, pushToMainContentStream, switchSceneRelative } fro
 import { Screens, showTutorial, TopbarLink } from "../topbar/topBar";
 import { SeasonEditorPage } from "../seasonEditor/seasonEditorPage";
 import { CastingScreen } from "../castingScreen/castingScreen";
-import { dealNewCast } from "../../cartoon/newCast";
+import { dealNewCast, loadCast } from "../../cartoon/newCast";
+import { castFromUrl } from "../../cartoon/castCode";
 import { EditRelationshipsScreen, getProfiles } from "../editRelationshipsScreen/editRelationshipScreen";
 import { Tribe } from "../../model/tribe";
 import { selectPlayer } from "../playerPortrait/selectedPortrait";
@@ -41,7 +42,17 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
         selectPlayer(null);
         this.setState({ ...cast$.value.options });
         const code = !inviteHandled && joinCodeFromUrl();
+        const shared = !inviteHandled && castFromUrl();
         inviteHandled = true;
+        if (shared) {
+            // a shared cast link: that cast, ready to play
+            try {
+                window.history.replaceState(null, "", window.location.pathname);
+            } catch (e) {
+                // fine: the link just stays in the address bar
+            }
+            setTimeout(() => loadCast(shared.cast, shared.relationships), 0);
+        }
         if (code) {
             try {
                 window.history.replaceState(null, "", window.location.pathname);

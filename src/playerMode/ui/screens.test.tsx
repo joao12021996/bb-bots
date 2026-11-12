@@ -815,3 +815,27 @@ describe("house rules editor", () => {
         expect(rulesSummary(withDefaults({ lastChance: false, actions: 5 }))).toEqual(["always two nominees", "5 actions per block"]);
     });
 });
+
+describe("sharing a cast on the casting screen", () => {
+    it("shares the cast as a link, and loads a pasted code in its place", () => {
+        const { CastingScreen } = require("../../components/castingScreen/castingScreen");
+        const { encodeCast } = require("../../cartoon/castCode");
+        const { cartoonCast } = require("../../cartoon/cartoon");
+        const c = mount(<CastingScreen cast={cartoonCast(5)} />);
+        const button = (label: string) => Array.from(c.querySelectorAll("button")).find((b) => b.textContent!.includes(label)) as HTMLButtonElement;
+        act(() => button("Share this cast").click());
+        expect((c.querySelector('input[aria-label="Cast link"]') as HTMLInputElement).value).toContain("?cast=C1");
+
+        const friend = cartoonCast(7);
+        friend[0].name = "From A Friend";
+        act(() => button("Load a cast").click());
+        const input = c.querySelector('input[aria-label="Cast code or link"]') as HTMLInputElement;
+        const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!;
+        act(() => {
+            setValue.call(input, encodeCast(friend).code);
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        act(() => (Array.from(c.querySelectorAll("button")).find((b) => b.textContent === "Load") as HTMLButtonElement).click());
+        expect(c.textContent).toContain("From A Friend");
+    });
+});

@@ -5,7 +5,9 @@ import { SetupPortrait } from "../playerPortrait/setupPortrait";
 import { shuffle } from "lodash";
 import { RandomButton } from "./randomXButton";
 import { selectCastPlayer } from "../playerPortrait/selectedPortrait";
-import { pushToMainContentStream, selectedCastPlayer$, overwriteCast } from "../../subjects/subjects";
+import { cast$, pushToMainContentStream, selectedCastPlayer$, overwriteCast } from "../../subjects/subjects";
+import { CastShare } from "./castShare";
+import { SharedCast } from "../../cartoon/castCode";
 import { HasText, Input } from "../layout/text";
 import { Centered } from "../layout/centered";
 import { Subscription } from "rxjs";
@@ -20,6 +22,8 @@ interface CastingScreenProps {
 interface CastingScreenState {
     players: PlayerProfile[];
     selectedPlayers: Set<number>;
+    // custom relationships, and the cast (by name, in order) they're for: dropped once the cast changes
+    relationships?: { names: string[]; map: { [a: number]: { [b: number]: number } } };
 }
 
 let id = 1;
@@ -33,7 +37,10 @@ export class CastingScreen extends React.Component<CastingScreenProps, CastingSc
             selectCastPlayer(null);
             props.cast.forEach((player) => (player.castingScreenId = id++));
         }
-        this.state = { players: props.cast || [], selectedPlayers: new Set<number>() };
+        const options = cast$.value.options;
+        const relationships =
+            props.cast && options && options.relationships ? { names: props.cast.map((p) => p.name), map: options.relationships } : undefined;
+        this.state = { players: props.cast || [], selectedPlayers: new Set<number>(), relationships };
     }
 
     public componentDidMount() {
@@ -103,8 +110,22 @@ export class CastingScreen extends React.Component<CastingScreenProps, CastingSc
         return <div className="columns is-gapless is-mobile is-multiline is-centered">{rows}</div>;
     }
 
+    // the custom relationships, if they're still for this exact cast
+    private currentRelationships() {
+        const r = this.state.relationships;
+        const names = this.state.players.map((p) => p.name);
+        return r && r.names.length === names.length && r.names.every((n, i) => n === names[i]) ? r.map : undefined;
+    }
+
+    private importCast = (shared: SharedCast) => {
+        const players = shared.cast.map((p) => ({ ...p, castingScreenId: id++ }));
+        selectCastPlayer(null);
+        this.setState({ players, relationships: shared.relationships ? { names: players.map((p) => p.name), map: shared.relationships } : undefined });
+    };
+
     private submit = () => {
-        overwriteCast(this.state.players);
+        const relationships = this.currentRelationships();
+        overwriteCast(this.state.players, relationships ? { relationships } : undefined);
         pushToMainContentStream(<SeasonEditorPage />, Screens.Season);
     };
 
@@ -186,6 +207,7 @@ export class CastingScreen extends React.Component<CastingScreenProps, CastingSc
                         </button>
                     </div>
                 </HasText>
+                <CastShare cast={this.state.players} relationships={this.currentRelationships()} onImport={this.importCast} />
                 <Input type="file" multiple onChange={this.handleUpload} />
                 {this.state.players.length === 0 && (
                     <Centered>

@@ -2879,3 +2879,32 @@ body.bbb-reduce-motion *::after {
     margin-top: 1rem;
     text-align: center;
 }
+
+/* ---------- Sharing a cast ---------- */
+.bbb-cast-share {
+    margin: 0.5rem 0 1rem;
+}
+.bbb-cast-share-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.bbb-cast-share-panel {
+    max-width: 640px;
+    margin: 0.6rem auto 0;
+    padding: 0.75rem;
+    border: 1px solid var(--bbb-border);
+    border-radius: var(--bbb-radius);
+    background: var(--bbb-card-2);
+}
+.bbb-cast-share-row {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-top: 0.4rem;
+}
+.bbb-cast-share-row .input {
+    flex: 1 1 220px;
+    min-width: 0;
+}

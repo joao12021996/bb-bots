@@ -188,6 +188,11 @@ const SECTIONS: Section[] = [
                     <b>🎨 Your avatar</b>: build a cartoon of yourself feature by feature (skin, hair, eyes, glasses,
                     hats and more), roll a random one, or use a photo.
                 </li>
+                <li>
+                    <b>🔗 Share a cast</b>: on the Casting screen, 📤 Share this cast gives you a link that opens the
+                    game with your cast (names, looks, ratings and relationships). 📥 Load a cast takes a code a friend
+                    sent you.
+                </li>
             </ul>
         ),
     },
