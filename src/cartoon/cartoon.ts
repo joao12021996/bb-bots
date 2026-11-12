@@ -132,10 +132,16 @@ export function castNames(n: number, rand: () => number): string[] {
     return names;
 }
 
-function statRoll(rand: () => number): number {
-    // a gentle bell curve over 1-10, mostly 4 to 7
-    const avg = (rand() + rand() + rand()) / 3;
-    return Math.max(1, Math.min(10, Math.round(1 + avg * 9)));
+// A wide bell curve over 1-10: most houseguests are in the middle, but about 1 in 10 is a 9-10 and about 1 in
+// 10 is a 1-2, so every cast has its standouts and its disasters.
+export const STAT_MEAN = 5.5;
+export const STAT_SPREAD = 2.35;
+
+export function statRoll(rand: () => number): number {
+    const u1 = Math.max(1e-9, rand());
+    const u2 = rand();
+    const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    return Math.max(1, Math.min(10, Math.round(STAT_MEAN + STAT_SPREAD * z)));
 }
 
 // A whole cast of cartoon houseguests, all different, with Social and Comp scores.

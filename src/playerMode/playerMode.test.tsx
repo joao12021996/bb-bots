@@ -4,7 +4,7 @@ import { rng } from "../utils";
 import { seedRng } from "./seeding";
 import { PlayerModeController, newPlayerSave, Prompt, Step, PlayerSave, migrateSave } from "./playerModeController";
 import { botPercentile, compLuck, luckyComp } from "./comps/botScores";
-import { cartoonCast, cartoonURL, decodeLook, encodeLook, lookDistance, lookFromURL, lookOf, randomLook } from "../cartoon/cartoon";
+import { cartoonCast, cartoonURL, statRoll, decodeLook, encodeLook, lookDistance, lookFromURL, lookOf, randomLook } from "../cartoon/cartoon";
 import { botSocialTime, performSocialAction, SocialMemory } from "./social/socialActions";
 import { Alliance, betray, botNominate, createAlliance, emptyBook, holdMeeting } from "./social/alliances";
 import { openHohRoom, pComesUp, visitBotHoh } from "./social/hohRoom";
@@ -459,6 +459,20 @@ describe("cartoon cast and custom players", () => {
             expect(p.comp).toBeGreaterThanOrEqual(1);
             expect(p.comp).toBeLessThanOrEqual(10);
         });
+    });
+
+    it("social and comp scores use the whole 1-10 range: mostly middling, with about 1 in 10 at each end", () => {
+        const rand = seededRand(11);
+        const rolls = Array.from({ length: 20000 }, () => statRoll(rand));
+        const share = (f: (n: number) => boolean) => rolls.filter(f).length / rolls.length;
+        expect(Math.min(...rolls)).toBe(1);
+        expect(Math.max(...rolls)).toBe(10);
+        expect(share((n) => n >= 9)).toBeGreaterThan(0.07);
+        expect(share((n) => n >= 9)).toBeLessThan(0.13);
+        expect(share((n) => n <= 2)).toBeGreaterThan(0.07);
+        expect(share((n) => n <= 2)).toBeLessThan(0.13);
+        expect(share((n) => n >= 4 && n <= 7)).toBeGreaterThan(0.5);
+        expect(rolls.reduce((a, b) => a + b, 0) / rolls.length).toBeCloseTo(5.5, 0);
     });
 
     it("a cartoon's look comes back out of its picture; anyone else gets one from their name", () => {
