@@ -180,6 +180,11 @@ function AllianceCard(props: { controller: PlayerModeController; alliance: Allia
                             />
                         )}
                     </div>
+                ) : controller.allianceStandsDown(a) ? (
+                    <Subtle>
+                        {members.length === 2 ? "You're both" : "Every one of you is"} on the block, so there's nobody for {a.name} to go after.
+                        No target this week: it's every member for themselves.
+                    </Subtle>
                 ) : a.met ? (
                     <Subtle>{a.name} already met this round.</Subtle>
                 ) : myPick !== undefined ? (

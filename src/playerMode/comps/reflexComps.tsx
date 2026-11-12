@@ -3,44 +3,61 @@ import { nonEvictedHouseguests } from "../../model";
 import { BigButton, pressable, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { AnswerReveal, bestOf, Reveal, revealRows, sumSoFar, useAnimationFrame } from "./compUi";
-import { chance, clamp, gaussian, pick, Rand, randInt, seededRand, shuffled } from "./random";
+import { chance, clamp, gaussian, Rand, randInt, seededRand, shuffled } from "./random";
 
 // ---------------- Whack-a-Houseguest ----------------
 
 const HOLES = 9;
 const WHACK_SECONDS = 40;
 
+// Every pop-up, worked out from the seed before play starts: which hole, whose face, when it pops up and when it
+// ducks back down. Everyone gets exactly the same board, whatever they hit (a hit only hides the face). The draws
+// are the same, in the same order, as simulateWhack's, so the bots face the same pop-ups too.
+export function whackPlan(rand: Rand, faceCount: number): { hole: number; face: number; at: number; until: number }[] {
+    const plan: { hole: number; face: number; at: number; until: number }[] = [];
+    const busyUntil = Array.from({ length: HOLES }, () => 0);
+    let t = 0.6;
+    while (t < WHACK_SECONDS) {
+        const wanted = randInt(rand, 0, HOLES - 1);
+        const face = randInt(rand, 0, Math.max(0, faceCount - 1));
+        const life = Math.max(0.55, 1.15 - t / 60);
+        let hole = wanted;
+        for (let i = 0; i < HOLES; i++) {
+            const h = (wanted + i) % HOLES;
+            if (busyUntil[h] <= t) {
+                hole = h;
+                break;
+            }
+        }
+        busyUntil[hole] = t + life;
+        plan.push({ hole, face, at: t, until: t + life });
+        t += 0.35 + rand() * 0.5;
+    }
+    return plan;
+}
+
 function Whack(props: CompProps) {
     const faces = React.useMemo(() => nonEvictedHouseguests(props.gameState), [props.gameState]);
-    const [moles, setMoles] = React.useState<{ hole: number; face: number; until: number }[]>([]);
-    const [score, setScore] = React.useState(0);
-    const nextSpawn = React.useRef(0.6);
-    const start = React.useRef(performance.now());
     const { rand, report } = props;
+    const [plan] = React.useState(() => whackPlan(rand, faces.length));
+    const [now, setNow] = React.useState(0);
+    const [hitIds, setHitIds] = React.useState<number[]>([]);
+    const [score, setScore] = React.useState(0);
+    const start = React.useRef(performance.now());
 
     React.useEffect(() => {
-        const t = setInterval(() => {
-            const now = (performance.now() - start.current) / 1000;
-            setMoles((current) => {
-                let next = current.filter((m) => m.until > now);
-                if (now >= nextSpawn.current && next.length < 3) {
-                    const free = Array.from({ length: HOLES }, (_, i) => i).filter((h) => !next.some((m) => m.hole === h));
-                    const life = Math.max(0.55, 1.15 - now / 60);
-                    next = [...next, { hole: pick(rand, free), face: randInt(rand, 0, faces.length - 1), until: now + life }];
-                    nextSpawn.current = now + 0.35 + rand() * 0.5;
-                }
-                return next;
-            });
-        }, 60);
+        const t = setInterval(() => setNow((performance.now() - start.current) / 1000), 60);
         return () => clearInterval(t);
-    }, [rand, faces.length]);
+    }, []);
+
+    const moles = plan.map((m, i) => ({ ...m, i })).filter((m) => m.at <= now && now < m.until && !hitIds.includes(m.i));
 
     const tap = (hole: number) => {
-        const hit = moles.some((m) => m.hole === hole);
-        const s = score + (hit ? 1 : -1);
+        const mole = moles.find((m) => m.hole === hole);
+        const s = score + (mole ? 1 : -1);
         setScore(s);
         report(s);
-        if (hit) setMoles(moles.filter((m) => m.hole !== hole));
+        if (mole) setHitIds([...hitIds, mole.i]);
     };
 
     return (

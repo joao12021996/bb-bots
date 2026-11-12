@@ -55,8 +55,15 @@ export function generateVetoCeremonyScene(
     initialNominees.forEach((nom) => nom.id === povWinner.id && (nomineeWonPov = true));
 
     povTarget = vetoChoice.decision;
+    // The veto holder can never be the replacement nominee. If there's nobody else left to name (at the final four,
+    // with the holder off the block), the veto can't be used at all.
+    const renomPool = exclude(nonEvictedHousguestsSplit(splitIndex, initialGameState), [...initialNominees, povWinner, ...immunePlayers]);
+    const cantUse = !!povTarget && veto !== BoomerangVeto && renomPool.length === 0;
+    if (cantUse) povTarget = null;
     const tousethepov = "to use the veto";
-    if (!povTarget) {
+    if (cantUse) {
+        descisionText += `...not ${tousethepov}. There's nobody left to name as a replacement, so the veto can't be used.`;
+    } else if (!povTarget) {
         descisionText += `...not ${tousethepov}.`;
     } else if (veto === BoomerangVeto) {
         descisionText += `...${tousethepov}.`;
@@ -78,12 +85,8 @@ export function generateVetoCeremonyScene(
         nameAReplacement += HoHwonPoV
             ? `Since I have just vetoed one of my nominations, I must name ${aReplacementNominee}.`
             : `${HoHnamer.name}, since I have just vetoed ${oneOf}your nominations, ${you} must name ${aReplacementNominee}.`;
-        // if the exclusion yielded no options, you may be forced to name the veto winner as a replacement
-        const potentialRenoms = nonEvictedHousguestsSplit(splitIndex, initialGameState);
-        let exclusion = exclude(potentialRenoms, [...initialNominees, povWinner, ...immunePlayers]);
-        if (exclusion.length === 0) {
-            exclusion = exclude(potentialRenoms, [HoH, ...initialNominees, ...immunePlayers]);
-        }
+        // never the veto holder (if nobody's left, the veto wasn't usable: see cantUse)
+        const exclusion = renomPool;
         const replacementCount = veto === BoomerangVeto ? 2 : 1;
         const replacementNoms = options.forcedRenom
             ? [getById(initialGameState, options.forcedRenom.id)]

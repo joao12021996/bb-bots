@@ -115,7 +115,7 @@ import { evictionIntro, finaleIntro, previouslyOn } from "./social/narration";
 import { montageLines } from "./social/montage";
 import { MoveRecord, seasonAwards, seasonStats } from "./social/awards";
 import { listNames } from "../utils/listStrings";
-import { HOH } from "./terms";
+import { HOH, VETO } from "./terms";
 import {
     emptyLedger,
     final2Partners,
@@ -2490,7 +2490,8 @@ export class PlayerModeController {
         if (!this.isHuman(actor)) return this.skipTurn();
         if (s.socialStage === "alliance") {
             // at the final three there's nobody left to target: no alliance time
-            if (this.alliancesOf(actor.id).length === 0 || !this.allianceTimeOpen()) return this.endAlliance();
+            // nothing to meet about: no alliances, or every one of them is all on the block
+            if (this.alliancesOf(actor.id).every((a) => this.allianceStandsDown(a)) || !this.allianceTimeOpen()) return this.endAlliance();
             this.privately(actor.id, `${actor.name}'s alliance time`, () =>
                 this.show({ kind: "alliance", blockName, actorId: actor.id })
             );
@@ -2628,6 +2629,14 @@ export class PlayerModeController {
         if (s.step !== Step.SocialBlockbuster && s.step !== Step.SocialCampaign) return undefined;
         const block = (s.week.nomineeIds || []).filter((id) => !this.player(id).isEvicted);
         return block.length > 0 ? block : undefined;
+    }
+
+    // Every member left in the alliance is on the block: there's nobody for it to target, so it doesn't pick one.
+    // It's every member for themselves this week.
+    public allianceStandsDown(a: Alliance): boolean {
+        const block = this.targetBlock();
+        const members = aliveMembers(this.gameState, a);
+        return !!block && members.length > 0 && members.every((m) => block.includes(m.id));
     }
 
     // ---------- reads: what players learn about how others feel ----------
@@ -3631,7 +3640,7 @@ export class PlayerModeController {
         const s = this.state;
         const actor = this.socialActor;
         const a = getAlliance(s.book, allianceId);
-        if (!a || a.met) return [];
+        if (!a || a.met || this.allianceStandsDown(a)) return [];
         a.suggestions[actor.id] = targetId;
         a.backupSuggestions = { ...(a.backupSuggestions || {}), [actor.id]: this.planBWeek && backupId !== targetId ? backupId : null };
         a.memberIds.forEach((m) => this.noteRead(actor.id, m)); // alliance time: you get a read on your allies
@@ -3733,9 +3742,9 @@ export class PlayerModeController {
         this.mutate((gs) => {
             // alliances that haven't met yet meet now (players who skipped alliance time don't get a say)
             s.book.alliances
-                .filter((a) => !a.met && aliveMembers(gs, a).length >= 2 && this.allianceTimeOpen())
+                .filter((a) => !a.met && aliveMembers(gs, a).length >= 2 && this.allianceTimeOpen() && !this.allianceStandsDown(a))
                 .forEach((a) => {
-                    const result = holdMeeting(gs, a, s.humanIds, this.targetBlock(), [], this.planBWeek);
+                    const result = holdMeeting(gs, a, s.humanIds, this.targetBlock(), this.targetExclude(), this.planBWeek);
                     this.tellAlliance(a, `🤝 ${a.name} met without you. ${result.lines[result.lines.length - 1]}`);
                 });
             s.book.alliances.filter((a) => a.chemistry <= 0).forEach((a) => this.dissolve(a));
@@ -3985,9 +3994,11 @@ export class PlayerModeController {
     // ---------- alliances convene before nominations ----------
 
     // Who can't be the alliance's target right now: the new HoH can't be nominated (unless it's a secret).
+    // Who an alliance can't target: this week's Head of House, who's safe until the eviction (unless it's a
+    // secret who the Head of House is).
     public targetExclude(): number[] {
         const s = this.state;
-        if (s.step !== Step.AllianceHoh || s.week.secretHoh || s.week.hohId === undefined) return [];
+        if (s.week.secretHoh || s.week.hohId === undefined || this.player(s.week.hohId).isEvicted) return [];
         return [s.week.hohId];
     }
 
@@ -4621,9 +4632,9 @@ export class PlayerModeController {
 
         const afterChoice = (choice: { decision: Houseguest | null; reason: string }) => {
             if (!choice.decision) return generate(choice);
-            const everyone = nonEvictedHouseguests(gsAtStart);
-            let options = exclude(everyone, [...noms, pov, hoh]);
-            if (options.length === 0) options = exclude(everyone, [hoh, ...noms]);
+            // the replacement: never the veto holder (vetoUsable makes sure there's someone)
+            const options = exclude(nonEvictedHouseguests(gsAtStart), [...noms, pov, hoh]);
+            if (options.length === 0) return generate({ decision: null, reason: "" });
             if (!this.isHuman(hoh)) {
                 const { picks, betrayed } = botNominate(gsAtStart, s.book, hoh, options, 1, this.roomSway());
                 return renominate(choice, picks[0].id, options, (id) => {
@@ -4651,6 +4662,13 @@ export class PlayerModeController {
             );
         };
 
+        // At the final four, with the veto holder off the block, there's nobody left to name as a replacement: the
+        // veto can't be used, so there's nothing to decide.
+        const vetoUsable = exclude(nonEvictedHouseguests(gsAtStart), [...noms, pov, hoh]).length > 0;
+        if (!vetoUsable) {
+            this.feedPush(`🛡️ ${pov.name} can't use the ${VETO}: there's nobody left to name as a replacement.`);
+            return generate({ decision: null, reason: "" });
+        }
         if (this.isHuman(pov)) {
             this.privately(pov.id, `${pov.name}, veto holder`, () =>
                 this.show({

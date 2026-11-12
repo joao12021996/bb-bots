@@ -3295,3 +3295,56 @@ describe("season awards", () => {
         expect(awards.find((a: any) => a.title === "Biggest Backstab").winnerId).toBe(3);
     });
 });
+
+describe("veto and alliance rules", () => {
+    // plays a season with the automatic player until `until` says stop
+    function playUntil(n: number, until: (c: PlayerModeController) => boolean): PlayerModeController {
+        const controller = new PlayerModeController(newPlayerSave(newGame(n), [0]));
+        controller.state.seed = 4242 + n;
+        let prompt: Prompt | null = null;
+        controller.prompt$.subscribe((p) => (prompt = p));
+        controller.start();
+        for (let guard = 0; guard < 5000 && !until(controller); guard++) {
+            const p = prompt as unknown as Prompt;
+            if (p.kind === "gameOver") break;
+            answer(controller, p, "first", false);
+        }
+        return controller;
+    }
+
+    it("at the final four, a veto holder who isn't nominated can't use it, and never becomes the replacement", () => {
+        const { GoldenVeto } = require("../components/episode/veto/veto");
+        const { generateVetoCeremonyScene } = require("../components/episode/scenes/vetoCeremonyScene");
+        const gs = newGame(4);
+        const [hoh, a, b, pov] = gs.houseguests;
+        const [, , finalNoms] = generateVetoCeremonyScene(gs, [hoh], [a, b], pov, {
+            veto: GoldenVeto,
+            forcedVetoChoice: { decision: a, reason: "" },
+        });
+        expect(finalNoms.map((h: any) => h.id).sort()).toEqual([a.id, b.id].sort());
+        // at five, the veto works, and the replacement is never the holder
+        const five = newGame(5);
+        const [h5, a5, b5, pov5] = five.houseguests;
+        const [, , noms5] = generateVetoCeremonyScene(five, [h5], [a5, b5], pov5, { veto: GoldenVeto, forcedVetoChoice: { decision: a5, reason: "" } });
+        expect(noms5.map((h: any) => h.id)).not.toContain(pov5.id);
+        expect(noms5.map((h: any) => h.id)).not.toContain(a5.id);
+    });
+
+    it("the Head of House can't be an alliance's target for the rest of their week", () => {
+        const c = playUntil(8, (x) => x.state.step === Step.SocialAfternoon && x.state.week.hohId !== undefined);
+        expect(c.state.step).toBe(Step.SocialAfternoon);
+        expect(c.targetExclude()).toEqual([c.state.week.hohId]);
+    });
+
+    it("an alliance whose members are all on the block doesn't pick a target", () => {
+        const c = playUntil(8, (x) => x.state.step === Step.SocialCampaign);
+        expect(c.state.step).toBe(Step.SocialCampaign);
+        const noms = c.state.week.nomineeIds!;
+        const gs = new MutableGameState(c.gameState);
+        const a = createAlliance(gs, c.state.book, [noms[0], noms[1]], "Both On The Block");
+        c.state.gameState = new GameState(gs);
+        expect(c.allianceStandsDown(a)).toBe(true);
+        const other = createAlliance(gs, c.state.book, [noms[0], c.state.week.hohId!], "Not Both");
+        expect(c.allianceStandsDown(other)).toBe(false);
+    });
+});

@@ -2,6 +2,7 @@
 import { GameState, nonEvictedHouseguests, PlayerProfile } from "../model";
 import { PlayerModeController, Prompt, Step } from "./playerModeController";
 import { rankResults } from "./comps/compRunner";
+import { Rand, seededRand } from "./comps/random";
 
 export function cast(n: number): PlayerProfile[] {
     return Array.from({ length: n }, (_, i) => ({
@@ -19,14 +20,27 @@ export function newGame(n: number): GameState {
 export type Strategy = "first" | "random";
 
 // Answers whatever the controller is asking, automatically.
+// The automatic player's "random" choices are seeded by the season, so a test plays the same season every run
+// (they used Math.random, and a test could pass alone and fail in the full run).
+const rands = new WeakMap<PlayerModeController, Rand>();
+function randFor(controller: PlayerModeController): Rand {
+    let r = rands.get(controller);
+    if (!r) {
+        r = seededRand((controller.state.seed * 31 + 17) >>> 0);
+        rands.set(controller, r);
+    }
+    return r;
+}
+
 export function answer(controller: PlayerModeController, p: Prompt, strategy: Strategy, humansWin: boolean | "random") {
-    const pick = <T,>(arr: T[]): T => (strategy === "first" ? arr[0] : arr[Math.floor(Math.random() * arr.length)]);
+    const random = randFor(controller);
+    const pick = <T,>(arr: T[]): T => (strategy === "first" ? arr[0] : arr[Math.floor(random() * arr.length)]);
     if (p.kind === "scene") controller.continue();
     else if (p.kind === "handoff") p.next();
     else if (p.kind === "social") {
         const me = controller.socialActor;
         // answer whoever came to talk
-        while (controller.approachesFor(me.id).length > 0) controller.respondApproach(0, Math.random() < 0.6);
+        while (controller.approachesFor(me.id).length > 0) controller.respondApproach(0, random() < 0.6);
         const week = controller.state.week;
         const noms = week.nomineeIds || [];
         if (controller.state.step === Step.SocialCampaign) controller.voters().forEach((v) => controller.askVote(v.id));
@@ -34,7 +48,7 @@ export function answer(controller: PlayerModeController, p: Prompt, strategy: St
             const others = nonEvictedHouseguests(controller.gameState).filter((hg) => hg.id !== me.id);
             if (others.length === 0) break;
             const other = pick(others);
-            const deal = Math.random() < 0.4 && !controller.isHuman(other) ? pick(["final2", "voteDeal", "pity", "tellVote", "tellTarget"]) : null;
+            const deal = random() < 0.4 && !controller.isHuman(other) ? pick(["final2", "voteDeal", "pity", "tellVote", "tellTarget"]) : null;
             if (deal === "final2" || ((deal === "voteDeal" || deal === "pity") && noms.includes(me.id))) {
                 controller.socialAct({ kind: deal as any, botId: other.id });
                 continue;
@@ -63,7 +77,7 @@ export function answer(controller: PlayerModeController, p: Prompt, strategy: St
         const me = controller.socialActor;
         controller.alliancesOf(me.id).forEach((a) => {
             const outsiders = nonEvictedHouseguests(controller.gameState).filter((hg) => !a.memberIds.includes(hg.id));
-            if (Math.random() < 0.05 && outsiders.length > 0) controller.leak(a.id, pick(outsiders).id);
+            if (random() < 0.05 && outsiders.length > 0) controller.leak(a.id, pick(outsiders).id);
             else controller.allianceSuggest(a.id, outsiders.length > 0 ? pick(outsiders).id : null);
         });
         controller.endAlliance();
@@ -77,7 +91,7 @@ export function answer(controller: PlayerModeController, p: Prompt, strategy: St
         controller.continue();
     } else if (p.kind === "hohRoom") {
         const room = controller.room!;
-        while (room.index < room.visitors.length) controller.hohAnswer(Math.random() < 0.6);
+        while (room.index < room.visitors.length) controller.hohAnswer(random() < 0.6);
         controller.endHohRoom();
     } else if (p.kind === "speech") {
         const tone = pick(p.tones);
@@ -85,7 +99,7 @@ export function answer(controller: PlayerModeController, p: Prompt, strategy: St
         expect(p.deliver(tone.id, ids).length).toBeGreaterThan(0);
         p.next();
     } else if (p.kind === "ownMoves") {
-        p.onDone(p.moves.filter(() => Math.random() < 0.5).map((m) => m.id));
+        p.onDone(p.moves.filter(() => random() < 0.5).map((m) => m.id));
     } else if (p.kind === "juryQuestion") {
         p.onAnswer(pick(["own", "sorry", "deny"]) as any);
     } else if (p.kind === "juryReveal") {
@@ -93,11 +107,11 @@ export function answer(controller: PlayerModeController, p: Prompt, strategy: St
     } else if (p.kind === "knockout") {
         p.onDone();
     } else if (p.kind === "winePour") {
-        p.onPour({ offerTainted: Math.random() < 0.5, claim: pick<"clean" | "tainted" | "none">(["clean", "tainted", "none"]) });
+        p.onPour({ offerTainted: random() < 0.5, claim: pick<"clean" | "tainted" | "none">(["clean", "tainted", "none"]) });
     } else if (p.kind === "wineDrink") {
-        p.onDecide(Math.random() < 0.5);
+        p.onDecide(random() < 0.5);
     } else if (p.kind === "tiebreak") {
-        p.onGuess(Math.floor(Math.random() * 200));
+        p.onGuess(Math.floor(random() * 200));
     } else if (p.kind === "tiebreakResults") {
         p.onDone();
     } else if (p.kind === "memoryDuel") {
@@ -112,23 +126,25 @@ export function answer(controller: PlayerModeController, p: Prompt, strategy: St
                 humansWin === true && twin !== undefined
                     ? twin
                     : humansWin === false && misses.length
-                    ? misses[Math.floor(Math.random() * misses.length)]
-                    : free[Math.floor(Math.random() * free.length)];
+                    ? misses[Math.floor(random() * misses.length)]
+                    : free[Math.floor(random() * free.length)];
             p.onFlip!(best);
         }
     } else if (p.kind === "hideTiebreak") {
-        p.onHide(Math.floor(Math.random() * p.spots.length));
+        // offset by the player: online, every device's controller has the same seed, and players who always hid in
+        // the same spot would tie forever
+        p.onHide((Math.floor(random() * p.spots.length) + p.playerId) % p.spots.length);
     } else if (p.kind === "hideResults") {
         p.onDone();
     } else if (p.kind === "compPlay") {
-        const win = humansWin === "random" ? Math.random() < 0.5 : humansWin;
+        const win = humansWin === "random" ? random() < 0.5 : humansWin;
         p.onScore(win ? 1e9 : -1e9);
     } else if (p.kind === "compResults") {
         p.onDone(rankResults(p.results, controller.state.humanIds)[0].id);
     } else if (p.kind === "choose") {
         const ids = p.options.map((o) => o.id);
-        if (p.noneLabel && Math.random() < 0.5) p.resolve([]);
-        else p.resolve(strategy === "first" ? ids.slice(0, p.count) : [...ids].sort(() => Math.random() - 0.5).slice(0, p.count));
+        if (p.noneLabel && random() < 0.5) p.resolve([]);
+        else p.resolve(strategy === "first" ? ids.slice(0, p.count) : [...ids].sort(() => random() - 0.5).slice(0, p.count));
     }
 }
 

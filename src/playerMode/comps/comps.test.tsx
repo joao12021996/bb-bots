@@ -554,3 +554,57 @@ describe("new comps", () => {
         }
     });
 });
+
+// Fairness: every player gets exactly the same comp. Two different players play each comp with the same seed and
+// tap the same things; what's on screen (questions, options, boards, layouts) must match. Names of the two players
+// are masked (a comp may greet you by name), and so are positions and timers that move with the clock.
+describe("every player gets exactly the same comp", () => {
+    const screen = (el: HTMLElement) =>
+        el.innerHTML
+            .replace(/ style="[^"]*"/g, "")
+            .replace(/Houseguest[01]\b/g, "PLAYER")
+            .replace(/\b\d+(\.\d+)?\s?s\b/g, "Ns")
+            .replace(/\b\d+:\d\d\b/g, "N:NN");
+
+    it.each(ALL_COMPS.map((c) => [c.name, c]))("%s", async (_name, comp: any) => {
+        const gs = game();
+        const participants = nonEvictedHouseguests(gs).slice(0, 4);
+        const play = async (me: number) => {
+            const container = document.createElement("div");
+            document.body.appendChild(container);
+            const Component = comp.Component;
+            await act(async () => {
+                ReactDOM.render(
+                    <Component
+                        participants={participants}
+                        human={participants[me]}
+                        gameState={gs}
+                        history={history}
+                        rand={seededRand(777)}
+                        opponents={[]}
+                        report={() => undefined}
+                        finish={() => undefined}
+                    />,
+                    container
+                );
+            });
+            const screens = [screen(container)];
+            for (let i = 0; i < 6; i++) {
+                const targets = Array.from(container.querySelectorAll("button:not([disabled]), [style*='cursor: pointer']")) as HTMLElement[];
+                if (targets.length === 0) break;
+                const t = targets[(i * 3) % targets.length];
+                await act(async () => {
+                    t.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+                    t.click();
+                });
+                screens.push(screen(container));
+            }
+            ReactDOM.unmountComponentAtNode(container);
+            container.remove();
+            return screens;
+        };
+        const a = await play(0);
+        const b = await play(1);
+        expect(b).toEqual(a);
+    });
+});
