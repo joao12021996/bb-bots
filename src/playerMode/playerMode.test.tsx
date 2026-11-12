@@ -3,7 +3,7 @@ import { GameState, getById, nonEvictedHouseguests, PlayerProfile, MutableGameSt
 import { rng } from "../utils";
 import { seedRng } from "./seeding";
 import { PlayerModeController, newPlayerSave, Prompt, Step, PlayerSave, migrateSave } from "./playerModeController";
-import { botPercentile } from "./comps/botScores";
+import { botPercentile, compLuck, LUCK_SPREAD } from "./comps/botScores";
 import { botSocialTime, performSocialAction, SocialMemory } from "./social/socialActions";
 import { Alliance, betray, botNominate, createAlliance, emptyBook, holdMeeting } from "./social/alliances";
 import { openHohRoom, pComesUp, visitBotHoh } from "./social/hohRoom";
@@ -222,6 +222,26 @@ describe("bot scores", () => {
         expect(avg(5)).toBeLessThan(avg(10));
         expect(avg(5)).toBeGreaterThan(0.4);
         expect(avg(5)).toBeLessThan(0.6);
+    });
+
+    it("luck multiplies the comp score: a bell curve around 1, from 0 to 2, with the ends rare", () => {
+        const rand = seededRand(7);
+        const lucks = Array.from({ length: 20000 }, () => compLuck(rand));
+        const share = (f: (l: number) => boolean) => lucks.filter(f).length / lucks.length;
+        expect(Math.min(...lucks)).toBeGreaterThanOrEqual(0);
+        expect(Math.max(...lucks)).toBeLessThanOrEqual(2);
+        expect(share((l) => l >= 0.9 && l <= 1.1)).toBeGreaterThan(0.2); // everyday
+        expect(share((l) => l <= 0.1 || l >= 1.9)).toBeLessThan(0.005); // hardly ever
+        // comp 5 with luck 2 plays like comp 10; comp 8 with luck 0 like comp 0
+        const at = (comp: number, luck: number) => {
+            // a rand that makes gaussian() come out at z = (luck - 1) / LUCK_SPREAD: u1 = exp(-z²/2), and u2 = 0 or ½ (cos = ±1)
+            const z = (luck - 1) / LUCK_SPREAD;
+            const draws = [1 - Math.exp((-z * z) / 2), z < 0 ? 0.5 : 1 - 1e-12];
+            let k = 0;
+            return botPercentile({ comp }, () => draws[k++ % 2]);
+        };
+        expect(at(5, 2)).toBeCloseTo(at(10, 1), 5);
+        expect(at(8, 0)).toBeCloseTo(0.2, 5);
     });
 
     it("every comp turns bot percentiles into sensible, monotonic-ish scores", () => {
