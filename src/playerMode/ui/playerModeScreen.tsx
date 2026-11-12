@@ -505,7 +505,12 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                         🚨 You were expelled for breaking the rules: no inspect tools during an online game. You can keep watching.
                     </div>
                 )}
-                {session && owner === null && actor === null && !session.amHost && !session.everyoneContinues && prompt.kind !== "gameOver" && prompt.kind !== "waiting" && (
+                {session && session.spectating && (
+                    <div className="bbb-banner bbb-spectating" role="status">
+                        👀 You're watching live. You see what the whole house sees, never anyone's private screens, and the show moves on when the players do.
+                    </div>
+                )}
+                {session && !session.spectating && owner === null && actor === null && !session.amHost && !session.everyoneContinues && prompt.kind !== "gameOver" && prompt.kind !== "waiting" && (
                     <div className="bbb-online-note">⏩ The host moves the show along from here.</div>
                 )}
                 {body}

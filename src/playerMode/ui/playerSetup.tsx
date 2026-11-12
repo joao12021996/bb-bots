@@ -1,14 +1,17 @@
 import React from "react";
 import { DAY_PART, dayLabel } from "../days";
 import { shuffle } from "lodash";
-import { defaultJurySize, Episode, EpisodeType, getById, getComp, getSocial, PlayerProfile } from "../../model";
+import { defaultJurySize, validateJurySize, Episode, EpisodeType, getById, getComp, getSocial, PlayerProfile } from "../../model";
 import { cast$, episodes$, getCast, newEpisode } from "../../subjects/subjects";
 import { PregameEpisode } from "../../components/episode/pregameEpisode";
 import { activatePlayerMode, Difficulty, migrateSave, newPlayerSave, PlayerModeController, PlayerSave } from "../playerModeController";
 import { ALL_POWERS, PowerId, POWERS } from "../social/powers";
 import { clearSave, inlineBlobImages, readSave } from "../save/serialize";
 import { buildSeason } from "../setupGame";
-import { BigButton, Face, Grid, Loading, Panel, Subtle, Title } from "./common";
+import { BigButton, Face, Grid, Loading, Panel, Stepper, Subtle, Title } from "./common";
+import { DifficultyPicker, RulesEditor } from "./rulesEditor";
+import { SeasonRules, withDefaults } from "../rules";
+export { Stepper };
 import { cartoonFor } from "../../cartoon/cartoon";
 import { FaceEditor, Look } from "./faceEditor";
 import { PlayerModeScreen } from "./playerModeScreen";
@@ -35,30 +38,6 @@ export function castSource(): { cast: PlayerProfile[]; hohPlaysVeto: boolean } {
 
 const MIN_HOUSEGUESTS = 4;
 
-export function Stepper(props: { label: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
-    return (
-        <div className="bbb-stepper">
-            <span className="bbb-stepper-label">{props.label}</span>
-            <button
-                type="button"
-                className="button is-light"
-                disabled={props.value <= props.min}
-                onClick={() => props.onChange(props.value - 1)}
-            >
-                −
-            </button>
-            <span className="bbb-stepper-value">{props.value}</span>
-            <button
-                type="button"
-                className="button is-light"
-                disabled={props.value >= props.max}
-                onClick={() => props.onChange(props.value + 1)}
-            >
-                +
-            </button>
-        </div>
-    );
-}
 
 export function PlayerSetup() {
     const [{ cast, hohPlaysVeto }] = React.useState(castSource);
@@ -85,6 +64,11 @@ export function PlayerSetup() {
     React.useEffect(() => savePref("setup.difficulty", difficulty), [difficulty]);
     React.useEffect(() => savePref("setup.powerMode", powerMode), [powerMode]);
     React.useEffect(() => savePref("setup.powers", chosenPowers), [chosenPowers]);
+    const [rules, setRules] = React.useState<SeasonRules>(() => withDefaults(loadPref<Partial<SeasonRules>>("setup.rules", {})));
+    const [hohVeto, setHohVeto] = React.useState<boolean>(() => loadPref("setup.hohPlaysVeto", hohPlaysVeto));
+    const [juryPick, setJuryPick] = React.useState<number | null>(null);
+    React.useEffect(() => savePref("setup.rules", rules), [rules]);
+    React.useEffect(() => savePref("setup.hohPlaysVeto", hohVeto), [hohVeto]);
 
     const basePool = [...cast, ...customs];
     const pool: PlayerProfile[] = basePool.map((hg, i) => (looks[i] && selected.includes(i) ? { ...hg, ...looks[i] } : hg));
@@ -98,7 +82,10 @@ export function PlayerSetup() {
     const effectiveBots = Math.max(minBots, Math.min(botCount, maxBots));
     const bots = botOrder.filter((i) => !selected.includes(i)).slice(0, effectiveBots);
     const houseguests = playerCount + effectiveBots;
-    const jury = defaultJurySize(houseguests);
+    const maxJury = Math.max(1, houseguests - 2 - ((houseguests - 2) % 2 === 0 ? 1 : 0));
+    const jury = juryPick !== null && validateJurySize(juryPick, houseguests) ? juryPick : defaultJurySize(houseguests);
+    // the jury can never tie: it moves in steps of two
+    const changeJury = (n: number) => setJuryPick(Math.max(1, Math.min(maxJury, n > jury ? jury + 2 : jury - 2)));
 
     const changePlayers = (n: number) => {
         setPlayerCount(n);
@@ -139,11 +126,11 @@ export function PlayerSetup() {
         // skill randomizer: everyone gets secret, random Social and Comp scores
         const roll = () => statRoll(Math.random);
         const players = hideSkills ? pool.map((hg) => ({ ...hg, social: roll(), comp: roll() })) : pool;
-        const setup = buildSeason(players, selected, bots, cast$.value.options || {}, hohPlaysVeto);
+        const setup = buildSeason(players, selected, bots, cast$.value.options || {}, hohVeto, jury);
         // make uploaded portraits survive a reload
         await inlineBlobImages(setup.gameState.houseguests);
         const powers = powerMode === "surprise" ? "surprise" : powerMode === "choose" ? chosenPowers : [];
-        const save = newPlayerSave(setup.gameState, setup.humanIds, setup.castOptions, hideSkills, { difficulty, powers });
+        const save = newPlayerSave(setup.gameState, setup.humanIds, setup.castOptions, hideSkills, { difficulty, powers, rules });
         await newEpisode(null);
         await newEpisode(new PregameEpisode(setup.gameState));
         launch(new PlayerModeController(save));
@@ -241,23 +228,7 @@ export function PlayerSetup() {
                     strongest. Revealed when the season ends.
                 </span>
             </label>
-            <div className="bbb-setting">
-                <b>🎚️ Difficulty</b>
-                <div className="bbb-segmented">
-                    {(["easy", "normal", "hard"] as Difficulty[]).map((d) => (
-                        <button key={d} type="button" className={difficulty === d ? "is-active" : ""} onClick={() => setDifficulty(d)}>
-                            {d === "easy" ? "Easy" : d === "normal" ? "Normal" : "Hard"}
-                        </button>
-                    ))}
-                </div>
-                <Subtle>
-                    {difficulty === "easy"
-                        ? "Bots are weaker in comps, and often vote with their gut instead of going after threats."
-                        : difficulty === "normal"
-                        ? "Bots play comps like real people of their skill, and go after big threats as the season goes on."
-                        : "Bots are sharper in comps, and ruthlessly target threats with their nominations and votes."}
-                </Subtle>
-            </div>
+            <DifficultyPicker value={difficulty} onChange={setDifficulty} />
             <div className="bbb-setting">
                 <b>🤫 Secret powers</b>
                 <div className="bbb-segmented">
@@ -288,6 +259,12 @@ export function PlayerSetup() {
                         </label>
                     ))}
             </div>
+            <RulesEditor
+                rules={rules}
+                onChange={setRules}
+                jury={{ value: jury, min: 1, max: maxJury, onChange: changeJury }}
+                hohPlaysVeto={{ value: hohVeto, onChange: setHohVeto }}
+            />
             <div className="bbb-setup-summary">
                 <b>{houseguests}</b> houseguests · jury of <b>{jury}</b> · final <b>2</b>
             </div>

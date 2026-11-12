@@ -524,6 +524,42 @@ describe("online play", () => {
         expect(prompt(clients[0]).kind).toBe("gameOver");
     });
 
+    it("a late joiner can watch live: in sync, never asked to act, never waited for, and never made host", () => {
+        const { hub, host, clients } = setup(8, [0, 3, 5], 17);
+        for (let i = 0; i < 40; i++) step(hub, [host, ...clients]);
+        // "a0" sorts before every player's device: it would be next in line to host if it were playing
+        const fan = NetSession.join(hub.join("a0"), "TEST", opts);
+        hub.flush();
+        expect(fan.localPlayerId).toBe(null);
+        expect(fan.controller).toBe(null);
+        fan.watch();
+        hub.flush();
+        expect(fan.spectating).toBe(true);
+        expect(fan.status$.value.spectating).toBe(true);
+        expect(fan.controller).not.toBe(null);
+        settle(hub, host);
+        let all = [host, ...clients, fan];
+        expectInSync(all);
+        expect(fan.everyoneContinues).toBe(false);
+        expect(fan.mayActFor(null)).toBe(false);
+        [0, 3, 5].forEach((id) => expect(fan.mayActFor(id)).toBe(false));
+        for (let i = 0; i < 40; i++) step(hub, all);
+        // (a device that started from a save can drift from the live season: the host's hash check fixes it)
+        settle(hub, host);
+        expectInSync(all);
+        // the host leaves: a player's device takes over, not the spectator's
+        host.leave();
+        hub.flush();
+        all = [...clients, fan];
+        expect(fan.amHost).toBe(false);
+        expect(clients.filter((c) => c.amHost).length).toBe(1);
+        let guard = 0;
+        while (guard++ < 5000 && step(hub, all)) if (guard % 25 === 0) settle(hub, clients.find((c) => c.amHost)!);
+        settle(hub, clients.find((c) => c.amHost)!);
+        expectInSync(all);
+        expect(prompt(fan).kind).toBe("gameOver");
+    });
+
     it("a returning device with nobody else around carries on alone, as the host", () => {
         const hub = new FakeHub();
         const save = newPlayerSave(newGame(8), [0, 3]);

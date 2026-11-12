@@ -58,8 +58,8 @@ import { opponentCorrectAfter } from "./comps/compUi";
 import { rankResults } from "./comps/compRunner";
 import { answer, cast, newGame, Strategy } from "./testing";
 
-function playSeason(n: number, humanIds: number[], strategy: Strategy, humansWin: boolean | "random") {
-    const controller = new PlayerModeController(newPlayerSave(newGame(n), humanIds));
+function playSeason(n: number, humanIds: number[], strategy: Strategy, humansWin: boolean | "random", extras: Parameters<typeof newPlayerSave>[4] = {}) {
+    const controller = new PlayerModeController(newPlayerSave(newGame(n), humanIds, undefined, undefined, extras));
     controller.state.seed = humanIds[0] * 7919 + n;
     const seen = new Set<string>();
     const scenes = new Set<string>();
@@ -196,6 +196,56 @@ describe("player mode season", () => {
         expect(WEEKLY_COMPS.length).toBeGreaterThanOrEqual(2 * (16 - 3) + 1);
         expect(new Set(ALL_COMPS.map((c) => c.id)).size).toBe(ALL_COMPS.length);
         ALL_COMPS.forEach((c) => expect(c.maxSeconds).toBeLessThanOrEqual(900));
+    });
+});
+
+describe("house rules and difficulty", () => {
+    const { withDefaults, isDefaultRules, DEFAULT_RULES, DIFFICULTIES } = require("./rules");
+    const { compById } = require("./comps");
+    const { buildSeason } = require("./setupGame");
+    // a difficulty's suspicion is house-wide: put it back for the tests after these
+    afterAll(() => require("./social/promises").setSuspicion(1));
+
+    it("fills in missing rules with the usual ones, and keeps actions in range", () => {
+        expect(withDefaults(undefined)).toEqual(DEFAULT_RULES);
+        expect(isDefaultRules(withDefaults({}))).toBe(true);
+        expect(withDefaults({ actions: 99 }).actions).toBe(6);
+        expect(withDefaults({ actions: 0 }).actions).toBe(1);
+        expect(withDefaults({ kinds: [] }).kinds).toEqual(DEFAULT_RULES.kinds);
+        expect(DIFFICULTIES.map((d: any) => d.id)).toEqual(["easy", "normal", "hard", "cutthroat"]);
+    });
+
+    it("without big weeks there are always two nominees and no Last Chance comp", () => {
+        const { nomCounts, scenes } = playSeason(10, [0], "random", true, { rules: withDefaults({ lastChance: false }) });
+        expect(nomCounts.length).toBeGreaterThan(0);
+        nomCounts.forEach(([, count]) => expect(count).toBe(2));
+        expect(scenes.has("Last Chance")).toBe(false);
+    });
+
+    it("only the chosen kinds of comp come up each week, and the social block has the chosen number of actions", () => {
+        const { controller } = playSeason(8, [2], "random", "random", { rules: withDefaults({ kinds: ["quiz"], actions: 5, formats: [] }) });
+        expect(controller.state.step).toBe(Step.GameOver);
+        // the finale's three parts are the classic ones, whatever the rules
+        const weekly = controller.state.usedComps.slice(0, -3).map((id: string) => compById(id));
+        expect(weekly.length).toBeGreaterThan(0);
+        expect(weekly.filter((c: any) => c.kind !== "quiz").map((c: any) => c.id)).toEqual([]);
+        expect(controller.rules.actions).toBe(5);
+    });
+
+    it("plays a cutthroat season to a winner, and the rules survive a save", () => {
+        const { controller } = playSeason(8, [1], "random", "random", { difficulty: "cutthroat", rules: withDefaults({ actions: 2 }) });
+        expect(controller.state.step).toBe(Step.GameOver);
+        const back = new PlayerModeController(migrateSave(deserialize<any>(serialize(controller.state)))!);
+        expect(back.rules.actions).toBe(2);
+        expect(back.state.difficulty).toBe("cutthroat");
+    });
+
+    it("a custom jury size and HoH-plays-veto setting go into the season", () => {
+        const s = buildSeason(cast(10), [0], [1, 2, 3, 4, 5, 6, 7, 8, 9], {}, false, 5);
+        expect(s.gameState.finalJurySize()).toBe(5);
+        expect(s.gameState.hohPlaysVeto).toBe(false);
+        // a jury that can tie, or is too big, falls back to the usual
+        expect(buildSeason(cast(10), [0], [1, 2, 3], {}, true, 2).gameState.finalJurySize()).toBe(1);
     });
 });
 

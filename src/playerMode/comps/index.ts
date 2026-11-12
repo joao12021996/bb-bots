@@ -3,7 +3,7 @@ import { rng } from "../../utils";
 import { WeekRecord } from "../history";
 import { CatchTheKeysComp, SteadyHandComp, TowerStackComp } from "./actionComps";
 import { BeforeOrAfterComp } from "./beforeOrAfter";
-import { CompDefinition } from "./compTypes";
+import { CompDefinition, CompKind } from "./compTypes";
 import { FaceOffComp } from "./faceOff";
 import { HoldTheWallComp } from "./holdTheWall";
 import { FactOrFictionComp, ZoomInComp } from "./houseComps";
@@ -77,8 +77,11 @@ export const WEEKLY_COMPS = ALL_COMPS.filter((c) => !c.finaleOnly && !c.tiebreak
 
 // Picks a comp for a weekly HoH or veto. Never repeats a comp within a season while unplayed ones remain;
 // only a season longer than the comp library (more than ~13 weeks) falls back to the least recently played.
-export function pickWeeklyComp(gameState: GameState, history: WeekRecord[], used: string[]): CompDefinition {
-    const available = WEEKLY_COMPS.filter((c) => !c.available || c.available(gameState, history));
+export function pickWeeklyComp(gameState: GameState, history: WeekRecord[], used: string[], kinds?: CompKind[]): CompDefinition {
+    const fits = WEEKLY_COMPS.filter((c) => !c.available || c.available(gameState, history));
+    // the house rules can leave some kinds of comp out (if that leaves nothing, anything goes)
+    const allowed = kinds ? fits.filter((c) => kinds.includes(c.kind)) : fits;
+    const available = allowed.length > 0 ? allowed : fits;
     const unused = available.filter((c) => !used.includes(c.id));
     if (unused.length > 0) return unused[rng().randomInt(0, unused.length - 1)];
     // everything has been played: take the one played longest ago
@@ -112,8 +115,10 @@ export const QUICK_COMPS: CompDefinition[] = [
 ];
 
 // Picks the Last Chance comp: a quick one, not played yet this season if possible.
-export function pickQuickComp(gameState: GameState, history: WeekRecord[], used: string[]): CompDefinition {
-    const available = QUICK_COMPS.filter((c) => !c.available || c.available(gameState, history));
+export function pickQuickComp(gameState: GameState, history: WeekRecord[], used: string[], kinds?: CompKind[]): CompDefinition {
+    const fits = QUICK_COMPS.filter((c) => !c.available || c.available(gameState, history));
+    const allowed = kinds ? fits.filter((c) => kinds.includes(c.kind)) : fits;
+    const available = allowed.length > 0 ? allowed : fits;
     const unused = available.filter((c) => !used.includes(c.id));
     if (unused.length > 0) return unused[rng().randomInt(0, unused.length - 1)];
     return available.reduce((best, c) => (used.lastIndexOf(c.id) < used.lastIndexOf(best.id) ? c : best));

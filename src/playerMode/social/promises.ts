@@ -102,8 +102,14 @@ export function shiftHouseTrust(gs: MutableGameState, ledger: Ledger, speaker: n
 
 // How readily `listener` believes `speaker`: their own trust, plus what the house says about them.
 // Multiplies the odds of a deal, a claim or a cover story landing (1 for a stranger with a clean record).
+// How suspicious bots are this season (the difficulty): under 1, they believe less.
+let suspicion = 1;
+export function setSuspicion(k: number) {
+    suspicion = k;
+}
+
 export function belief(ledger: Ledger, listener: number, speaker: number): number {
-    return clamp(0.4 + 1.2 * trustOf(ledger, listener, speaker) + 0.1 * reputation(ledger, speaker), 0.3, 1.4);
+    return clamp(0.4 + 1.2 * trustOf(ledger, listener, speaker) + 0.1 * reputation(ledger, speaker), 0.3, 1.4) * suspicion;
 }
 
 export function trustLabel(trust: number): string {

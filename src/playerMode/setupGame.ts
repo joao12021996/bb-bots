@@ -1,4 +1,4 @@
-import { defaultJurySize, GameState, PlayerProfile } from "../model";
+import { defaultJurySize, GameState, PlayerProfile, validateJurySize } from "../model";
 import { Tribe } from "../model/tribe";
 import { CastOptionsOverride } from "../components/episode/episodeFactory";
 
@@ -20,7 +20,8 @@ export function buildSeason(
     playerIndexes: number[],
     botIndexes: number[],
     options: CastOptions = {},
-    hohPlaysVeto: boolean = true
+    hohPlaysVeto: boolean = true,
+    jury?: number
 ): SeasonSetup {
     const chosen = Array.from(new Set([...playerIndexes, ...botIndexes])).sort((a, b) => a - b);
     const players: PlayerProfile[] = chosen.map((i) => ({
@@ -30,7 +31,7 @@ export function buildSeason(
         comp: cast[i].comp,
         castingScreenId: cast[i].castingScreenId,
     }));
-    const gameState = new GameState({ players, jury: defaultJurySize(players.length), hohPlaysVeto });
+    const gameState = new GameState({ players, jury: jury !== undefined && validateJurySize(jury, players.length) ? jury : defaultJurySize(players.length), hohPlaysVeto });
     const newId = (castIndex: number) => chosen.indexOf(castIndex);
 
     const castOptions: CastOptionsOverride = {};

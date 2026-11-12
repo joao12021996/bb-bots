@@ -192,3 +192,28 @@ export function pressable(onPress: () => void, label: string) {
         },
     };
 }
+
+export function Stepper(props: { label: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
+    return (
+        <div className="bbb-stepper">
+            <span className="bbb-stepper-label">{props.label}</span>
+            <button
+                type="button"
+                className="button is-light"
+                disabled={props.value <= props.min}
+                onClick={() => props.onChange(props.value - 1)}
+            >
+                −
+            </button>
+            <span className="bbb-stepper-value">{props.value}</span>
+            <button
+                type="button"
+                className="button is-light"
+                disabled={props.value >= props.max}
+                onClick={() => props.onChange(props.value + 1)}
+            >
+                +
+            </button>
+        </div>
+    );
+}

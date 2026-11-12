@@ -177,7 +177,12 @@ const SECTIONS: Section[] = [
                 </li>
                 <li>
                     <b>🌐 Play online</b>: host a game and share the code. The house starts full of bots, and every
-                    friend who joins takes the place of one.
+                    friend who joins takes the place of one. Late to the party? Tap 👀 Just watch to follow the season live.
+                </li>
+                <li>
+                    <b>🎚️ Difficulty and 📜 House rules</b>: from Casual (forgiving bots) to Cutthroat (bots that doubt
+                    you and break their word). House rules set the jury size, whether the Head of House plays in the
+                    Veto, big three-nominee weeks, actions per social block, and which kinds of comp come up.
                 </li>
                 <li>
                     <b>🎨 Your avatar</b>: build a cartoon of yourself feature by feature (skin, hair, eyes, glasses,

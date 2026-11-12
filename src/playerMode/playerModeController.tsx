@@ -31,6 +31,8 @@ import { generateVotingTable } from "../components/votingTable/votingTable";
 import { newEpisode, playerModeScreen$, pushToMainContentStream, secretRelationships$, selectedPlayer$ } from "../subjects/subjects";
 import { Screens } from "../components/topbar/topBar";
 import { WeekRecord } from "./history";
+import { Difficulty, SeasonRules, withDefaults } from "./rules";
+import { setSuspicion } from "./social/promises";
 import { capitalize, explainNomination, explainVote, ReasonContext } from "./social/reasons";
 import { CompDefinition, EnduranceDeals, Opponent } from "./comps/compTypes";
 import { CompRole, THROW_EFFORT, throwChance } from "./comps/throwing";
@@ -41,7 +43,6 @@ import { botPercentile } from "./comps/botScores";
 import { sample, seededRand } from "./comps/random";
 import { CompResult, LiveScore, tiedForFirst } from "./comps/compRunner";
 import {
-    ACTIONS_PER_BLOCK,
     answerPitch,
     Approach,
     botApproaches,
@@ -193,7 +194,7 @@ import { DiaryEntry, diaryEntries, recapText } from "./social/diary";
 import { battleBackCandidates, battleBackDue, haveNotCount } from "./social/twists";
 import { DiaryRoom } from "./ui/diaryRoom";
 
-export type Difficulty = "easy" | "normal" | "hard";
+export type { Difficulty } from "./rules";
 
 export enum Step {
     BattleBack = "BattleBack", // evicted houseguests compete to come back, before the week starts
@@ -328,6 +329,7 @@ export interface PlayerSave {
     dossier?: { [viewerId: number]: { [otherId: number]: { day: number; text: string }[] } };
     statsHidden?: boolean; // skill randomizer: Social/Comp scores are random and secret until the end
     difficulty?: Difficulty; // how well bots play comps, and how strategically they vote
+    rules?: SeasonRules; // house rules (see rules.ts); left out: the defaults
     powers?: PowersState; // the season's secret powers: which, when, and who holds them
     announce?: { title: string; lines: string[] }[]; // the host's announcements, shown before the next step
     moves?: MoveRecord[]; // big moves and backstabs, for the season awards
@@ -616,6 +618,16 @@ export class PlayerModeController {
 
     constructor(save: PlayerSave) {
         this.state = save;
+        this.applyDifficulty();
+    }
+
+    // Bots believe what they're told more readily, or less, depending on the difficulty.
+    private applyDifficulty() {
+        setSuspicion({ easy: 1.15, normal: 1, hard: 1, cutthroat: 0.8 }[this.difficulty] ?? 1);
+    }
+
+    get rules(): SeasonRules {
+        return withDefaults(this.state.rules);
     }
 
     get gameState(): GameState {
@@ -964,7 +976,7 @@ export class PlayerModeController {
     // A bot's comp performance, adjusted for difficulty.
     // `seed`: the same skill every time for this seed (a comp that's replayed after a reload must come out the same)
     private botSkill(hg: Houseguest, seed?: string): number {
-        const shift = { easy: -0.12, normal: 0, hard: 0.08 }[this.difficulty];
+        const shift = { easy: -0.12, normal: 0, hard: 0.08, cutthroat: 0.14 }[this.difficulty] ?? 0;
         const rand = seed === undefined ? undefined : seededRand(hashcode(`${seed}:skill:${hg.id}`));
         return Math.max(0, Math.min(1, botPercentile(hg, rand) + shift));
     }
@@ -974,6 +986,7 @@ export class PlayerModeController {
         const late = this.lateness();
         if (this.difficulty === "easy") return { threatVote: 0.05 + 0.15 * late, threatNom: 0.15 + 0.25 * late, gut: 0.25 };
         if (this.difficulty === "hard") return { threatVote: 0.3 + 0.4 * late, threatNom: 0.5 + 0.4 * late, gut: 0 };
+        if (this.difficulty === "cutthroat") return { threatVote: 0.5 + 0.4 * late, threatNom: 0.7 + 0.25 * late, gut: 0 };
         return { threatVote: 0.15 + 0.3 * late, threatNom: 0.3 + 0.4 * late, gut: 0 };
     }
 
@@ -1503,7 +1516,7 @@ export class PlayerModeController {
         const s = this.state;
         s.socialTurn++;
         s.socialStage = "social";
-        s.actionsLeft = ACTIONS_PER_BLOCK;
+        s.actionsLeft = this.rules.actions;
         this.save();
         this.run();
     }
@@ -1760,6 +1773,7 @@ export class PlayerModeController {
     // A knockout HoH comes up once a season, while there are enough houseguests for it to hurt.
     private useKnockout(competitors: Houseguest[]): boolean {
         return (
+            this.rules.formats.includes("knockout") &&
             !this.state.week.secretHoh &&
             !this.state.usedComps.includes(KNOCKOUT_ID) &&
             competitors.length >= 5 &&
@@ -1921,6 +1935,7 @@ export class PlayerModeController {
     // Tainted Wine comes up once a season (HoH or Veto), with a player in it and enough houseguests to make it a game.
     private useTaintedWine(competitors: Houseguest[]): boolean {
         return (
+            this.rules.formats.includes("taintedWine") &&
             !this.state.week.secretHoh &&
             !this.state.usedComps.includes(TAINTED_WINE_ID) &&
             competitors.length >= 3 &&
@@ -1932,6 +1947,7 @@ export class PlayerModeController {
     // Memory Duel, like Tainted Wine: once a season, with a player in it.
     private useMemoryDuel(competitors: Houseguest[]): boolean {
         return (
+            this.rules.formats.includes("memoryDuel") &&
             !this.state.week.secretHoh &&
             !this.state.usedComps.includes(MEMORY_DUEL_ID) &&
             competitors.length >= 3 &&
@@ -1946,7 +1962,7 @@ export class PlayerModeController {
             if (hoh && this.useKnockout(competitors)) return KNOCKOUT_ID;
             if (this.useTaintedWine(competitors)) return TAINTED_WINE_ID;
             if (this.useMemoryDuel(competitors)) return MEMORY_DUEL_ID;
-            return pickWeeklyComp(this.state.gameState, this.state.history, this.state.usedComps).id;
+            return pickWeeklyComp(this.state.gameState, this.state.history, this.state.usedComps, this.rules.kinds).id;
         });
     }
 
@@ -2388,13 +2404,13 @@ export class PlayerModeController {
         const finale = remaining === 3;
         s.gameState = prepareNextWeek(s.gameState, finale ? BigBrotherFinale : BigBrotherVanilla, s.castOptions);
         s.weekStartState = s.gameState;
-        s.week = { blockbuster: !finale && remaining >= BLOCKBUSTER_MIN_PLAYERS };
+        s.week = { blockbuster: this.rules.lastChance && !finale && remaining >= BLOCKBUSTER_MIN_PLAYERS };
         s.deals = this.deals.filter((d) => d.week >= s.gameState.phase - 1);
         s.humanIds.forEach((id) => (this.socialMemory(id).chatsThisWeek = {}));
         s.socialLog = [];
         s.socialTurn = 0;
         s.socialStage = "social";
-        s.actionsLeft = ACTIONS_PER_BLOCK;
+        s.actionsLeft = this.rules.actions;
         pruneAlliances(s.gameState, s.book).forEach((a) => this.tellAlliance(a, `💔 ${a.name} is no more.`));
         const title = finale ? "Finale" : `Day ${weekStartDay(s.gameState, s.gameState.phase)}`;
         s.step = finale ? Step.SocialFinale1 : Step.SocialMorning;
@@ -3414,6 +3430,8 @@ export class PlayerModeController {
     private honor(botId: number, toId: number): number {
         const info = this.traitsOf(botId);
         let h = honorChance(this.gameState, botId, toId) + (info ? info.honor : 0);
+        // casual bots keep their word more; cutthroat bots break it when it suits them
+        h += { easy: 0.1, normal: 0, hard: 0, cutthroat: -0.15 }[this.difficulty] ?? 0;
         if (this.personalities[botId] === "wildcard") h += (Math.abs(rng().randomFloat()) - 0.5) * 0.5;
         return Math.max(0.05, Math.min(0.99, h));
     }
@@ -3655,7 +3673,7 @@ export class PlayerModeController {
         if (actor) s.approaches[actor.id] = [];
         s.socialTurn++;
         s.socialStage = "social";
-        s.actionsLeft = ACTIONS_PER_BLOCK;
+        s.actionsLeft = this.rules.actions;
         this.save();
         this.run();
     };
@@ -3751,7 +3769,7 @@ export class PlayerModeController {
         s.socialLog = [];
         s.socialTurn = 0;
         s.socialStage = "social";
-        s.actionsLeft = ACTIONS_PER_BLOCK;
+        s.actionsLeft = this.rules.actions;
         this.goTo(AFTER_SOCIAL[s.step]);
     }
 
@@ -3836,7 +3854,7 @@ export class PlayerModeController {
             ]);
             return this.run();
         }
-        const comp = compById(this.compChoice(() => pickQuickComp(s.gameState, s.history, s.usedComps).id));
+        const comp = compById(this.compChoice(() => pickQuickComp(s.gameState, s.history, s.usedComps, this.rules.kinds).id));
         this.runComp("🔙 Battle Back Competition", comp, candidates, (winnerId) => {
             const back = this.player(winnerId);
             const wasJuror = back.isJury;
@@ -3967,7 +3985,7 @@ export class PlayerModeController {
         });
         s.socialTurn = 0;
         s.socialStage = "social";
-        s.actionsLeft = ACTIONS_PER_BLOCK;
+        s.actionsLeft = this.rules.actions;
         this.goTo(Step.HohRoom);
     }
 
@@ -4624,7 +4642,7 @@ export class PlayerModeController {
     private blockbuster() {
         const s = this.state;
         const noms = s.week.nomineeIds!.map((id) => getById(s.gameState, id));
-        const comp = compById(this.compChoice(() => pickQuickComp(s.gameState, s.history, s.usedComps).id));
+        const comp = compById(this.compChoice(() => pickQuickComp(s.gameState, s.history, s.usedComps, this.rules.kinds).id));
         this.runComp("Last Chance Competition", comp, noms, (winnerId) => {
             const [gs, scene, remaining] = generateBlockbusterScene(s.gameState, noms, winnerId);
             s.gameState = gs;
@@ -5355,7 +5373,7 @@ export function newPlayerSave(
     humanIds: number[],
     castOptions?: CastOptionsOverride,
     statsHidden?: boolean,
-    extras: { difficulty?: Difficulty; powers?: PowerId[] | "surprise"; battleBack?: boolean } = {}
+    extras: { difficulty?: Difficulty; powers?: PowerId[] | "surprise"; battleBack?: boolean; rules?: SeasonRules } = {}
 ): PlayerSave {
     const seed = Date.now() % 1000000007;
     const rand = seededRand(hashcode(`${seed}:powers`));
@@ -5377,7 +5395,7 @@ export function newPlayerSave(
         social,
         socialTurn: 0,
         socialStage: "social",
-        actionsLeft: ACTIONS_PER_BLOCK,
+        actionsLeft: withDefaults(extras.rules).actions,
         socialLog: [],
         book: emptyBook(),
         approaches: {},
@@ -5386,6 +5404,7 @@ export function newPlayerSave(
         castOptions,
         statsHidden,
         difficulty: extras.difficulty || "normal",
+        rules: extras.rules ? withDefaults(extras.rules) : undefined,
         powers,
     };
 }

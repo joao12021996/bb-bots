@@ -786,3 +786,32 @@ describe("player mode screens", () => {
         expect({ ...after, glasses: before.glasses }).toEqual(before);
     });
 });
+
+describe("house rules editor", () => {
+    const { RulesEditor, DifficultyPicker, rulesSummary } = require("./rulesEditor");
+    const { DEFAULT_RULES, withDefaults } = require("../rules");
+
+    it("lists all four difficulties, and opens the house rules to change them", () => {
+        let picked = "normal";
+        const d = mount(<DifficultyPicker value="normal" onChange={(x: string) => (picked = x)} />);
+        const buttons = Array.from(d.querySelectorAll("button")).map((b) => b.textContent);
+        expect(buttons).toEqual(["Casual", "Normal", "Hard", "Cutthroat"]);
+        act(() => (d.querySelectorAll("button")[3] as HTMLButtonElement).click());
+        expect(picked).toBe("cutthroat");
+
+        let rules = DEFAULT_RULES;
+        let jury = 3;
+        const c = mount(
+            <RulesEditor rules={rules} onChange={(r: any) => (rules = r)} jury={{ value: 3, min: 1, max: 7, onChange: (n: number) => (jury = n) }} />
+        );
+        expect(c.textContent).toContain("(the usual)");
+        act(() => (c.querySelector(".bbb-rules-toggle") as HTMLButtonElement).click());
+        const lastChance = Array.from(c.querySelectorAll("label")).find((l) => l.textContent!.includes("Big weeks"))!.querySelector("input")!;
+        act(() => lastChance.click());
+        expect(rules.lastChance).toBe(false);
+        const plus = Array.from(c.querySelectorAll(".bbb-stepper")).find((s) => s.textContent!.includes("Jury"))!.querySelectorAll("button")[1] as HTMLButtonElement;
+        act(() => plus.click());
+        expect(jury).toBe(4); // the setup screen turns this into the next odd size
+        expect(rulesSummary(withDefaults({ lastChance: false, actions: 5 }))).toEqual(["always two nominees", "5 actions per block"]);
+    });
+});

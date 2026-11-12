@@ -1,4 +1,6 @@
-import { PlayerProfile } from "../../model";
+import { defaultJurySize, PlayerProfile, validateJurySize } from "../../model";
+import { statRoll } from "../../cartoon/cartoon";
+import { SeasonRules, withDefaults } from "../rules";
 import { CastOptionsOverride } from "../../components/episode/episodeFactory";
 import { Difficulty, newPlayerSave, PlayerSave } from "../playerModeController";
 import { buildSeason } from "../setupGame";
@@ -21,6 +23,9 @@ export interface LobbySetup {
     powers: "off" | "surprise";
     battleBack?: boolean; // evicted houseguests compete to come back, right before the jury starts
     hideSkills: boolean;
+    rules?: Partial<SeasonRules>; // house rules; anything left out is the usual
+    jury?: number; // jury size, when the host changed it
+    hohPlaysVeto?: boolean; // left out: the cast's setting
     seats: LobbySeat[]; // the players, in the order they joined
     botOrder: number[]; // cast indexes, in the order bots are picked
 }
@@ -100,15 +105,21 @@ export function buildOnlineSeason(
         .filter((spot) => spot.kind === "bot")
         .map((spot) => (spot as { castIndex: number }).castIndex);
     // skill randomizer: everyone gets secret, random Social and Comp scores
-    const roll = () => Math.round(1 + 9 * ((Math.random() + Math.random()) / 2));
+    const roll = () => statRoll(Math.random);
     const players = setup.hideSkills ? pool.map((hg) => ({ ...hg, social: roll(), comp: roll() })) : pool;
-    const season = buildSeason(players, playerIndexes, botIndexes, castOptions, hohPlaysVeto);
+    const season = buildSeason(players, playerIndexes, botIndexes, castOptions, setup.hohPlaysVeto ?? hohPlaysVeto, lobbyJury(setup, houseOf(setup, cast).length));
     const save = newPlayerSave(season.gameState, season.humanIds, season.castOptions as CastOptionsOverride, setup.hideSkills, {
         difficulty: setup.difficulty,
         powers: setup.powers === "surprise" ? "surprise" : [],
         battleBack: !!setup.battleBack,
+        rules: withDefaults(setup.rules),
     });
     const claims: { [playerId: number]: string } = {};
     season.humanIds.forEach((id, i) => (claims[id] = setup.seats[i].peerId));
     return { save, claims };
+}
+
+// The jury for a house of this size: the host's pick if it still fits, or the usual.
+export function lobbyJury(setup: LobbySetup, houseSize: number): number {
+    return setup.jury !== undefined && validateJurySize(setup.jury, houseSize) ? setup.jury : defaultJurySize(houseSize);
 }

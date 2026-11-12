@@ -88,6 +88,7 @@ export interface NetStatus {
     setup: LobbySetup | null;
     cast: CastCard[];
     mySeat: LobbySeat | null;
+    spectating: boolean; // watching the season live, without a seat
 }
 
 export interface SessionOptions {
@@ -251,6 +252,7 @@ export class NetSession {
     private cast: CastCard[] = [];
     private wantPlayerId: number | null = null; // a returning player claims their old seat automatically
     private fallbackJson: string | null = null; // a returning device's own copy of the season
+    private watching = false; // asked to watch without a seat
 
     // the screens being shown, unwrapped: the one everyone shares, and players' own (by player id)
     private rawPrompt: Prompt | null = null;
@@ -376,6 +378,7 @@ export class NetSession {
             setup: this.setup,
             cast: this.cast,
             mySeat: (this.setup && this.setup.seats.find((s) => s.peerId === this.room.selfId)) || null,
+            spectating: this.spectating,
         };
     }
 
@@ -390,6 +393,19 @@ export class NetSession {
     }
 
     // ---------- lobby ----------
+
+    // Watching without a seat: a late joiner, or a friend who just wants to see. A spectator sees the screen
+    // everyone shares, never anyone's own screens or chats, and can't act. They can still take a free seat later.
+    public watch() {
+        if (!this.started || this.isHost) return;
+        this.watching = true;
+        if (this.hostId && !this.controller) this.room.send("snapReq", {}, this.hostId);
+        this.emit();
+    }
+
+    public get spectating(): boolean {
+        return this.watching && this.localPlayerId === null && !this.isHost;
+    }
 
     public claim(playerId: number) {
         if (this.isHost) this.grantClaim(playerId, this.room.selfId);
@@ -520,7 +536,12 @@ export class NetSession {
     private onPeerLeave(peerId: string) {
         if (peerId === this.hostId) {
             // the host left: the device with the smallest id takes over
-            const next = [this.room.selfId, ...this.room.peers()].filter((id) => id !== peerId).sort()[0];
+            // (a device playing in the season, before one that's only watching)
+            const left = [this.room.selfId, ...this.room.peers()].filter((id) => id !== peerId).sort();
+            const seated = Object.keys(this.claims)
+                .map((id) => this.claims[Number(id)])
+                .filter((id) => id !== peerId);
+            const next = left.find((id) => seated.includes(id)) || left[0];
             this.hostId = next;
             this.settleAllProposals();
             // Continue presses went to the old host: everyone presses again
@@ -651,7 +672,7 @@ export class NetSession {
         const mine = this.localPlayerId;
         if (mine === null && this.wantPlayerId !== null && !this.connected(this.claims[this.wantPlayerId])) {
             this.room.send("claim", { playerId: this.wantPlayerId }, from);
-        } else if (this.started && mine !== null && !this.controller) {
+        } else if (this.started && (mine !== null || this.watching) && !this.controller) {
             this.room.send("snapReq", {}, from);
         }
         if (this.controller && mine !== null) {
@@ -723,7 +744,7 @@ export class NetSession {
         Object.keys(this.buffer).forEach((s) => {
             if (Number(s) <= seq) delete this.buffer[Number(s)];
         });
-        writeOnlineSave({ code: this.code, playerId: this.localPlayerId, json });
+        if (!this.spectating) writeOnlineSave({ code: this.code, playerId: this.localPlayerId, json });
         const fresh = seq === 0 && save.history.length === 0 && !save.week.hohId;
         seedRng(`net:start:${seq - log.length}`);
         this.depth++;
@@ -799,7 +820,7 @@ export class NetSession {
         this.lastSavedJson = json;
         this.log = [];
         this.savedDuringInput = true;
-        writeOnlineSave({ code: this.code, playerId: this.localPlayerId, json });
+        if (!this.spectating) writeOnlineSave({ code: this.code, playerId: this.localPlayerId, json });
     }
 
     // This device's player broke the rules (opened the inspect tools): everyone finds out, and they're expelled.

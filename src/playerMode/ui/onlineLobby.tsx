@@ -2,10 +2,13 @@ import React from "react";
 import { getById, PlayerProfile } from "../../model";
 import { cast$, pushToMainContentStream } from "../../subjects/subjects";
 import { Screens } from "../../components/topbar/topBar";
-import { actorOf, Difficulty, PlayerModeController, PlayerSave, Prompt } from "../playerModeController";
+import { actorOf, PlayerModeController, PlayerSave, Prompt } from "../playerModeController";
 import { NetSession, NetStatus, SessionOptions, setActiveSession } from "../net/netSession";
 import { cleanRoomCode, joinLink, newRoomCode, openRoom, parseInvite } from "../net/room";
-import { buildOnlineSeason, defaultSetup, houseOf, maxHouse, minHouse } from "../net/lobby";
+import { buildOnlineSeason, defaultSetup, houseOf, lobbyJury, maxHouse, minHouse } from "../net/lobby";
+import { DifficultyPicker, RulesEditor, rulesSummary } from "./rulesEditor";
+import { difficultyLabel, withDefaults } from "../rules";
+import { HOH, VETO } from "../terms";
 import { inlineBlobImages, readOnlineSave } from "../save/serialize";
 import { BigButton, Face, Grid, Loading, Panel, Subtle, Title } from "./common";
 import { cartoonFor } from "../../cartoon/cartoon";
@@ -306,10 +309,12 @@ function LobbyRoom(props: { session: NetSession; status: NetStatus }) {
                 <HostSettings session={session} status={status} />
             ) : (
                 <Subtle>
-                    <b>{house.length}</b> houseguests · {setup.difficulty} difficulty
+                    <b>{house.length}</b> houseguests · {difficultyLabel(setup.difficulty)} difficulty · jury of {lobbyJury(setup, house.length)}
                     {setup.powers === "surprise" && " · secret powers"}
                     {setup.battleBack && " · battle back"}
                     {setup.hideSkills && " · skill randomizer"}
+                    {setup.hohPlaysVeto === false && ` · the ${HOH} sits out the ${VETO}`}
+                    {rulesSummary(withDefaults(setup.rules)).map((r) => ` · ${r}`)}
                 </Subtle>
             )}
 
@@ -362,26 +367,15 @@ function HostSettings(props: { session: NetSession; status: NetStatus }) {
     const setup = status.setup!;
     const min = minHouse(setup);
     const max = maxHouse(setup, status.cast.length);
+    const jury = lobbyJury(setup, setup.size);
+    const maxJury = Math.max(1, setup.size - 2 - ((setup.size - 2) % 2 === 0 ? 1 : 0));
+    const hohVeto = setup.hohPlaysVeto ?? castSource().hohPlaysVeto;
     return (
         <div className="bbb-lobby-settings">
             <div className="bbb-steppers">
                 <Stepper label="🏠 Houseguests" value={setup.size} min={min} max={max} onChange={(size) => session.updateSetup({ size })} />
             </div>
-            <div className="bbb-setting">
-                <b>🎚️ Difficulty</b>
-                <div className="bbb-segmented">
-                    {(["easy", "normal", "hard"] as Difficulty[]).map((d) => (
-                        <button
-                            key={d}
-                            type="button"
-                            className={setup.difficulty === d ? "is-active" : ""}
-                            onClick={() => session.updateSetup({ difficulty: d })}
-                        >
-                            {d === "easy" ? "Easy" : d === "normal" ? "Normal" : "Hard"}
-                        </button>
-                    ))}
-                </div>
-            </div>
+            <DifficultyPicker value={setup.difficulty} onChange={(difficulty) => session.updateSetup({ difficulty })} />
             <div className="bbb-setting">
                 <b>🤫 Secret powers</b>
                 <div className="bbb-segmented">
@@ -404,6 +398,12 @@ function HostSettings(props: { session: NetSession; status: NetStatus }) {
                     🎲 <b>Skill randomizer</b>: secret, random Social and Comp scores for everyone, revealed when the season ends.
                 </span>
             </label>
+            <RulesEditor
+                rules={withDefaults(setup.rules)}
+                onChange={(rules) => session.updateSetup({ rules })}
+                jury={{ value: jury, min: 1, max: maxJury, onChange: (n) => session.updateSetup({ jury: Math.max(1, Math.min(maxJury, n > jury ? jury + 2 : jury - 2)) }) }}
+                hohPlaysVeto={{ value: hohVeto, onChange: (on) => session.updateSetup({ hohPlaysVeto: on }) }}
+            />
         </div>
     );
 }
@@ -426,7 +426,13 @@ function SeatPicker(props: { session: NetSession; status: NetStatus }) {
                 <Loading text="Connecting to the room…" detail="If nothing happens, check the code, and that the host has the game open." />
             ) : (
                 <>
-                    <Subtle>{mine === null ? "Which player are you? Tap yourself to jump back in." : "Loading the season…"}</Subtle>
+                    <Subtle>
+                        {mine !== null || status.spectating
+                            ? "Loading the season…"
+                            : status.started
+                            ? "Which player are you? Tap yourself to jump back in, or just watch."
+                            : "Which player are you? Tap yourself to jump back in."}
+                    </Subtle>
                     <Grid>
                         {status.slots.map((slot) => {
                             const holder = status.claims[slot.id];
@@ -447,6 +453,14 @@ function SeatPicker(props: { session: NetSession; status: NetStatus }) {
                     <Subtle>
                         {claimed}/{status.slots.length} players connected
                     </Subtle>
+                    {status.started && mine === null && !status.spectating && (
+                        <div className="bbb-watch">
+                            <button type="button" className="button is-light" onClick={() => session.watch()}>
+                                👀 Just watch
+                            </button>
+                            <Subtle>Follow the season live as a spectator: you see what the whole house sees, never anyone's private screens.</Subtle>
+                        </div>
+                    )}
                 </>
             )}
         </Panel>
@@ -550,7 +564,8 @@ export function OnlineBar(props: { session: NetSession; controller: PlayerModeCo
         <div className="bbb-online-bar">
             <span>
                 🌐 <b>{status.code}</b>
-                {status.isHost && " · 👑 host"} <CopyButton text={joinLink(status.code)} label="🔗 invite link" />
+                {status.isHost && " · 👑 host"}
+                {status.spectating && " · 👀 watching"} <CopyButton text={joinLink(status.code)} label="🔗 invite link" />
             </span>
             <span className="bbb-online-players">
                 {status.slots.map((slot) => {
