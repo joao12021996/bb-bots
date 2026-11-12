@@ -287,7 +287,7 @@ export const HideAndGoVetoComp: CompDefinition = {
 
 // ---------------- BB Comics ----------------
 
-const COMIC_FAKES = 2; // forgeries of each real cover
+const COMIC_FAKES = 1; // forgeries of each real cover: one real, one fake per houseguest
 const COMIC_LIMIT = 480; // seconds
 const COMIC_PASS = 1.6; // seconds per column of covers (two rows) rolling across the screen
 const COMIC_ADJECTIVES = ["Amazing", "Incredible", "Uncanny", "Mighty", "Invincible", "Savage", "Sneaky", "Fearless"];
@@ -371,7 +371,7 @@ function ComicCover(props: { hg: Houseguest; rival?: Houseguest; cover: Cover; o
 
 export interface ComicPile {
     cast: Houseguest[]; // every houseguest of the season, in the order their comics go by
-    // every cover on the table, real ones and forgeries, mixed up: `of` is whose it is (index in `cast`)
+    // every cover on the table, real ones and fakes, mixed up: `of` is whose it is (index in `cast`)
     covers: { of: number; real: boolean; cover: Cover }[];
 }
 
@@ -685,7 +685,7 @@ function BBComics(props: CompProps) {
                 <div className="bbb-comic-compare">
                     <Subtle>
                         {comparing.at === "slot"
-                            ? `Slot #${comparing.i + 1}: which one stays? The others go back on the table.`
+                            ? `Slot #${comparing.i + 1}: which one stays? The other goes back on the table.`
                             : "Which one do you keep? The other goes back on the table."}
                     </Subtle>
                     <div className="bbb-comics">
@@ -775,7 +775,7 @@ export const BBComicsComp: CompDefinition = {
     emoji: "🦸",
     kind: "memory",
     rules:
-        "A jury-phase classic: every houseguest of the season stars in their own comic book. All the covers are on the table, but next to each real one are forgeries that change one detail: " +
+        "A jury-phase classic: every houseguest of the season stars in their own comic book. All the covers are on the table: each real one, and a fake that changes one detail: " +
         "the title, the speech bubble, the sound effect, the rival, the prop, which way the hero faces, the color or the issue number. " +
         "Press Review and the real covers roll across the screen in two rows, numbered in order, then they're gone. Review as often as you like (the clock keeps running), then put the real ones in that order. " +
         "Drag the covers into place, or tap one and then a slot. Pile a duplicate on top of a cover in a slot: the one on top is your answer. " +

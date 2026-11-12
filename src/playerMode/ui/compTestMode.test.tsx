@@ -24,15 +24,15 @@ describe("BB Comics", () => {
         expect(pile.cast.some((hg) => !hg.isEvicted)).toBe(true);
     });
 
-    it("puts every juror's real cover and its forgeries on the table, the same for everyone", () => {
+    it("puts every houseguest's real cover and one fake on the table, the same for everyone", () => {
         const { gameState, history } = testSeason(cast, "jury");
         const pile = comicPile(gameState, history, seededRand(5));
         expect(JSON.stringify(comicPile(gameState, history, seededRand(5)))).toBe(JSON.stringify(pile));
         pile.cast.forEach((_, of) => {
             const mine = pile.covers.filter((c) => c.of === of);
             expect(mine.filter((c) => c.real).length).toBe(1);
-            expect(mine.length).toBe(3);
-            expect(new Set(mine.map((c) => JSON.stringify(c.cover))).size).toBe(3); // the fakes really differ
+            expect(mine.length).toBe(2); // the real one and one fake
+            expect(new Set(mine.map((c) => JSON.stringify(c.cover))).size).toBe(2); // the fake really differs
         });
         const right = pile.cast.map((_, of) => pile.covers.findIndex((c) => c.real && c.of === of));
         expect(comicsRight(pile, right)).toBe(pile.cast.length);
@@ -70,7 +70,7 @@ describe("BB Comics", () => {
         const slot = (i: number) => Array.from(div.querySelectorAll(".bbb-comic-slot")[i].querySelectorAll("button")).pop() as HTMLButtonElement; // the top of a pile
         const button = (t: string) => Array.from(div.querySelectorAll("button")).find((b) => b.textContent!.includes(t))!;
         const tap = (b: HTMLElement) => act(async () => b.click());
-        expect(div.querySelectorAll(".bbb-comics-pool .bbb-comic").length).toBe(n * 3);
+        expect(div.querySelectorAll(".bbb-comics-pool .bbb-comic").length).toBe(n * 2);
 
         // the review: the real covers, numbered, in two rows that roll across and are gone
         await act(async () => button("Review the comics").click());
@@ -290,12 +290,12 @@ describe("BB Comics", () => {
         const tap = (b: HTMLElement) => act(async () => b.click());
         const right = pile.cast.map((_, of) => pile.covers.findIndex((c) => c.real && c.of === of));
         const fakes = pile.covers.map((c, i) => i).filter((i) => !pile.covers[i].real && pile.covers[i].of === 0);
-        // slot 1: real, then both fakes on top (all three of the same houseguest)
+        // slot 1: the real one, then its fake on top
         for (const c of [right[0], ...fakes]) {
             await tap(onTable(c));
             await tap(slotButton(0));
         }
-        expect(slotEl(0).querySelectorAll(".bbb-comic-peek").length).toBe(2);
+        expect(slotEl(0).querySelectorAll(".bbb-comic-peek").length).toBe(1);
         for (let i = 1; i < n; i++) {
             await tap(onTable(right[i]));
             await tap(slotButton(i));
@@ -304,10 +304,10 @@ describe("BB Comics", () => {
         await tap(button("Lock it in"));
         expect(div.querySelector(".bbb-comic-wrong")).not.toBeNull();
         expect(finished).toEqual([]);
-        // open the pile and keep the real one: the fakes go back on the table
+        // open the pile and keep the real one: the fake goes back on the table
         await tap(slotButton(0));
         const choices = Array.from(div.querySelectorAll(".bbb-comic-choice"));
-        expect(choices.length).toBe(3);
+        expect(choices.length).toBe(2);
         const order = choices.map((ch) => ch.querySelector(".bbb-comic")!.textContent);
         expect(order[0]).toBe(div.querySelector(".bbb-comic-slot .bbb-comic-drag")!.textContent); // the top one first
         const realChoice = choices.findIndex((ch) => (ch.querySelector(".bbb-comic") as HTMLElement).outerHTML === onTable(right[0]).outerHTML);
