@@ -1376,30 +1376,42 @@ input[type="number"] {
     text-overflow: ellipsis;
 }
 /* BB Comics: the table (two rows), the slots, and the real covers sliding in */
-.bbb-comics-pool {
-    display: grid;
-    grid-template-rows: repeat(2, auto);
-    grid-auto-flow: column;
-    justify-content: start;
-    gap: 8px;
-    overflow-x: auto;
-    padding: 6px 4px 10px;
-    margin: 10px 0;
-    -webkit-overflow-scrolling: touch;
-}
-.bbb-comics-pool .bbb-comic,
-.bbb-comic-slot .bbb-comic {
-    zoom: 0.6;
-}
-.bbb-comics-pool .is-used {
-    opacity: 0.2;
-}
+/* two rows when the screen allows it (the covers shrink to fit: --comic-zoom), or wrapped onto more */
+.bbb-comics-pool,
 .bbb-comic-slots {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
+    align-items: flex-start;
     gap: 8px;
+    padding: 6px;
     margin: 10px 0;
+}
+.bbb-comics-pool.is-two-rows,
+.bbb-comic-slots.is-two-rows {
+    display: grid;
+    grid-template-columns: repeat(var(--comic-columns), auto);
+}
+.bbb-comics-pool .bbb-comic,
+.bbb-comic-slot .bbb-comic {
+    zoom: var(--comic-zoom, 0.6);
+}
+/* the gold number: which slot a cover goes in */
+.bbb-comic-num {
+    display: inline-block;
+    min-width: 2.2em;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--bbb-gold);
+    color: #111;
+    font-weight: 900;
+    font-size: 0.95rem;
+    text-align: center;
+    line-height: 1.4;
+}
+.bbb-comic-strip-item .bbb-comic-num {
+    font-size: 1.4rem;
+    margin-bottom: 4px;
 }
 .bbb-comic-slot {
     display: flex;
@@ -1410,8 +1422,8 @@ input[type="number"] {
     color: var(--bbb-muted);
 }
 .bbb-comic-empty {
-    width: 94px;
-    height: 160px;
+    width: calc(156px * var(--comic-zoom, 0.6));
+    height: calc(240px * var(--comic-zoom, 0.6));
     border: 2px dashed var(--bbb-muted);
     border-radius: 6px;
     opacity: 0.6;
@@ -1487,7 +1499,7 @@ input[type="number"] {
     align-items: center;
 }
 .bbb-comic-peek {
-    height: 22px;
+    height: calc(36px * var(--comic-zoom, 0.6));
     overflow: hidden;
     pointer-events: none;
 }
@@ -1507,8 +1519,9 @@ input[type="number"] {
     align-items: center;
     justify-content: center;
 }
-.bbb-comics-pool > .is-under {
-    width: 94px;
+.bbb-comics-pool > .is-under,
+.bbb-comics-pool > .is-used {
+    width: calc(156px * var(--comic-zoom, 0.6));
 }
 .bbb-comic-slot.is-target .bbb-comic-empty {
     border-color: var(--bbb-gold);

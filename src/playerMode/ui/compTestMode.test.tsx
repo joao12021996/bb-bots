@@ -109,6 +109,8 @@ describe("BB Comics", () => {
         const pileInSlot = div.querySelectorAll(".bbb-comic-slot")[0];
         expect(pileInSlot.querySelectorAll(".bbb-comic-peek").length).toBe(1); // the fake peeks out from under it
         expect(spot(fake).className).toContain("is-used"); // still in the pile
+        expect(spot(fake).querySelector(".bbb-comic")).toBeNull(); // and not on the table too: only ever two covers each
+        expect(div.querySelectorAll(".bbb-comics-pool .bbb-comic").length).toBe(n - 1); // the n in slots (one under), n - 1 left
         // tap the pile: both, to choose from; leave it as it is
         await tap(slot(0));
         expect(div.querySelectorAll(".bbb-comic-choice").length).toBe(2);
@@ -290,6 +292,8 @@ describe("BB Comics", () => {
         const tap = (b: HTMLElement) => act(async () => b.click());
         const right = pile.cast.map((_, of) => pile.covers.findIndex((c) => c.real && c.of === of));
         const fakes = pile.covers.map((c, i) => i).filter((i) => !pile.covers[i].real && pile.covers[i].of === 0);
+        const look = (b: Element) => `${b.getAttribute("style")}|${b.innerHTML}`; // a cover, whether you can tap it or not
+        const realLook = look(onTable(right[0]));
         // slot 1: the real one, then its fake on top
         for (const c of [right[0], ...fakes]) {
             await tap(onTable(c));
@@ -310,7 +314,7 @@ describe("BB Comics", () => {
         expect(choices.length).toBe(2);
         const order = choices.map((ch) => ch.querySelector(".bbb-comic")!.textContent);
         expect(order[0]).toBe(div.querySelector(".bbb-comic-slot .bbb-comic-drag")!.textContent); // the top one first
-        const realChoice = choices.findIndex((ch) => (ch.querySelector(".bbb-comic") as HTMLElement).outerHTML === onTable(right[0]).outerHTML);
+        const realChoice = choices.findIndex((ch) => look(ch.querySelector(".bbb-comic")!) === realLook);
         expect(realChoice).toBeGreaterThanOrEqual(0);
         await tap(choices[realChoice].querySelector("button.button") as HTMLElement);
         expect(slotEl(0).querySelectorAll(".bbb-comic-peek").length).toBe(0);

@@ -346,7 +346,7 @@ function ComicCover(props: { hg: Houseguest; rival?: Houseguest; cover: Cover; o
     return (
         <button type="button" className="bbb-comic" style={style} disabled={!props.onClick} onClick={props.onClick}>
             <div className="bbb-comic-mast">
-                <span>#{cover.issue}</span>
+                <span>No. {cover.issue}</span>
                 <span className="bbb-comic-brand">BB COMICS</span>
             </div>
             <div className="bbb-comic-title">
@@ -413,6 +413,35 @@ type ComicStack = { at: "table"; top: number } | { at: "slot"; i: number };
 
 const DRAG_START = 8; // px the pointer moves before a press becomes a drag
 
+// The slots and the table each fit in two rows, the covers shrunk to fit the screen. If they'd have to shrink
+// too far for that (a phone), they stay a readable size and wrap onto more rows instead.
+const COMIC_WIDTH = 160; // px, a cover at full size (shadow included)
+const COMIC_ZOOM = 0.6; // the size they're shown at, at most
+const COMIC_ZOOM_MIN = 0.4; // any smaller is too small to tell the covers apart
+const COMIC_GAP = 8; // px between them
+
+function useComicFit(columns: number): { ref: (el: HTMLDivElement | null) => void; zoom: number; twoRows: boolean } {
+    const [el, ref] = React.useState<HTMLDivElement | null>(null);
+    const [width, setWidth] = React.useState(0);
+    React.useLayoutEffect(() => {
+        if (!el) return;
+        const measure = () => setWidth(el.clientWidth);
+        measure();
+        if (typeof ResizeObserver !== "undefined") {
+            const observer = new ResizeObserver(measure);
+            observer.observe(el);
+            return () => observer.disconnect();
+        }
+        window.addEventListener("resize", measure);
+        return () => window.removeEventListener("resize", measure);
+    }, [el]);
+    if (!width) return { ref, zoom: COMIC_ZOOM, twoRows: true }; // not laid out yet
+    const zoom = (width - 12 - COMIC_GAP * (columns - 1)) / (columns * COMIC_WIDTH);
+    return zoom >= COMIC_ZOOM_MIN ? { ref, zoom: Math.min(COMIC_ZOOM, zoom), twoRows: true } : { ref, zoom: COMIC_ZOOM, twoRows: false };
+}
+
+const fitStyle = (zoom: number, columns: number) => ({ "--comic-zoom": zoom, "--comic-columns": columns } as React.CSSProperties);
+
 // A pile of covers, solitaire style: the ones underneath peek out above the one on top.
 function ComicPileView(props: { below: React.ReactNode[]; top: React.ReactNode }) {
     return (
@@ -441,6 +470,8 @@ function BBComics(props: CompProps) {
     const [wrong, setWrong] = React.useState(0); // tries that weren't right
     const [checked, setChecked] = React.useState(false); // the red cross, until something changes
     const [start] = React.useState(() => Date.now());
+    const slotFit = useComicFit(Math.ceil(n / 2));
+    const tableFit = useComicFit(Math.ceil(pile.covers.length / 2));
     const justDragged = React.useRef(false); // the click that ends a drag isn't a tap
     const endDrag = React.useRef<(() => void) | null>(null);
     React.useEffect(
@@ -615,7 +646,7 @@ function BBComics(props: CompProps) {
             <div className="bbb-comic-strip-row">
                 {list.map((c) => (
                     <div key={c.of} className="bbb-comic-strip-item">
-                        <b>#{c.of + 1}</b>
+                        <b className="bbb-comic-num">#{c.of + 1}</b>
                         <ComicCover hg={pile.cast[c.of]} rival={rivalOf(c.cover)} cover={c.cover} />
                     </div>
                 ))}
@@ -650,7 +681,11 @@ function BBComics(props: CompProps) {
                 Drag covers into the slots, in the order they went by (or tap one, then tap a slot). Put a duplicate on top of a cover to pile them up:
                 the one on top is your answer. Tap a pile to see them all and keep one. Drag a cover out of its slot, or tap it, to put it back.
             </Subtle>
-            <div className="bbb-comic-slots">
+            <div
+                ref={slotFit.ref}
+                className={"bbb-comic-slots" + (slotFit.twoRows ? " is-two-rows" : "")}
+                style={fitStyle(slotFit.zoom, Math.ceil(n / 2))}
+            >
                 {slots.map((s, i) => {
                     const t = top(i);
                     return (
@@ -659,7 +694,7 @@ function BBComics(props: CompProps) {
                             className={"bbb-comic-slot" + (held !== null || drag ? " is-target" : "") + overClass(`slot:${i}`)}
                             data-drop={`slot:${i}`}
                         >
-                            <span>#{i + 1}</span>
+                            <span className="bbb-comic-num">#{i + 1}</span>
                             {t === null ? (
                                 <button type="button" className="bbb-comic-empty" aria-label={`Slot ${i + 1}`} onClick={tapped(() => tapSlot(i))} />
                             ) : (
@@ -725,13 +760,20 @@ function BBComics(props: CompProps) {
                     </div>
                 )
             )}
-            <div className={"bbb-comics-pool" + overClass("table")} data-drop="table">
+            <div
+                ref={tableFit.ref}
+                className={"bbb-comics-pool" + (tableFit.twoRows ? " is-two-rows" : "") + overClass("table")}
+                style={fitStyle(tableFit.zoom, Math.ceil(pile.covers.length / 2))}
+                data-drop="table"
+            >
                 {pile.covers.map((_, i) => {
+                    // under a stack, or in a slot: an empty spot, so every houseguest only ever shows two covers
                     if (hidden.has(i)) return <div key={i} className="is-under" />;
+                    if (used.has(i)) return <div key={i} className="is-used" />;
                     const stack = under[i] !== undefined;
-                    const free = !used.has(i) && !stack;
-                    const classes = [used.has(i) ? "is-used" : "", held === i ? "is-held" : "", stack ? "is-stack" : "", dragging(i) ? "is-dragging" : ""];
-                    const face = cover(i, used.has(i) || comparing !== null ? undefined : tapped(() => tapTable(i)));
+                    const free = !stack;
+                    const classes = [held === i ? "is-held" : "", stack ? "is-stack" : "", dragging(i) ? "is-dragging" : ""];
+                    const face = cover(i, comparing !== null ? undefined : tapped(() => tapTable(i)));
                     return (
                         <div
                             key={i}
@@ -777,7 +819,7 @@ export const BBComicsComp: CompDefinition = {
     rules:
         "A jury-phase classic: every houseguest of the season stars in their own comic book. All the covers are on the table: each real one, and a fake that changes one detail: " +
         "the title, the speech bubble, the sound effect, the rival, the prop, which way the hero faces, the color or the issue number. " +
-        "Press Review and the real covers roll across the screen in two rows, numbered in order, then they're gone. Review as often as you like (the clock keeps running), then put the real ones in that order. " +
+        "Press Review and the real covers roll across the screen in two rows, each with its slot number on top, then they're gone. Review as often as you like (the clock keeps running), then put the real ones in that order. " +
         "Drag the covers into place, or tap one and then a slot. Pile a duplicate on top of a cover in a slot: the one on top is your answer. " +
         "When you lock it in, a red cross means something's wrong, but you won't be told what. Fastest to get it right wins.",
     maxSeconds: COMIC_LIMIT,
