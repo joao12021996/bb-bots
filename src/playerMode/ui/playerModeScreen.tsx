@@ -100,6 +100,15 @@ export class PlayerModeScreen extends React.Component<Props, State> {
             });
     }
 
+    // a new season loaded into the same screen (online: fetched again): follow the new controller
+    componentDidUpdate(prev: Props) {
+        if (prev.controller === this.props.controller) return;
+        this.componentWillUnmount();
+        this.shown = null;
+        this.setState({ prompt: null, personal: {} });
+        this.componentDidMount();
+    }
+
     componentWillUnmount() {
         // leaving the screen (e.g. browsing past weeks in the sidebar): restore normal Continue buttons
         continueOverride$.next(null);

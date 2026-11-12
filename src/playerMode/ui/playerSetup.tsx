@@ -13,8 +13,13 @@ import { initialsAvatar } from "./avatar";
 import { FaceEditor, Look } from "./faceEditor";
 import { PlayerModeScreen } from "./playerModeScreen";
 
+let launches = 0;
+
 export function launch(controller: PlayerModeController) {
-    activatePlayerMode(controller, () => <PlayerModeScreen controller={controller} />);
+    // a fresh screen for every season loaded: online, a device that fetches the season again gets a new
+    // controller, and the screen must follow it rather than keep showing the old one
+    const key = ++launches;
+    activatePlayerMode(controller, () => <PlayerModeScreen key={key} controller={controller} />);
 }
 
 // The cast to pick from, and season settings from the season editor if the user set one up.

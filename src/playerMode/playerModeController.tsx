@@ -589,13 +589,13 @@ export class PlayerModeController {
     }
 
     // Approaches that still make sense (the houseguests involved are still in the house).
+    // Read by the screens, so it changes nothing (online, each device draws different screens: reading must
+    // never make one device's season differ). Those who answer one save the list back.
     public approachesFor(id: number): Approach[] {
         const alive = (hid: number) => getById(this.gameState, hid) && !getById(this.gameState, hid).isEvicted;
-        const list = (this.state.approaches[id] || []).filter(
+        return (this.state.approaches[id] || []).filter(
             (a) => alive(a.fromId) && (a.kind !== "pitch" || alive(a.targetId)) && (a.kind !== "sides" || alive(a.otherId))
         );
-        this.state.approaches[id] = list;
-        return list;
     }
 
     public newsFor(id: number): string[] {
@@ -2350,7 +2350,7 @@ export class PlayerModeController {
                 const result = snoop(gs, this.ledger, this.book, actorId);
                 if (result.learned !== undefined) {
                     const known = this.overheardBy(actorId);
-                    if (!known.includes(result.learned)) known.push(result.learned);
+                    if (!known.includes(result.learned)) this.state.overheard = { ...(this.state.overheard || {}), [actorId]: [...known, result.learned] };
                     this.noteOverheard(gs, actorId, result.learned);
                 }
                 return result.outcome;
@@ -2562,11 +2562,9 @@ export class PlayerModeController {
         return outcome;
     }
 
+    // Read by the screens, so it changes nothing (see approachesFor).
     public overheardBy(playerId: number): number[] {
-        const s = this.state;
-        if (!s.overheard) s.overheard = {};
-        if (!s.overheard[playerId]) s.overheard[playerId] = [];
-        return s.overheard[playerId];
+        return (this.state.overheard || {})[playerId] || [];
     }
 
     // How far into the season we are: 0 at the start, 1 at the final 3.
