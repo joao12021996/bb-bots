@@ -1000,12 +1000,13 @@ function BBComics(props: CompProps) {
 
 function simulateBBComics(ctx: SimContext, skill: number, noise: Rand): SimResult {
     const n = comicPile(ctx.gameState, ctx.history, seededRand(ctx.seed)).cast.length;
-    // a look at the comics, then a cover at a time, with the odd wrong try
-    const perCover = 6 + (1 - skill) * 22;
-    const tries = Math.max(0, Math.round((1 - skill) * 2.5 + gaussian(noise)));
-    const secs = 10 + n * perCover * (0.75 + 0.5 * noise()) + tries * (6 + 4 * noise());
+    // Paced on the real thing: with about 16 covers, the best finish in around 11 minutes (the record is 10:58,
+    // most winners take 11 to 12), and plenty never finish. Fewer covers, a bit quicker.
+    const scale = Math.max(0.6, n / 16);
+    const tries = Math.max(0, Math.round((1 - skill) * 3 + gaussian(noise))); // wrong lock-ins, then back to review
+    const secs = scale * ((560 + (1 - skill) * 900) * (0.85 + 0.35 * noise()) + tries * (45 + 30 * noise()));
     if (secs < COMIC_LIMIT) return { score: 1000 + (COMIC_LIMIT - secs) };
-    return { score: clamp(Math.round(n * (0.3 + 0.6 * skill) + gaussian(noise)), 0, n - 1) };
+    return { score: clamp(Math.round(n * (0.2 + 0.55 * skill) + gaussian(noise)), 0, n - 1) };
 }
 
 export const BBComicsComp: CompDefinition = {
@@ -1024,7 +1025,8 @@ export const BBComicsComp: CompDefinition = {
     available: (gs) => gs.houseguests.filter((hg) => hg.isJury).length >= 2,
     Component: BBComics,
     simulate: simulateBBComics,
-    botScore: (p) => (p > 0.35 ? 1000 + Math.round(COMIC_LIMIT * 0.6 * p) : Math.round(4 * p)),
+    // only the best finish, in 10 to 15 minutes; the rest get some of the covers right
+    botScore: (p) => (p > 0.7 ? 1000 + Math.round(1000 * (p - 0.7)) : Math.round(10 * p)),
     format: (s) => (s >= 1000 ? `done in ${Math.round(COMIC_LIMIT - (s - 1000))}s` : `${Math.round(s)} in the right place`),
 };
 
