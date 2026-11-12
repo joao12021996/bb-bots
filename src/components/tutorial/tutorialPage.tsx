@@ -3,8 +3,10 @@ import { HasText } from "../layout/text";
 import { APP_NAME, HOH, LAST_CHANCE, POWER_NAMES, VETO } from "../../playerMode/terms";
 import { cartoonCast } from "../../cartoon/cartoon";
 import { reducedMotion } from "../../prefs/motion";
+import { useLanguage } from "../../i18n/i18n";
+import { HERO_FR, SECTIONS_FR } from "./tutorialFr";
 
-interface Section {
+export interface Section {
     id: string;
     emoji: string;
     title: string;
@@ -14,7 +16,7 @@ interface Section {
 // A few cartoon houseguests to decorate the page (always the same ones).
 const FACES = cartoonCast(6, 2024);
 
-const SECTIONS: Section[] = [
+const SECTIONS_EN: Section[] = [
     {
         id: "goal",
         emoji: "🏠",
@@ -204,13 +206,17 @@ const SECTIONS: Section[] = [
 ];
 
 export function TutorialPage(): JSX.Element {
+    const lang = useLanguage();
+    const SECTIONS = lang === "fr" ? SECTIONS_FR : SECTIONS_EN;
+    const hero =
+        lang === "fr" ? HERO_FR : { kicker: "How to play", title: `Welcome to ${APP_NAME}`, lead: "Everything you need to know to outlast the house, in two minutes." };
     return (
         <HasText>
             <div className="bbb-tutorial">
                 <div className="bbb-hero">
-                    <div className="bbb-hero-kicker">How to play</div>
-                    <h1>Welcome to {APP_NAME}</h1>
-                    <p>Everything you need to know to outlast the house, in two minutes.</p>
+                    <div className="bbb-hero-kicker">{hero.kicker}</div>
+                    <h1>{hero.title}</h1>
+                    <p>{hero.lead}</p>
                     <div className="bbb-tutorial-faces" aria-hidden="true">
                         {FACES.map((f) => (
                             <img key={f.name} src={f.imageURL} alt="" />

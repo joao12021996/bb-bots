@@ -16,6 +16,7 @@ import { PlayerSetup, resumeSavedSeason } from "../../playerMode/ui/playerSetup"
 import { CompTestMode } from "../../playerMode/ui/compTestMode";
 import { hasSave, readOnlineSave } from "../../playerMode/save/serialize";
 import { HostOnlineButton, joinCodeFromUrl, showJoinScreen } from "../../playerMode/ui/onlineLobby";
+import { t } from "../../i18n/i18n";
 
 // An invite link (?join=CODE) opens the join screen, once.
 let inviteHandled = false;
@@ -74,73 +75,72 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
         return (
             <HasText>
                 <div className="bbb-hero">
-                    <div className="bbb-hero-kicker">Reality TV, simulated</div>
+                    <div className="bbb-hero-kicker">{t("Reality TV, simulated")}</div>
                     <h1>Houseguest Bots</h1>
                     <p>
-                        Build a cast, add twists, and watch the bots scheme, compete and vote each other out, or move
-                        into the house yourself and try to outlast them.
+                        {t(
+                            "Build a cast, add twists, and watch the bots scheme, compete and vote each other out, or move into the house yourself and try to outlast them."
+                        )}
                     </p>
                     <button className="button is-light bbb-hero-help" onClick={showTutorial}>
-                        📖 How to play
+                        📖 {t("How to play")}
                     </button>
                 </div>
                 <div className="bbb-modes">
                     <div className="bbb-mode-card">
-                        <h3>📺 Watch the bots</h3>
-                        <p>Every houseguest is a bot. Step through the season week by week.</p>
+                        <h3>📺 {t("Watch the bots")}</h3>
+                        <p>{t("Every houseguest is a bot. Step through the season week by week.")}</p>
                         {props.cast.length > 0 ? (
                             <button className="button is-primary" onClick={() => switchSceneRelative(1)}>
-                                Start Game
+                                {t("Start Game")}
                             </button>
                         ) : (
                             <button
                                 className="button is-primary"
                                 onClick={() => dealNewCast()}
                             >
-                                Deal a cast
+                                {t("Deal a cast")}
                             </button>
                         )}
                     </div>
                     <div className="bbb-mode-card is-featured">
-                        <h3>🎮 Play as a houseguest</h3>
-                        <p>
-                            Socialize, form alliances, win comps on your phone or computer. Solo, or pass-and-play with
-                            friends on one device.
-                        </p>
+                        <h3>🎮 {t("Play as a houseguest")}</h3>
+                        <p>{t("Socialize, form alliances, win comps on your phone or computer. Solo, or pass-and-play with friends on one device.")}</p>
                         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                             {props.cast.length > 2 ? (
                                 <button
                                     className="button is-warning"
                                     onClick={() => pushToMainContentStream(<PlayerSetup />, Screens.Ingame)}
                                 >
-                                    Play now
+                                    {t("Play now")}
                                 </button>
                             ) : (
                                 <button
                                     className="button is-warning"
                                     onClick={() => dealNewCast()}
                                 >
-                                    Deal a cast first
+                                    {t("Deal a cast first")}
                                 </button>
                             )}
                             {hasSave() && (
                                 <button className="button is-light" onClick={() => resumeSavedSeason()}>
-                                    ▶ Resume saved season
+                                    ▶ {t("Resume saved season")}
                                 </button>
                             )}
                             <button
                                 className="button is-light"
                                 onClick={() => pushToMainContentStream(<CompTestMode cast={props.cast} />, Screens.Ingame)}
                             >
-                                🧪 Test a comp
+                                🧪 {t("Test a comp")}
                             </button>
                         </div>
                     </div>
                     <div className="bbb-mode-card is-featured">
-                        <h3>🌐 Play online with friends</h3>
+                        <h3>🌐 {t("Play online with friends")}</h3>
                         <p>
-                            Everyone on their own phone or computer, from anywhere. Host a game and share the code: the
-                            house starts full of bots, and every friend who joins takes one's place.
+                            {t(
+                                "Everyone on their own phone or computer, from anywhere. Host a game and share the code: the house starts full of bots, and every friend who joins takes one's place."
+                            )}
                         </p>
                         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                             {props.cast.length >= 4 ? (
@@ -150,11 +150,11 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                                     className="button is-warning"
                                     onClick={() => dealNewCast()}
                                 >
-                                    Deal a cast first
+                                    {t("Deal a cast first")}
                                 </button>
                             )}
                             <button className="button is-light" onClick={() => showJoinScreen()}>
-                                {readOnlineSave() ? "Join or rejoin a game" : "Join a game"}
+                                {readOnlineSave() ? t("Join or rejoin a game") : t("Join a game")}
                             </button>
                         </div>
                     </div>
@@ -165,23 +165,23 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                             dealNewCast();
                         }}
                     >
-                        Deal a new cast
+                        {t("Deal a new cast")}
                     </TopbarLink>{" "}
-                    of cartoon houseguests, or{" "}
+                    {t("of cartoon houseguests, or")}{" "}
                     <TopbarLink
                         onClick={() => {
                             pushToMainContentStream(<CastingScreen cast={[]} />, Screens.Casting);
                         }}
                     >
-                        upload your own
+                        {t("upload your own")}
                     </TopbarLink>
-                    , then{" "}
+                    {t(", then")}{" "}
                     <TopbarLink
                         onClick={() => {
                             pushToMainContentStream(<SeasonEditorPage />, Screens.Season);
                         }}
                     >
-                        add twists
+                        {t("add twists")}
                     </TopbarLink>
                     .
                 </p>
@@ -190,7 +190,7 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                     ""
                 ) : (
                     <p>
-                        <b> {"You can use the ⬅️ and ➡️ arrow keys to move forwards and backwards."}</b>
+                        <b> {t("You can use the ⬅️ and ➡️ arrow keys to move forwards and backwards.")}</b>
                     </p>
                 )}
                 <div style={{ justifyContent: "space-between", display: "flex" }}>
@@ -211,7 +211,7 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                                 )
                             }
                         >
-                            {`Edit Relationships${initialTribes?.length ? "/Teams" : ""}`}
+                            {initialTribes?.length ? t("Edit Relationships/Teams") : t("Edit Relationships")}
                         </button>
                     )}
                 </div>

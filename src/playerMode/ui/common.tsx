@@ -2,6 +2,7 @@ import React from "react";
 import styled from "styled-components";
 import { ColorTheme } from "../../theme/theme";
 import { continueWaiting$ } from "../../subjects/subjects";
+import { t } from "../../i18n/i18n";
 
 // Shared building blocks for player mode screens. Everything is tap-friendly and fits a 400px-wide phone.
 
@@ -171,7 +172,7 @@ export function Loading(props: { text?: string; detail?: React.ReactNode }) {
             <div className="bbb-loading-eye" aria-hidden="true">
                 👁️
             </div>
-            <div className="bbb-loading-text">{props.text || "Loading…"}</div>
+            <div className="bbb-loading-text">{props.text || t("Loading…")}</div>
             {props.detail && <div className="bbb-loading-detail">{props.detail}</div>}
         </div>
     );

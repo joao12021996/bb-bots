@@ -1,4 +1,5 @@
 import React from "react";
+import { t } from "../../i18n/i18n";
 import { getById, PlayerProfile } from "../../model";
 import { cast$, pushToMainContentStream } from "../../subjects/subjects";
 import { Screens } from "../../components/topbar/topBar";
@@ -58,12 +59,12 @@ export function HostOnlineButton(props: { disabled?: boolean }) {
                         await hostOnlineGame();
                     } catch (e) {
                         console.error(e);
-                        setError("Couldn't open a room. Check your internet connection and try again.");
+                        setError(t("Couldn't open a room. Check your internet connection and try again."));
                         setBusy(false);
                     }
                 }}
             >
-                {busy ? "Opening a room…" : "Host a game"}
+                {busy ? t("Opening a room…") : t("Host a game")}
             </button>
             {error && <span style={{ color: "#f87171", flexBasis: "100%" }}>{error}</span>}
         </>
@@ -456,7 +457,7 @@ function SeatPicker(props: { session: NetSession; status: NetStatus }) {
                     {status.started && mine === null && !status.spectating && (
                         <div className="bbb-watch">
                             <button type="button" className="button is-light" onClick={() => session.watch()}>
-                                👀 Just watch
+                                👀 {t("Just watch")}
                             </button>
                             <Subtle>Follow the season live as a spectator: you see what the whole house sees, never anyone's private screens.</Subtle>
                         </div>

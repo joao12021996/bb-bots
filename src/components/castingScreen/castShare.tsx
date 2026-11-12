@@ -1,6 +1,7 @@
 import React from "react";
 import { PlayerProfile } from "../../model";
 import { castLink, decodeCast, encodeCast, SharedCast } from "../../cartoon/castCode";
+import { t } from "../../i18n/i18n";
 
 async function copy(text: string): Promise<boolean> {
     try {
@@ -47,7 +48,7 @@ export function CastShare(props: {
                         setMode(mode === "share" ? "closed" : "share");
                     }}
                 >
-                    📤 Share this cast
+                    📤 {t("Share this cast")}
                 </button>
                 <button
                     type="button"
@@ -57,7 +58,7 @@ export function CastShare(props: {
                         setMode(mode === "import" ? "closed" : "import");
                     }}
                 >
-                    📥 Load a cast
+                    📥 {t("Load a cast")}
                 </button>
             </div>
             {mode === "share" && shared && (

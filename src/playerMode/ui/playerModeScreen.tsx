@@ -27,27 +27,28 @@ import { Cue, play } from "../../sound/sound";
 import { recordScore } from "../../prefs/prefs";
 import { POWERS } from "../social/powers";
 import { Tip } from "../coach";
+import { t } from "../../i18n/i18n";
 
 // Guided seasons: the coach explains a part of the week, the first time it comes up.
 export function CoachTip(props: { tip: Tip; onDismiss: () => void; onStop: () => void }) {
     const { tip } = props;
     return (
-        <aside className="bbb-coach" role="note" aria-label={`Tip: ${tip.title}`}>
+        <aside className="bbb-coach" role="note" aria-label={`${t("Tip")}: ${t(tip.title)}`}>
             <div className="bbb-coach-head">
                 <span className="bbb-coach-icon" aria-hidden="true">
                     🎓
                 </span>
-                <b>{tip.title}</b>
+                <b>{t(tip.title)}</b>
             </div>
             {tip.lines.map((line, i) => (
-                <p key={i}>{line}</p>
+                <p key={i}>{t(line)}</p>
             ))}
             <div className="bbb-coach-buttons">
                 <button type="button" className="button is-small is-info" onClick={props.onDismiss}>
-                    Got it
+                    {t("Got it")}
                 </button>
                 <button type="button" className="button is-small is-text" onClick={props.onStop}>
-                    Turn off tips
+                    {t("Turn off tips")}
                 </button>
             </div>
         </aside>

@@ -2964,3 +2964,22 @@ body.bbb-reduce-motion *::after {
     border-radius: var(--bbb-radius);
     border: 1px dashed rgba(56, 189, 248, 0.4);
 }
+
+/* ---------- ⚙️ Settings: language ---------- */
+.bbb-settings-language {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+.bbb-select {
+    background: var(--bbb-card-2);
+    color: var(--bbb-text);
+    border: 1px solid var(--bbb-border);
+    border-radius: 8px;
+    padding: 4px 8px;
+    font: inherit;
+}
+.bbb-select:disabled {
+    opacity: 0.5;
+}

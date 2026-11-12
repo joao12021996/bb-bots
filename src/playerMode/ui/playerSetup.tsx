@@ -12,6 +12,7 @@ import { BigButton, Face, Grid, Loading, Panel, Stepper, Subtle, Title } from ".
 import { DifficultyPicker, RulesEditor } from "./rulesEditor";
 import { DEFAULT_RULES, SeasonRules, withDefaults } from "../rules";
 import { loadCareer } from "../../career/career";
+import { t } from "../../i18n/i18n";
 import { cartoonFor } from "../../cartoon/cartoon";
 import { FaceEditor, Look } from "./faceEditor";
 import { PlayerModeScreen } from "./playerModeScreen";
@@ -157,41 +158,41 @@ export function PlayerSetup() {
     const instructions =
         selected.length < playerCount
             ? playerCount === 1
-                ? "Tap the houseguest you'll play as, or join under your own name."
-                : `Tap a houseguest for each player, or join under your own names (${selected.length}/${playerCount}).`
-            : "Ready! Bots are picked at random from the rest of the cast.";
+                ? t("Tap the houseguest you'll play as, or join under your own name.")
+                : t("Tap a houseguest for each player, or join under your own names ({n}/{total}).", { n: selected.length, total: playerCount })
+            : t("Ready! Bots are picked at random from the rest of the cast.");
 
     if (starting)
         return (
             <Panel>
-                <Loading text="Moving everyone into the house…" detail="Packing suitcases, hiding cameras, assigning beds." />
+                <Loading text={t("Moving everyone into the house…")} detail={t("Packing suitcases, hiding cameras, assigning beds.")} />
             </Panel>
         );
     return (
         <Panel>
             <div className="bbb-hero small">
-                <div className="bbb-hero-kicker">Player mode</div>
-                <Title>Set up your season</Title>
+                <div className="bbb-hero-kicker">{t("Player mode")}</div>
+                <Title>{t("Set up your season")}</Title>
                 <Subtle>
-                    Choose how many people are playing and how many bots join them. With 2 or more players, pass
-                    this device around for secret moves. (To play on separate devices, use Play online on the start screen.)
+                    {t(
+                        "Choose how many people are playing and how many bots join them. With 2 or more players, pass this device around for secret moves. (To play on separate devices, use Play online on the start screen.)"
+                    )}
                 </Subtle>
             </div>
             <div className={"bbb-guided" + (firstTimer ? " is-first" : "")}>
                 <label className="bbb-toggle">
                     <input type="checkbox" checked={guided} onChange={(e) => setGuided(e.target.checked)} />
                     <span>
-                        🎓 <b>Guided season</b>: a coach explains each part of the week the first time it comes up. Great for a
-                        first season.
+                        🎓 <b>{t("Guided season")}</b>: {t("a coach explains each part of the week the first time it comes up. Great for a first season.")}
                     </span>
                 </label>
                 <button type="button" className="button is-small is-info is-light" onClick={firstSeason}>
-                    ✨ Set up a gentle first season for me
+                    ✨ {t("Set up a gentle first season for me")}
                 </button>
             </div>
             <div className="bbb-steppers">
-                <Stepper label="🎮 Players" value={playerCount} min={1} max={maxPlayers} onChange={changePlayers} />
-                <Stepper label="🤖 Bots" value={effectiveBots} min={minBots} max={maxBots} onChange={setBotCount} />
+                <Stepper label={"🎮 " + t("Players")} value={playerCount} min={1} max={maxPlayers} onChange={changePlayers} />
+                <Stepper label={"🤖 " + t("Bots")} value={effectiveBots} min={minBots} max={maxBots} onChange={setBotCount} />
             </div>
             <form
                 className="bbb-add-yourself"
@@ -204,11 +205,11 @@ export function PlayerSetup() {
                     className="input"
                     type="text"
                     maxLength={24}
-                    placeholder="Or play as yourself: type your name"
+                    placeholder={t("Or play as yourself: type your name")}
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
                 />
-                <label className="button is-light" title="Optional photo">
+                <label className="button is-light" title={t("Optional photo")}>
                     {newPhoto ? "📷 ✓" : "📷"}
                     <input
                         type="file"
@@ -221,7 +222,7 @@ export function PlayerSetup() {
                     />
                 </label>
                 <button type="submit" className="button is-warning" disabled={!newName.trim()}>
-                    ✏️ Join
+                    ✏️ {t("Join")}
                 </button>
             </form>
             {selected.length > 0 && (
@@ -230,9 +231,9 @@ export function PlayerSetup() {
                         <button key={i} type="button" className="bbb-look" onClick={() => setEditing(editing === i ? null : i)}>
                             <img src={pool[i].imageURL} alt="" />
                             <span>
-                                <b>Player {n + 1}</b>: {pool[i].name}
+                                <b>{t("Player {n}", { n: n + 1 })}</b>: {pool[i].name}
                                 <br />
-                                <small>✏️ Change name & face</small>
+                                <small>✏️ {t("Change name & face")}</small>
                             </span>
                         </button>
                     ))}
@@ -253,26 +254,26 @@ export function PlayerSetup() {
             <label className="bbb-toggle">
                 <input type="checkbox" checked={hideSkills} onChange={(e) => setHideSkills(e.target.checked)} />
                 <span>
-                    🎲 <b>Skill randomizer</b>: give everyone secret, random Social and Comp scores, so nobody knows who's
-                    strongest. Revealed when the season ends.
+                    🎲 <b>{t("Skill randomizer")}</b>:{" "}
+                    {t("give everyone secret, random Social and Comp scores, so nobody knows who's strongest. Revealed when the season ends.")}
                 </span>
             </label>
             <DifficultyPicker value={difficulty} onChange={setDifficulty} />
             <div className="bbb-setting">
-                <b>🤫 Secret powers</b>
+                <b>🤫 {t("Secret powers")}</b>
                 <div className="bbb-segmented">
                     {(["off", "surprise", "choose"] as const).map((m) => (
                         <button key={m} type="button" className={powerMode === m ? "is-active" : ""} onClick={() => setPowerMode(m)}>
-                            {m === "off" ? "Off" : m === "surprise" ? "Surprise me" : "Choose"}
+                            {m === "off" ? t("Off") : m === "surprise" ? t("Surprise me") : t("Choose")}
                         </button>
                     ))}
                 </div>
                 <Subtle>
                     {powerMode === "off"
-                        ? "A classic season: no twists."
+                        ? t("A classic season: no twists.")
                         : powerMode === "surprise"
-                        ? "A few secret powers and twists, picked at random. Nobody (you included) knows which until they show up."
-                        : "Pick the powers and twists in play. The houseguests won't know which ones exist until they show up."}
+                        ? t("A few secret powers and twists, picked at random. Nobody (you included) knows which until they show up.")
+                        : t("Pick the powers and twists in play. The houseguests won't know which ones exist until they show up.")}
                 </Subtle>
                 {powerMode === "choose" &&
                     ALL_POWERS.map((id) => (
@@ -283,7 +284,7 @@ export function PlayerSetup() {
                                 onChange={(e) => setChosenPowers(e.target.checked ? [...chosenPowers, id] : chosenPowers.filter((p) => p !== id))}
                             />
                             <span>
-                                {POWERS[id].emoji} <b>{POWERS[id].name}</b>: {POWERS[id].blurb}
+                                {POWERS[id].emoji} <b>{t(POWERS[id].name)}</b>: {t(POWERS[id].blurb)}
                             </span>
                         </label>
                     ))}
@@ -295,7 +296,7 @@ export function PlayerSetup() {
                 hohPlaysVeto={{ value: hohVeto, onChange: setHohVeto }}
             />
             <div className="bbb-setup-summary">
-                <b>{houseguests}</b> houseguests · jury of <b>{jury}</b> · final <b>2</b>
+                <b>{houseguests}</b> {t("houseguests")} · {t("jury of")} <b>{jury}</b> · {t("final")} <b>2</b>
             </div>
             <Subtle>
                 {instructions}
@@ -303,7 +304,7 @@ export function PlayerSetup() {
                     <>
                         {" "}
                         <button type="button" className="bbb-link-button" onClick={() => setBotOrder(shuffle(cast.map((_, i) => i)))}>
-                            🔀 Shuffle bots
+                            🔀 {t("Shuffle bots")}
                         </button>
                     </>
                 )}
@@ -318,9 +319,9 @@ export function PlayerSetup() {
                         onClick={() => toggle(i)}
                         caption={
                             role(i) === "player" ? (
-                                <b>🎮 Player {selected.indexOf(i) + 1}</b>
+                                <b>🎮 {t("Player {n}", { n: selected.indexOf(i) + 1 })}</b>
                             ) : isCustom(i) ? (
-                                <span>tap to play</span>
+                                <span>{t("tap to play")}</span>
                             ) : role(i) === "bot" ? (
                                 hideSkills ? (
                                     <span>🤖 🗣️? 🏆?</span>
@@ -330,19 +331,19 @@ export function PlayerSetup() {
                                     </span>
                                 )
                             ) : (
-                                <span>sitting out</span>
+                                <span>{t("sitting out")}</span>
                             )
                         }
                     />
                 ))}
             </Grid>
             <Subtle>
-                🗣️ Social and 🏆 Comp scores are set on the casting screen (or rolled in secret by the skill randomizer).
-                Bots use both. For players, Social boosts your social moves and your sway in alliances; your comp results
-                are all you.
+                {t(
+                    "🗣️ Social and 🏆 Comp scores are set on the casting screen (or rolled in secret by the skill randomizer). Bots use both. For players, Social boosts your social moves and your sway in alliances; your comp results are all you."
+                )}
             </Subtle>
             <BigButton kind="success" disabled={!ready || starting} onClick={start}>
-                {starting ? "Starting…" : "Enter the house"}
+                {starting ? t("Starting…") : t("Enter the house")}
             </BigButton>
         </Panel>
     );
