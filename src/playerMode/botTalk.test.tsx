@@ -32,6 +32,11 @@ describe("reading what players say to bots", () => {
         expect(read('Want to start an alliance called "The Squad"?')).toEqual({ kind: "alliance", name: "The Squad" });
         expect(read("we need to get Alex out, they win every comp")).toEqual({ kind: "pitch", targetId: 1, reason: "comps" });
         expect(read("Sam is coming for you, they have to go")).toEqual({ kind: "pitch", targetId: 3, reason: "relationship" });
+        // the same, with nothing asked of them: a rumour
+        expect(read("Heads up, Sam is coming for you")).toEqual({ kind: "rumour", targetId: 3, rumour: "coming" });
+        expect(read("Sam has a secret alliance with the others")).toEqual({ kind: "rumour", targetId: 3, rumour: "secretAlliance" });
+        expect(read("Sam has been talking trash about you")).toEqual({ kind: "rumour", targetId: 3, rumour: "trashTalk" });
+        expect(read("Is Sam coming for you?")).not.toEqual(expect.objectContaining({ kind: "rumour" }));
         expect(read("I'm voting to evict Jordan")).toEqual({ kind: "tellVote", targetId: 2 });
         expect(read("I'm putting up Sam", true)).toEqual({ kind: "tellTarget", targetId: 3 });
         expect(read("please keep me, I need this for my family")).toEqual({ kind: "keepMe", pity: true });

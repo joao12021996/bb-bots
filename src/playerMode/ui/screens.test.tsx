@@ -149,37 +149,57 @@ describe("player mode screens", () => {
         const controller = controllerAtSocial();
         const c = mount(<SocialScreen controller={controller} blockName="Morning in the house" />);
         expect(c.textContent).toContain("came to talk to you");
+        // whoever came to talk: what they want is in the conversation with them
+        expect(c.textContent).toContain("HG3 wants to talk to you");
+        click(c, "Talk to HG3");
+        expect(c.textContent).toContain("Night Owls");
         click(c, "Accept");
         expect(controller.alliancesOf(0).some((a) => a.name === "Night Owls")).toBe(true);
+        expect(c.textContent).toContain("I'm in!"); // your answer stays in the conversation
+        expect(controller.talkWith(0, 3).length).toBe(3);
+        click(c, "Back");
+        click(c, "Talk to HG4");
         click(c, "I'm in");
+        click(c, "Back");
+        click(c, "Talk to HG6");
+        expect(c.textContent).toContain("HG6 came by to chat.");
         click(c, "OK");
         expect(controller.approachesFor(0).length).toBe(0);
-        // talk to HG4: chat, then open the alliance form
+        click(c, "Back");
+        expect(c.textContent).not.toContain("came to talk to you");
+        // talk to HG4: everything is done from the conversation
         const faces = Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG4"));
         act(() => faces[0].click());
         click(c, "Chat");
         expect(controller.state.actionsLeft).toBe(2);
-        act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG4"))[0].click());
+        expect(c.textContent).toContain("Got a minute?");
         click(c, "Alliance");
         expect(c.textContent).toContain("Invite to The Vault");
         click(c, "Start it");
         expect(controller.state.actionsLeft).toBe(1);
         // pitch HG5 to HG4, with a reason
-        act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG4"))[0].click());
         click(c, "Pitch a target");
         act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG5"))[0].click());
         expect(c.textContent).toContain("Why should HG4 go after HG5?");
         click(c, "Great social game");
         expect(controller.state.actionsLeft).toBe(0);
-        click(c, "alliance time");
-        expect(controller.state.socialStage).toBe("alliance");
+        expect(c.textContent).toContain("Everybody loves HG5"); // the pitch, in your words
+        expect(c.textContent).toContain("out of actions");
+        click(c, "Back");
+        // the morning is before the HoH comp: no alliance time
+        expect(c.textContent).not.toContain("alliance time");
+        click(c, "Continue");
+        expect(controller.state.step).not.toBe("SocialMorning");
     });
 
     it("alliance time: shows allies' picks, suggests a target, renames, and backstabs", () => {
         const controller = controllerAtSocial();
-        controller.endSocial();
-        const c = mount(<AllianceScreen controller={controller} blockName="Morning in the house" />);
+        // right after the HoH comp: the alliance the new HoH is in meets about nominations
+        controller.state.step = "AllianceHoh" as any;
+        controller.state.week.hohId = 1;
+        const c = mount(<AllianceScreen controller={controller} blockName="Before nominations" />);
         expect(c.textContent).toContain("The Vault");
+        expect(c.textContent).toContain("HG1 won Head of House and wants your alliance's help");
         expect(c.textContent).toMatch(/HG1 (wants to go after|has no one in mind)/);
         // pick a target and suggest it
         const outsider = Array.from(c.querySelectorAll("button")).find((b) => b.textContent === "HG5")!;
@@ -405,13 +425,14 @@ describe("player mode screens", () => {
         const c = mount(<SocialScreen controller={controller} blockName="Campaign time" />);
         expect(c.textContent).toContain("Your vote count");
         expect(c.textContent).toContain("Your word");
+        controller.state.approachKey[0] = `${controller.gameState.phase}:SocialCampaign`; // their social time has started
         act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG4"))[0].click());
-        expect(c.textContent).toContain("Campaign for HG4's vote");
-        click(c, "Ask about the vote");
-        expect(c.textContent).toMatch(/HG4: ".*HG[02]/); // in HG4's own words
+        click(c, "Who are you voting for?");
+        expect(c.textContent).toMatch(/Who are you voting for\?.*HG[02]/); // in HG4's own words
         expect(controller.state.actionsLeft).toBe(3); // asking is free
         click(c, "Vote deal");
         expect(controller.state.actionsLeft).toBe(2);
+        click(c, "Back");
         act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG5"))[0].click());
         click(c, "Under the bus");
         expect(c.textContent).toContain("Why should HG5 go after HG2?");
@@ -448,7 +469,6 @@ describe("player mode screens", () => {
         // dealing with them tells you how much they believe you
         click(c, "Flirt");
         expect(controller.state.actionsLeft).toBe(2);
-        act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG5"))[0].click());
         expect(c.textContent).toMatch(/As of Day 1, HG5 (takes you at your word|mostly believes you|has doubts about you|doesn't believe a word you say)/);
     });
 
@@ -456,10 +476,12 @@ describe("player mode screens", () => {
         const controller = controllerAtSocial();
         controller.state.approaches[0] = [{ kind: "sides", fromId: 3, otherId: 4 }];
         const c = mount(<SocialScreen controller={controller} blockName="Morning in the house" />);
-        expect(c.textContent).toContain("blew up at each other");
         expect(c.textContent).toContain("Threat level");
+        click(c, "Talk to HG3");
+        expect(c.textContent).toContain("Whose side are you on?");
         click(c, "Stay out of it");
         expect(controller.approachesFor(0).length).toBe(0);
+        click(c, "Back");
         click(c, "Snoop around the house");
         expect(controller.state.actionsLeft).toBe(2);
         act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG5"))[0].click());
@@ -467,7 +489,7 @@ describe("player mode screens", () => {
         act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG6"))[0].click());
         click(c, "coming after you");
         expect(controller.state.actionsLeft).toBe(1);
-        act(() => Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG5"))[0].click());
+        expect(c.textContent).toContain("HG6 is coming after you. I heard it myself.");
         expect(c.textContent).not.toContain("House meeting"); // needs two actions
         click(c, "Confront");
         expect(controller.state.actionsLeft).toBe(0);

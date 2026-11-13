@@ -1,6 +1,6 @@
 import React from "react";
 import { nonEvictedHouseguests } from "../../model";
-import { isSocialStep, PlayerModeController } from "../playerModeController";
+import { isSocialStep, PlayerModeController, Step } from "../playerModeController";
 import { sessionFor } from "../net/netSession";
 import { TextsBanner } from "./playerChat";
 import { Alliance, aliveMembers, botBackup, botSuggestion, chemistryLabel, meetingSplit, positionsOf } from "../social/alliances";
@@ -328,7 +328,8 @@ export function AllianceScreen(props: AllianceScreenProps) {
     const { controller } = props;
     const me = controller.socialActor;
     // keep showing alliances the player leaves or gets kicked out of during this screen
-    const [alliances] = React.useState(() => controller.alliancesOf(me.id));
+    const [alliances] = React.useState(() => controller.meetingAlliancesOf(me.id));
+    const hohId = controller.state.step === Step.AllianceHoh ? controller.state.week.hohId : undefined; // asking about nominations
     const [, rerender] = React.useState(0);
     // online: social time is still on for the others, so you can go back to it (say, to answer a text)
     const session = controller.socialTogether ? sessionFor(controller) : null;
@@ -339,6 +340,13 @@ export function AllianceScreen(props: AllianceScreenProps) {
             <Subtle>{props.blockName}</Subtle>
             {controller.multiplayer && !session && <Subtle>{me.name}'s turn</Subtle>}
             {session && backable && <TextsBanner session={session} me={me.id} onOpen={() => controller.backToSocial()} action="Go back and answer" />}
+            {hohId !== undefined && (
+                <Subtle>
+                    {hohId === me.id
+                        ? "👑 You're Head of House. Your alliance weighs in: who should you nominate?"
+                        : `👑 ${controller.player(hohId).name} won Head of House and wants your alliance's help: who should go up?`}
+                </Subtle>
+            )}
             <Subtle>
                 Your alliances meet to agree on a target. Allies protect each other, so a strong alliance keeps you safe. When
                 an alliance can't agree, its chemistry drops.

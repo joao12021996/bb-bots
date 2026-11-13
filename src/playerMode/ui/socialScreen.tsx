@@ -3,10 +3,9 @@ import { getById, Houseguest, nonEvictedHouseguests } from "../../model";
 import { PlayerModeController, Step } from "../playerModeController";
 import { hasFinal2 } from "../social/promises";
 import { AllianceCount, JuryWatch, Overheard, PowerCard, PromiseList, ThreatMeter, VoteCount } from "./dealsPanel";
-import { RUMOURS } from "../social/drama";
 import { Approach, SocialAction, SocialOutcome } from "../social/socialActions";
 import { suggestAllianceName } from "../social/alliances";
-import { PITCH_REASONS, reasonLine } from "../social/pitch";
+import { reasonLine } from "../social/pitch";
 import { BigButton, Face, Grid, Panel, Subtle, Title, whenDone } from "./common";
 import { HOH } from "../terms";
 import { BotTalkPanel } from "./botTalkPanel";
@@ -23,15 +22,9 @@ interface SocialScreenProps {
 
 type Mode =
     | { kind: "pickBot" }
-    | { kind: "pickAction"; botId: number }
-    | { kind: "talk"; botId: number }
+    | { kind: "talk"; botId: number } // a bot: everything you do with them is in the conversation (see BotTalkPanel)
     | { kind: "player"; id: number } // online: texting another player
-    | { kind: "pickTarget"; botId: number; only?: number[]; prompt?: string }
-    | { kind: "tell"; botId: number; what: "tellVote" | "tellTarget" }
-    | { kind: "rumourAbout"; botId: number }
-    | { kind: "rumourKind"; botId: number; targetId: number }
-    | { kind: "pickReason"; botId: number; targetId: number }
-    | { kind: "alliance"; botId: number };
+    | { kind: "alliance"; botId: number }; // inviting another player
 
 function OutcomeList(props: { outcomes: SocialOutcome[] }) {
     if (props.outcomes.length === 0) return null;
@@ -223,6 +216,9 @@ export function SocialScreen(props: SocialScreenProps) {
     const allies = controller.allyIds(human.id);
     const myAlliances = controller.alliancesOf(human.id);
     const approaches = controller.approachesFor(human.id);
+    // bots who came to talk: what they want is in the conversation with them. Players' invitations: answered here.
+    const fromPlayers = approaches.filter((a) => controller.isHuman({ id: a.fromId }));
+    const approachers = approaches.map((a) => a.fromId).filter((id, i, all) => all.indexOf(id) === i && !controller.isHuman({ id }));
     const everyoneElse = nonEvictedHouseguests(gs).filter((hg) => hg.id !== human.id);
     const actionsLeft = controller.actionsOf(human.id);
     const hohId = controller.publicHohId(human.id); // a secret HoH stays secret
@@ -275,18 +271,16 @@ export function SocialScreen(props: SocialScreenProps) {
                             hg={hg}
                             caption={caption(hg)}
                             onClick={
-                                session && controller.isHuman(hg)
+                                !controller.isHuman(hg)
+                                    ? () => setMode({ kind: "talk", botId: hg.id })
+                                    : session
                                     ? () => setMode({ kind: "player", id: hg.id }) // online: text them (and invite them from there)
                                     : actionsLeft > 0
                                     ? () => {
-                                          if (controller.isHuman(hg)) {
-                                              setAllianceName(suggestAllianceName(controller.book));
-                                              setMode({ kind: "alliance", botId: hg.id });
-                                          } else setMode({ kind: "pickAction", botId: hg.id });
+                                          setAllianceName(suggestAllianceName(controller.book));
+                                          setMode({ kind: "alliance", botId: hg.id });
                                       }
-                                    : controller.isHuman(hg)
-                                    ? undefined
-                                    : () => setMode({ kind: "talk", botId: hg.id }) // out of actions: you can still talk
+                                    : undefined
                             }
                         />
                     ))}
@@ -298,132 +292,19 @@ export function SocialScreen(props: SocialScreenProps) {
                 )}
             </div>
         );
-    } else if (mode.kind === "pickAction") {
-        const bot = getById(gs, mode.botId);
-        const step = controller.state.step;
-        const campaign = step === Step.SocialCampaign;
-        const nomsSet = nomineeIds.length > 0 && [Step.SocialAfternoon, Step.SocialBlockbuster, Step.SocialCampaign].includes(step);
-        const iAmNominee = nomineeIds.includes(human.id);
-        const iAmHoh = human.id === hohId;
-        const botVotes = bot.id !== hohId && !nomineeIds.includes(bot.id);
-        const otherNoms = nomineeIds.filter((id) => id !== human.id);
-        const asked = ((controller.state.week.intel || {})[human.id] || {})[bot.id];
-        body = (
-            <div>
-                <Face hg={bot} caption={caption(bot)} />
-                <Subtle>
-                    {readLine(bot.name, controller.readOf(human.id, bot.id), controller.trustReadOf(human.id, bot.id))}
-                    {controller.showmancePartner(bot.id) !== undefined &&
-                        ` ${bot.name} is in a showmance with ${
-                            controller.showmancePartner(bot.id) === human.id ? "you" : controller.player(controller.showmancePartner(bot.id)!).name
-                        }.`}
-                </Subtle>
-                <Subtle>What do you want to do with {bot.name}?</Subtle>
-                <div>
-                    <BigButton kind="primary" onClick={() => setMode({ kind: "talk", botId: bot.id })}>
-                        ✍️ Talk (in your own words)
-                    </BigButton>
-                    <BigButton kind="info" onClick={() => act({ kind: "chat", botId: bot.id })}>
-                        💬 Chat
-                    </BigButton>
-                    <BigButton
-                        kind="success"
-                        onClick={() => {
-                            setAllianceName(suggestAllianceName(controller.book));
-                            setMode({ kind: "alliance", botId: bot.id });
-                        }}
-                    >
-                        🤝 Alliance
-                    </BigButton>
-                    <BigButton kind="warning" onClick={() => setMode({ kind: "pickTarget", botId: bot.id })}>
-                        🗡️ Pitch a target
-                    </BigButton>
-                    <BigButton kind="danger" onClick={() => act({ kind: "flirt", botId: bot.id })}>
-                        💕 Flirt
-                    </BigButton>
-                    <BigButton kind="warning" onClick={() => setMode({ kind: "rumourAbout", botId: bot.id })}>
-                        🗯️ Start a rumour
-                    </BigButton>
-                </div>
-                <div>
-                    <BigButton kind="danger" onClick={() => act({ kind: "confront", botId: bot.id })}>
-                        🔥 Confront
-                    </BigButton>
-                    {actionsLeft >= 2 && !(controller.state.week.meetingBy || []).includes(human.id) && (
-                        <BigButton kind="danger" onClick={() => act({ kind: "meeting", botId: bot.id })}>
-                            📣 House meeting (2 actions)
-                        </BigButton>
-                    )}
-                    {everyoneElse.length >= 3 && !hasFinal2(controller.ledger, human.id, bot.id) && (
-                        <BigButton kind="success" onClick={() => act({ kind: "final2", botId: bot.id })}>
-                            🏁 Final two deal
-                        </BigButton>
-                    )}
-                </div>
-                {campaign && iAmNominee && botVotes && (
-                    <div>
-                        <Subtle>You're on the block. Campaign for {bot.name}'s vote:</Subtle>
-                        <BigButton kind="success" onClick={() => act({ kind: "voteDeal", botId: bot.id })}>
-                            🤝 Vote deal
-                        </BigButton>
-                        <BigButton kind="info" onClick={() => act({ kind: "pity", botId: bot.id })}>
-                            🥺 Pity pitch
-                        </BigButton>
-                        <BigButton
-                            kind="warning"
-                            onClick={() =>
-                                otherNoms.length === 1
-                                    ? setMode({ kind: "pickReason", botId: bot.id, targetId: otherNoms[0] })
-                                    : setMode({ kind: "pickTarget", botId: bot.id, only: otherNoms, prompt: `Who do you throw under the bus?` })
-                            }
-                        >
-                            🚌 Under the bus
-                        </BigButton>
-                    </div>
-                )}
-                {nomsSet && (
-                    <div>
-                        {!iAmHoh && !iAmNominee && (
-                            <BigButton kind="light" onClick={() => setMode({ kind: "tell", botId: bot.id, what: "tellVote" })}>
-                                🗣️ Tell them my vote
-                            </BigButton>
-                        )}
-                        {iAmHoh && (
-                            <BigButton kind="light" onClick={() => setMode({ kind: "tell", botId: bot.id, what: "tellTarget" })}>
-                                🎯 Tell them the target
-                            </BigButton>
-                        )}
-                        {campaign && botVotes && asked === undefined && (
-                            <BigButton
-                                kind="light"
-                                onClick={() => {
-                                    whenDone(controller.askVote(bot.id), (said) => {
-                                        if (said !== null && said !== undefined)
-                                            record({
-                                                text: `${bot.name}: "${controller.say(bot.id, "voteAnswer", "ask", controller.player(said).name)}"`,
-                                                good: true,
-                                            });
-                                    });
-                                }}
-                            >
-                                🗳️ Ask about the vote (free)
-                            </BigButton>
-                        )}
-                    </div>
-                )}
-                <BigButton kind="light" onClick={() => setMode({ kind: "pickBot" })}>
-                    Back
-                </BigButton>
-            </div>
-        );
     } else if (mode.kind === "talk") {
         const bot = getById(gs, mode.botId);
+        const partner = controller.showmancePartner(bot.id);
         body = (
             <div>
                 <Face hg={bot} caption={caption(bot)} small={true} />
+                <Subtle>
+                    {readLine(bot.name, controller.readOf(human.id, bot.id), controller.trustReadOf(human.id, bot.id))}
+                    {partner !== undefined && ` ${bot.name} is in a showmance with ${partner === human.id ? "you" : controller.player(partner).name}.`}
+                </Subtle>
                 <Subtle>{actionsLeft > 0 ? `${actionsLeft} action${actionsLeft === 1 ? "" : "s"} left` : "Out of actions: offers will have to wait."}</Subtle>
-                <BotTalkPanel controller={controller} botId={bot.id} onOutcome={record} />
-                <BigButton kind="light" onClick={() => setMode(actionsLeft > 0 ? { kind: "pickAction", botId: bot.id } : { kind: "pickBot" })}>
+                <BotTalkPanel key={bot.id} controller={controller} botId={bot.id} onOutcome={record} />
+                <BigButton kind="light" onClick={() => setMode({ kind: "pickBot" })}>
                     Back
                 </BigButton>
             </div>
@@ -491,126 +372,15 @@ export function SocialScreen(props: SocialScreenProps) {
                 <div>
                     <BigButton
                         kind="light"
-                        onClick={() => setMode(isPlayer ? (session ? { kind: "player", id: other.id } : { kind: "pickBot" }) : { kind: "pickAction", botId: other.id })}
+                        onClick={() => setMode(isPlayer && session ? { kind: "player", id: other.id } : isPlayer ? { kind: "pickBot" } : { kind: "talk", botId: other.id })}
                     >
                         Back
                     </BigButton>
                 </div>
             </div>
         );
-    } else if (mode.kind === "pickReason") {
-        const bot = getById(gs, mode.botId);
-        const target = getById(gs, mode.targetId);
-        body = (
-            <div>
-                <Face hg={target} small={true} />
-                <Subtle>
-                    Why should {bot.name} go after {target.name}? Pick an argument {bot.name} will believe.
-                </Subtle>
-                <div>
-                    {PITCH_REASONS.map((r) => (
-                        <BigButton
-                            key={r.id}
-                            kind="warning"
-                            onClick={() => act({ kind: "pitch", botId: bot.id, targetId: target.id, reason: r.id })}
-                        >
-                            {r.label}
-                        </BigButton>
-                    ))}
-                </div>
-                <BigButton kind="light" onClick={() => setMode({ kind: "pickTarget", botId: bot.id })}>
-                    Back
-                </BigButton>
-            </div>
-        );
-    } else if (mode.kind === "rumourAbout") {
-        const bot = getById(gs, mode.botId);
-        body = (
-            <div>
-                <Subtle>Who do you want {bot.name} to hear a rumour about? It doesn't have to be true, but if it isn't, it may come back to you.</Subtle>
-                <Grid>
-                    {everyoneElse
-                        .filter((hg) => hg.id !== bot.id)
-                        .map((hg) => (
-                            <Face key={hg.id} hg={hg} small={true} onClick={() => setMode({ kind: "rumourKind", botId: bot.id, targetId: hg.id })} />
-                        ))}
-                </Grid>
-                <BigButton kind="light" onClick={() => setMode({ kind: "pickAction", botId: bot.id })}>
-                    Back
-                </BigButton>
-            </div>
-        );
-    } else if (mode.kind === "rumourKind") {
-        const bot = getById(gs, mode.botId);
-        const about = getById(gs, mode.targetId);
-        body = (
-            <div>
-                <Face hg={about} small={true} />
-                <Subtle>What do you tell {bot.name} about {about.name}?</Subtle>
-                <div>
-                    {RUMOURS.map((r) => (
-                        <BigButton
-                            key={r.id}
-                            kind="warning"
-                            onClick={() => act({ kind: "rumour", botId: bot.id, targetId: about.id, rumour: r.id })}
-                        >
-                            {r.label}
-                        </BigButton>
-                    ))}
-                </div>
-                <BigButton kind="light" onClick={() => setMode({ kind: "rumourAbout", botId: bot.id })}>
-                    Back
-                </BigButton>
-            </div>
-        );
-    } else if (mode.kind === "tell") {
-        const bot = getById(gs, mode.botId);
-        const vote = mode.what === "tellVote";
-        const options = vote
-            ? nomineeIds.filter((id) => id !== bot.id).map((id) => getById(gs, id))
-            : everyoneElse.filter((hg) => hg.id !== bot.id);
-        body = (
-            <div>
-                <Face hg={bot} caption={caption(bot)} />
-                <Subtle>
-                    {vote
-                        ? `Who do you tell ${bot.name} you're voting to evict? It doesn't have to be true, but tell different people different things and they may compare notes.`
-                        : `Who do you tell ${bot.name} is your real target? It doesn't have to be true, but tell different people different things and they may compare notes.`}
-                    {vote && nomineeIds.includes(bot.id) ? ` ${bot.name} is on the block: telling them you'll vote the other way is a promise.` : ""}
-                </Subtle>
-                <Grid>
-                    {options.map((hg) => (
-                        <Face key={hg.id} hg={hg} small={true} onClick={() => act({ kind: mode.what, botId: bot.id, targetId: hg.id })} />
-                    ))}
-                </Grid>
-                <BigButton kind="light" onClick={() => setMode({ kind: "pickAction", botId: bot.id })}>
-                    Back
-                </BigButton>
-            </div>
-        );
     } else {
-        const bot = getById(gs, mode.botId);
-        const only = mode.only;
-        body = (
-            <div>
-                <Subtle>{mode.prompt || `Who do you want to turn ${bot.name} against?`}</Subtle>
-                <Grid>
-                    {everyoneElse
-                        .filter((hg) => hg.id !== bot.id && (!only || only.includes(hg.id)))
-                        .map((hg) => (
-                            <Face
-                                key={hg.id}
-                                hg={hg}
-                                small={true}
-                                onClick={() => setMode({ kind: "pickReason", botId: bot.id, targetId: hg.id })}
-                            />
-                        ))}
-                </Grid>
-                <BigButton kind="light" onClick={() => setMode({ kind: "pickAction", botId: bot.id })}>
-                    Back
-                </BigButton>
-            </div>
-        );
+        body = <div />;
     }
 
     return (
@@ -619,7 +389,7 @@ export function SocialScreen(props: SocialScreenProps) {
             {controller.multiplayer && !session && <Subtle>{human.name}'s turn</Subtle>}
             {session && mode.kind !== "player" && <TextsBanner session={session} me={me} onOpen={(id) => setMode({ kind: "player", id })} />}
             <Subtle>
-                Social time, then alliance time. Bots who like you are less likely to nominate you or vote you out, and more
+                {controller.state.step === Step.SocialMorning ? "Social time (alliances meet once the Head of House is known)." : "Social time, then alliance time."} Bots who like you are less likely to nominate you or vote you out, and more
                 likely to vote for you to win.
             </Subtle>
             <NewsList news={news} />
@@ -630,18 +400,35 @@ export function SocialScreen(props: SocialScreenProps) {
             <AllianceCount controller={controller} actorId={human.id} />
             <Overheard controller={controller} actorId={human.id} />
             <JuryWatch controller={controller} actorId={human.id} />
-            {approaches.length > 0 && (
+            {(fromPlayers.length > 0 || approachers.some((id) => !(mode.kind === "talk" && mode.botId === id))) && (
                 <div className="bbb-card-box">
                     <div className="bbb-card-title">💬 Houseguests came to talk to you</div>
-                    {approaches.map((a, i) => (
-                        <ApproachCard
-                            key={`${a.kind}-${a.fromId}-${i}`}
-                            approach={a}
-                            controller={controller}
-                            onAnswer={(accept) => whenDone(controller.respondApproach(i, accept), record)}
-                            onSides={(side) => whenDone(controller.respondSides(i, side), record)}
-                        />
-                    ))}
+                    {approaches.map((a, i) =>
+                        controller.isHuman({ id: a.fromId }) ? (
+                            <ApproachCard
+                                key={`${a.kind}-${a.fromId}-${i}`}
+                                approach={a}
+                                controller={controller}
+                                onAnswer={(accept) => whenDone(controller.respondApproach(i, accept), record)}
+                                onSides={(side) => whenDone(controller.respondSides(i, side), record)}
+                            />
+                        ) : null
+                    )}
+                    {approachers
+                        .filter((id) => !(mode.kind === "talk" && mode.botId === id))
+                        .map((id) => (
+                            <div key={id} className="bbb-approach">
+                                <img src={controller.player(id).imageURL} alt={controller.player(id).name} />
+                                <div className="bbb-approach-text">
+                                    <b>{controller.player(id).name}</b> wants to talk to you.
+                                </div>
+                                <div className="bbb-approach-buttons">
+                                    <button type="button" className="button is-small is-warning" onClick={() => setMode({ kind: "talk", botId: id })}>
+                                        💬 Talk to {controller.player(id).name}
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
                 </div>
             )}
             {body}
@@ -669,7 +456,7 @@ export function SocialScreen(props: SocialScreenProps) {
                     else controller.endSocial();
                 }}
             >
-                {myAlliances.length === 0 || !controller.allianceTimeOpen()
+                {controller.meetingAlliancesOf(human.id).length === 0
                     ? actionsLeft > 0
                         ? "Skip the rest"
                         : "Continue"

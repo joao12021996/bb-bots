@@ -2257,6 +2257,34 @@ input[type="number"] {
     gap: 6px;
     padding: 0 8px 4px;
 }
+/* what you can do with them: actions, and the picker an action needs */
+.bbb-talk-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 0 6px;
+    margin-bottom: 6px;
+    border-top: 1px solid var(--bbb-border);
+    border-bottom: 1px solid var(--bbb-border);
+}
+.bbb-talk-menu > p,
+.bbb-talk-menu > .bbb-inline-form {
+    padding: 0 8px;
+    margin: 0;
+}
+.bbb-talk-menu > .button {
+    align-self: flex-start;
+    margin-left: 8px;
+}
+/* a houseguest who came to talk: what they said, and your answers */
+.bbb-chat-approach {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.bbb-chat-approach .bbb-talk-chips {
+    padding: 0;
+}
 
 /* ---------- comp test mode ---------- */
 .bbb-test-stage {

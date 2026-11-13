@@ -31,6 +31,7 @@ export type TalkIntent =
     | { kind: "pitch"; targetId: number; reason?: PitchReason }
     | { kind: "tellVote"; targetId: number }
     | { kind: "tellTarget"; targetId: number }
+    | { kind: "rumour"; targetId: number; rumour: "coming" | "secretAlliance" | "trashTalk" }
     | { kind: "keepMe"; pity: boolean }
     | { kind: "flirt" }
     | { kind: "insult" }
@@ -106,6 +107,16 @@ export function readMessage(text: string, aboutIds: number[], ctx: { iAmHoh: boo
         if (/\b(i'?m|i am|i'?ll|i will|gonna|going to|planning to|plan to)\b.{0,12}\bvot/.test(t) || /\bmy vote\b/.test(t)) return { kind: "tellVote", targetId: about };
         if (ctx.iAmHoh && /\b(i'?m|i am|i'?ll|i will|gonna|going to|my)\b.{0,12}\b(nominat|put(ting)? up|target|backdoor|renom)/.test(t))
             return { kind: "tellTarget", targetId: about };
+        // a rumour: something about them, told to the bot, with nothing asked of it (asking is a pitch)
+        const ask = /evict|get .{0,20}\bout\b|backdoor|nominat|put .{0,15}\bup\b|go(ing)? after|vote .{0,20}\bout\b|send .{0,20}\bhome|(has|have|needs?|got|gotta) to go|gotta go|get rid of|take .{0,10}\bout\b|we should|let'?s|you should/;
+        if (!question && !ask.test(t)) {
+            if (/secret alliance|(has|have|got|in|formed|made|started) an? (secret |little |side )?alliance|(alliance|deal) (behind|without) (your|ur) back/.test(t))
+                return { kind: "rumour", targetId: about, rumour: "secretAlliance" };
+            if (/(talk(s|ed|ing)?|said|saying|says) (trash|crap|smack|shit|bad|badly|stuff|things)\b|trash.?talk|bad.?mouth|making fun of (you|u)|behind (your|ur) back|(said|saying|says) .{0,25}about (you|u)\b/.test(t))
+                return { kind: "rumour", targetId: about, rumour: "trashTalk" };
+            if (/coming (for|after) (you|u)\b|(after|targeting|gunning for) (you|u)\b|wants (you|u) (out|gone)|put(ting)? (you|u) up|nominat\w* (you|u)\b|(your|ur) name/.test(t))
+                return { kind: "rumour", targetId: about, rumour: "coming" };
+        }
         if (
             /evict|get .{0,20}\bout\b|\btarget|backdoor|nominat|put .{0,15}\bup\b|go(ing)? after|vote .{0,20}\bout\b|send .{0,20}\bhome|threat|(has|have|needs?|got|gotta) to go|gotta go|coming for|after (you|me|us)|dangerous|cut .{0,10}\bloose|get rid of|take .{0,10}\bout\b|can'?t (be )?trust|snake|liar|playing (you|everyone)/.test(
                 t
@@ -203,7 +214,16 @@ export type Reply =
     | "alreadyAllied"
     | "notNow"
     | "flirtYes"
-    | "flirtNo";
+    | "flirtNo"
+    | "chatYes"
+    | "chatNo"
+    | "rumourYes"
+    | "rumourNo"
+    | "confrontYes"
+    | "confrontNo"
+    | "meetingYes"
+    | "meetingNo"
+    | "pityYes";
 
 const GENERIC: { [r in Reply]: string[] } = {
     greet: ["Hey! What's up?", "Oh hey, you.", "Hi! Sit, sit."],
@@ -256,6 +276,15 @@ const GENERIC: { [r in Reply]: string[] } = {
     notNow: ["That's not really a thing right now.", "Huh? Not this week."],
     flirtYes: ["Oh? Well... maybe.", "Stop it. Okay, don't stop.", "You're kind of cute too."],
     flirtNo: ["Ha. Let's just be friends.", "I'm here to play the game, sorry.", "Uh... no."],
+    chatYes: ["Ha! I needed this. Thanks for hanging out.", "This was nice. We should do this more.", "Okay, you're actually fun."],
+    chatNo: ["Mm-hm. Anyway...", "Sorry, I'm a bit distracted.", "Yeah. Cool."],
+    rumourYes: ["Wait, seriously? {name}?", "I knew something was off about {name}.", "{name}? Okay. Good to know."],
+    rumourNo: ["Hm. That doesn't sound like {name}.", "Where did you hear that?", "I'll believe it when I see it."],
+    confrontYes: ["Okay, okay. Maybe I had that coming.", "Fine. I hear you.", "Alright. Point taken."],
+    confrontNo: ["Oh, you want to do this? Let's do this.", "Excuse me? Who do you think you are?", "Wow. You picked the wrong person."],
+    meetingYes: ["...Okay. Everyone heard that.", "I don't even know what to say to that."],
+    meetingNo: ["Really? In front of everyone?", "That was a mistake, and the house saw it."],
+    pityYes: ["Aw... okay. I'll think about keeping you.", "I hear you. I really do."],
 };
 
 // How each personality says it differently (anything missing: the usual way).

@@ -2971,25 +2971,32 @@ describe("alliances and the block", () => {
         expect(controller.planBWeek).toBe(false);
     });
 
-    it("alliances convene after the HoH comp, before nominations; the new HoH can't be the target", () => {
+    it("the new HoH's alliance convenes after the HoH comp, before nominations; the HoH can't be the target", () => {
         const controller = new PlayerModeController(newPlayerSave(prepareNextWeek(newGame(10), BigBrotherVanilla), [0]));
         let prompt: Prompt | null = null;
         controller.prompt$.subscribe((p) => (prompt = p));
         const a = createAlliance(new MutableGameState(controller.gameState), controller.book, [0, 3, 4], "Trio");
-        controller.state.week.hohId = 5;
+        const other = createAlliance(new MutableGameState(controller.gameState), controller.book, [0, 6], "Duo");
+        // the morning is before the HoH comp: nobody meets
+        controller.state.step = Step.SocialMorning;
+        expect(controller.meetingAlliancesOf(0)).toEqual([]);
+        controller.state.week.hohId = 3;
         controller.state.step = Step.AllianceHoh;
+        // only the alliance the HoH is in meets now; the other one meets after the nominations
+        expect(controller.meetingAlliancesOf(0).map((x) => x.name)).toEqual(["Trio"]);
+        expect(other.memberIds).toEqual([0, 6]);
         (controller as any).run();
         const p = prompt as any;
         // a private handoff in pass-and-play goes straight through for one player
         const shown = p.kind === "handoff" ? (p.next(), prompt as any) : p;
         expect(shown.kind).toBe("alliance");
         expect(shown.blockName).toContain("Before nominations");
-        expect(controller.targetExclude()).toEqual([5]);
-        // HG3 and HG4 never suggest the HoH
-        expect(require("./social/alliances").botSuggestion(controller.gameState, a, 3, undefined, [5])).not.toBe(5);
+        expect(controller.targetExclude()).toEqual([3]);
+        // HG4 never suggests the HoH
+        expect(require("./social/alliances").botSuggestion(controller.gameState, a, 4, undefined, [3])).not.toBe(3);
         controller.allianceSuggest(a.id, 6);
         expect(a.target).toBeDefined();
-        expect(a.target).not.toBe(5);
+        expect(a.target).not.toBe(3);
         controller.endAlliance();
         expect(controller.state.step).toBe(Step.HohRoom);
         expect(a.met).toBe(false); // they can meet again later in the week
@@ -3507,5 +3514,37 @@ describe("veto ceremony", () => {
         }
         expect(replacements).toBeGreaterThan(0);
         expect(forcedSeen).toBeGreaterThan(0);
+    });
+
+    it("before naming a replacement, a HoH asks their alliance who should go up", () => {
+        let asked = 0;
+        for (let seed = 1; seed <= 30 && asked === 0; seed++) {
+            const controller = new PlayerModeController(newPlayerSave(newGame(8), [0]));
+            controller.state.seed = seed * 53;
+            let prompt: Prompt | null = null;
+            controller.prompt$.subscribe((p) => (prompt = p));
+            controller.start();
+            // the player is in an alliance with everybody: whoever wins HoH is an ally
+            createAlliance(new MutableGameState(controller.gameState), controller.book, [0, 1, 2, 3, 4, 5, 6, 7], "Everyone");
+            for (let guard = 0; guard < 3000 && controller.gameState.phase === 1; guard++) {
+                const p = prompt as Prompt | null;
+                if (!p || p.kind === "gameOver") break;
+                if (p.kind === "choose" && p.title.includes("needs a replacement nominee")) {
+                    asked++;
+                    const hoh = controller.player(controller.state.week.hohId!);
+                    expect(p.title).toContain(hoh.name);
+                    expect(p.text).toContain("Who should I put up instead?");
+                    expect(p.noneLabel).toBe("Leave it to them");
+                    const pick = p.options[0].id;
+                    p.resolve([pick]);
+                    // the HoH told them whether they took the advice
+                    const news = (controller.state.news[0] || []).join("\n");
+                    expect(news).toMatch(new RegExp(`${hoh.name} (took|didn't take) your advice`));
+                    break;
+                }
+                answer(controller, p, "random", "random");
+            }
+        }
+        expect(asked).toBeGreaterThan(0);
     });
 });

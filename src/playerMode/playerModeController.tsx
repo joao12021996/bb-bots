@@ -64,6 +64,7 @@ import { discussTarget, meetingSplit, fallBackToPlanB,
     betray,
     botAllianceTime,
     botNominate,
+    botSuggestion,
     botVeto,
     botVote,
     cleanName,
@@ -144,6 +145,7 @@ import { recordSeason, SeasonSummary } from "../career/career";
 import { Hall, recordHall } from "../career/halls";
 import { SeasonCard } from "../career/seasonCard";
 import { play as playCue } from "../sound/sound";
+import { reasonLine } from "./social/pitch";
 import { feelingReply, mentionsIn, opinionReply, readMessage, Reply, TALK_MAX_LENGTH, TALKS_MIN, talkLine, talkPatience, TalkLine } from "./social/botTalk";
 import {
     acceptFinal2,
@@ -200,6 +202,14 @@ import { DiaryRoom } from "./ui/diaryRoom";
 import { nextTip, Tip, tipIdsFor } from "./coach";
 
 export type { Difficulty } from "./rules";
+
+// How a player's answer to an approach reads in the conversation: [yes, no].
+const APPROACH_ANSWERS: { [kind: string]: [string, string] } = {
+    pitch: ["I'm in.", "I'm not so sure."],
+    invite: ["I'm in!", "No thanks."],
+    final2: ["Deal. You and me.", "Not yet."],
+    votePlea: ["You have my vote.", "I can't promise that."],
+};
 
 export enum Step {
     BattleBack = "BattleBack", // evicted houseguests compete to come back, before the week starts
@@ -2769,7 +2779,7 @@ export class PlayerModeController {
         if (s.socialStage === "alliance") {
             // at the final three there's nobody left to target: no alliance time
             // nothing to meet about: no alliances, or every one of them is all on the block
-            if (this.alliancesOf(actor.id).every((a) => this.allianceStandsDown(a)) || !this.allianceTimeOpen()) return this.endAlliance();
+            if (this.meetingAlliancesOf(actor.id).every((a) => this.allianceStandsDown(a))) return this.endAlliance();
             this.privately(actor.id, `${actor.name}'s alliance time`, () =>
                 this.show({ kind: "alliance", blockName, actorId: actor.id })
             );
@@ -2819,7 +2829,7 @@ export class PlayerModeController {
         });
         // nothing to meet about (no alliances, or every one of them stands down): straight past alliance time
         players.forEach((p) => {
-            if (by[p.id].stage === "alliance" && (this.alliancesOf(p.id).every((a) => this.allianceStandsDown(a)) || !this.allianceTimeOpen()))
+            if (by[p.id].stage === "alliance" && this.meetingAlliancesOf(p.id).every((a) => this.allianceStandsDown(a)))
                 by[p.id].stage = "done";
         });
         const ids = players.map((p) => p.id);
@@ -2959,14 +2969,74 @@ export class PlayerModeController {
             });
         }
         if (outcome) s.socialLog.push(`${outcome.good ? "👍" : "👎"} ${outcome.text}`);
+        const answer = APPROACH_ANSWERS[approach.kind];
+        this.logTalk(actor.id, approach.fromId, [
+            { who: "bot", text: this.approachText(approach) },
+            ...(answer ? [{ who: "me" as const, text: accept ? answer[0] : answer[1] }] : []),
+            ...(outcome ? [{ who: "note" as const, text: outcome.text }] : []),
+        ]);
         this.noteRead(actor.id, approach.fromId, approach.kind !== "chat");
         this.save();
         return outcome;
     }
 
+    // What a houseguest who came to talk to a player says, in their voice (see approachesFor).
+    public approachText(approach: Approach): string {
+        const from = approach.fromId;
+        switch (approach.kind) {
+            case "chat":
+                return approach.text;
+            case "pitch": {
+                const target = this.player(approach.targetId).name;
+                return `${this.say(from, "pitch", `pitch:${approach.targetId}`)} We need to get ${target} out of here.${
+                    approach.reason ? ` ${reasonLine(approach.reason, target)}` : ""
+                }`;
+            }
+            case "final2":
+                return this.say(from, "final2", "approach");
+            case "votePlea":
+                return `${this.say(from, "votePlea", "approach")} If I win ${HOH}, you're safe. Can I count on your vote?`;
+            case "sides":
+                return `Did you see me and ${this.player(approach.otherId).name}? Unbelievable. Whose side are you on?`;
+            case "invite": {
+                const existing = approach.allianceId !== undefined ? getAlliance(this.book, approach.allianceId) : undefined;
+                const others = existing ? existing.memberIds.filter((m) => m !== from).map((m) => this.player(m).name) : [];
+                return existing
+                    ? `Want to join ${approach.name}?${others.length > 0 ? ` It's ${others.join(", ")} and me.` : ""}`
+                    : `You and me: an alliance. I'm calling it ${approach.name}. You in?`;
+            }
+        }
+    }
+
+    // Adds to a player's conversation with a bot (see talkToBot): say, how they answered the bot's approach.
+    private logTalk(actorId: number, botId: number, lines: { who: TalkLine["who"]; text: string }[]) {
+        const s = this.state;
+        if (this.isHuman(this.player(botId)) || lines.length === 0) return;
+        const talks = (s.talks = s.talks || {});
+        const mine = (talks[actorId] = talks[actorId] || {});
+        const talk = (mine[botId] = mine[botId] || { lines: [], key: "", n: 0 });
+        const day = this.currentDay();
+        lines.forEach((l) => talk.lines.push({ ...l, day }));
+        if (talk.lines.length > 60) talk.lines = talk.lines.slice(talk.lines.length - 60);
+    }
+
     // Alliances pick targets only while there's an eviction vote to come: not at the final three.
     public allianceTimeOpen(): boolean {
         return nonEvictedHouseguests(this.gameState).length > 3;
+    }
+
+    // Whether an alliance meets now. Not before the HoH comp (there's nobody to plan for yet). Once the HoH is
+    // known, only the alliances the HoH is in, to help with nominations; the rest meet after the nominations.
+    public allianceMeetsNow(a: Alliance): boolean {
+        const s = this.state;
+        if (!this.allianceTimeOpen() || s.step === Step.SocialMorning) return false;
+        if (s.step === Step.AllianceHoh) return s.week.hohId !== undefined && !s.week.secretHoh && a.memberIds.includes(s.week.hohId);
+        return true;
+    }
+
+    // A player's alliances that meet now (see allianceMeetsNow).
+    public meetingAlliancesOf(id: number): Alliance[] {
+        return this.alliancesOf(id).filter((a) => this.allianceMeetsNow(a));
     }
 
     // After the veto ceremony, alliance targets have to come from the block (whoever's nominated now).
@@ -3343,6 +3413,11 @@ export class PlayerModeController {
             return { text: `You took ${chosen.name}'s side. ${other.name} noticed.`, good: true };
         });
         s.socialLog.push(`${outcome.good ? "👍" : "👎"} ${outcome.text}`);
+        this.logTalk(actor.id, a.id, [
+            { who: "bot", text: this.approachText(approach) },
+            { who: "me", text: side === null ? "I'm staying out of it." : side === "a" ? "I'm with you." : `I'm with ${b.name}.` },
+            { who: "note", text: outcome.text },
+        ]);
         this.save();
         return outcome;
     }
@@ -3357,13 +3432,16 @@ export class PlayerModeController {
     // The current player says something to a bot during social time. The message is read for what it's
     // about (see botTalk.ts), and the bot reacts by the same rules as the social buttons: questions and small
     // talk are free, while deals, pitches and the like use up a social action, just like the buttons do.
-    public talkToBot(botId: number, text: string): { lines: TalkLine[]; outcome?: SocialOutcome } | null {
+    // `action`: what the player picked from the talk menu (a deal, a pitch...), said in `text`, and done as is,
+    // without reading the message for it.
+    public talkToBot(botId: number, text: string, action?: SocialAction): { lines: TalkLine[]; outcome?: SocialOutcome } | null {
         const s = this.state;
         const actor = this.socialActor;
         const clean = String(text || "")
             .replace(/\s+/g, " ")
             .trim()
-            .slice(0, TALK_MAX_LENGTH);
+            .slice(0, action ? 400 : TALK_MAX_LENGTH);
+        if (action && (!("botId" in action) || action.botId !== botId)) return null;
         if (!actor || !clean || this.socialStageOf(actor.id) !== "social" || !this.isHuman(actor) || !SOCIAL_BLOCK_NAMES[s.step]) return null;
         if (s.approachKey[actor.id] !== `${s.gameState.phase}:${s.step}`) return null; // their social screen isn't up yet
         const bot = s.gameState.houseguests.find((hg) => hg.id === botId);
@@ -3402,7 +3480,7 @@ export class PlayerModeController {
             return { lines: said, outcome };
         };
 
-        if (talk.n > (talk.max ?? TALKS_MIN)) {
+        if (!action && talk.n > (talk.max ?? TALKS_MIN)) {
             botSays(line("tired"));
             return finish();
         }
@@ -3445,6 +3523,26 @@ export class PlayerModeController {
             this.noteRead(actor.id, botId);
             return finish();
         };
+
+        if (action) {
+            // the bot's answer either way: [it went your way, it didn't]
+            const replies: { [kind: string]: [Reply, Reply] } = {
+                chat: ["chatYes", "chatNo"],
+                alliance: ["accept", "decline"],
+                pitch: ["pitchYes", "pitchNo"],
+                flirt: ["flirtYes", "flirtNo"],
+                rumour: ["rumourYes", "rumourNo"],
+                confront: ["confrontYes", "confrontNo"],
+                meeting: ["meetingYes", "meetingNo"],
+                final2: ["accept", "decline"],
+                voteDeal: ["accept", "decline"],
+                pity: ["pityYes", "decline"],
+                tellVote: ["heard", "listen"],
+                tellTarget: ["heard", "listen"],
+            };
+            const [yes, no] = replies[action.kind] || ["heard", "listen"];
+            return act(action, yes, no, "targetId" in action ? name(action.targetId) : "");
+        }
 
         switch (intent.kind) {
             case "askTarget": {
@@ -3545,6 +3643,8 @@ export class PlayerModeController {
                 return act({ kind: "tellVote", botId, targetId: intent.targetId }, "heard", "listen");
             case "tellTarget":
                 return act({ kind: "tellTarget", botId, targetId: intent.targetId }, "heard", "listen");
+            case "rumour":
+                return act({ kind: "rumour", botId, targetId: intent.targetId, rumour: intent.rumour }, "rumourYes", "rumourNo", name(intent.targetId));
             case "keepMe":
                 if (s.step !== Step.SocialCampaign || !noms.includes(actor.id) || !botVotes) {
                     botSays(line(noms.includes(actor.id) ? "voteNotYet" : "listen"));
@@ -4106,7 +4206,7 @@ export class PlayerModeController {
         this.mutate((gs) => {
             // alliances that haven't met yet meet now (players who skipped alliance time don't get a say)
             s.book.alliances
-                .filter((a) => !a.met && aliveMembers(gs, a).length >= 2 && this.allianceTimeOpen() && !this.allianceStandsDown(a))
+                .filter((a) => !a.met && aliveMembers(gs, a).length >= 2 && this.allianceMeetsNow(a) && !this.allianceStandsDown(a))
                 .forEach((a) => {
                     const result = holdMeeting(gs, a, s.humanIds, this.targetBlock(), this.targetExclude(), this.planBWeek);
                     this.tellAlliance(a, `🤝 ${a.name} met without you. ${result.lines[result.lines.length - 1]}`);
@@ -4373,11 +4473,11 @@ export class PlayerModeController {
         const s = this.state;
         const alive = this.turnOrder;
         if (this.allianceTimeOpen() && this.socialTogether) {
-            const players = alive.filter((p) => this.isHuman(p) && this.alliancesOf(p.id).length > 0);
+            const players = alive.filter((p) => this.isHuman(p) && this.meetingAlliancesOf(p.id).length > 0);
             if (this.together(`Before nominations: ${this.hohLine()}`, "alliance", players)) return;
         }
         if (this.allianceTimeOpen()) {
-            while (s.socialTurn < alive.length && (this.alliancesOf(alive[s.socialTurn].id).length === 0 || !this.isHuman(alive[s.socialTurn])))
+            while (s.socialTurn < alive.length && (this.meetingAlliancesOf(alive[s.socialTurn].id).length === 0 || !this.isHuman(alive[s.socialTurn])))
                 s.socialTurn++;
             if (!this.socialTogether && s.socialTurn < alive.length) {
                 const actor = alive[s.socialTurn];
@@ -4390,7 +4490,7 @@ export class PlayerModeController {
             this.reseed("alliances:hoh");
             this.mutate((gs) =>
                 s.book.alliances
-                    .filter((a) => !a.met && aliveMembers(gs, a).length >= 2)
+                    .filter((a) => !a.met && aliveMembers(gs, a).length >= 2 && this.allianceMeetsNow(a))
                     .forEach((a) => {
                         const result = holdMeeting(gs, a, s.humanIds, undefined, this.targetExclude(), this.planBWeek);
                         this.tellAlliance(a, `🤝 ${a.name} met before nominations. ${result.lines[result.lines.length - 1]}`);
@@ -4408,6 +4508,15 @@ export class PlayerModeController {
         s.actionsLeft = this.rules.actions;
         delete s.socialBy;
         this.goTo(Step.HohRoom);
+    }
+
+    // The players a HoH talks a replacement nominee over with: the other players in the HoH's alliances (not when
+    // nobody's supposed to know who the HoH is).
+    private huddleWith(hohId: number): Houseguest[] {
+        const s = this.state;
+        if (s.week.secretHoh || !this.allianceTimeOpen()) return [];
+        const ids = this.alliancesOf(hohId).reduce<number[]>((all, a) => [...all, ...a.memberIds], []);
+        return this.alivePlayers.filter((p) => p.id !== hohId && this.isHuman(p) && ids.includes(p.id));
     }
 
     private hohLine(): string {
@@ -4571,9 +4680,14 @@ export class PlayerModeController {
         if (hohId === undefined) return { protect: room ? room.safe : [], targets: room ? room.targets.map((t) => t.targetId) : [] };
         const partners = final2Partners(this.ledger, hohId).filter((id) => Math.abs(rng().randomFloat()) < this.honor(hohId, id));
         const love = partnerOf(this.showmances, hohId);
+        // the alliances it talked nominations over with (players in them had their say): their pick comes first
+        const asked = this.alliancesOf(hohId)
+            .filter((a) => a.memberIds.some((m) => m !== hohId && this.isHuman({ id: m })) && a.target !== undefined && a.targetWeek === this.gameState.phase)
+            .map((a) => a.target!);
         return {
             protect: [...(room ? room.safe : []), ...partners, ...(love !== undefined ? [love] : [])],
             targets: [
+                ...asked,
                 ...this.showmanceTarget(hohId),
                 ...(room ? room.targets.map((t) => t.targetId) : []),
                 ...this.personalityTargets(hohId),
@@ -5021,6 +5135,42 @@ export class PlayerModeController {
                 this.weekScenes.push(scene);
                 return this.show({ kind: "scene", scene });
             }
+            // before naming a replacement, the HoH huddles with their alliance: players in it suggest who goes up
+            const huddle = this.huddleWith(hoh.id);
+            if (huddle.length > 0 && options.length > 1) {
+                return this.gather<number>(
+                    `huddle:${phase}`,
+                    huddle,
+                    `${hoh.name} is talking it over with their alliance`,
+                    (p) => `${p.name}: ${hoh.name} wants a word`,
+                    (p, _more, answer) => ({
+                        kind: "choose",
+                        actorId: p.id,
+                        title: `👑 ${hoh.name} needs a replacement nominee`,
+                        text:
+                            `${pov.name} used the ${VETO} on ${choice.decision!.name}. Before the ceremony goes on, ${hoh.name} pulls you aside: ` +
+                            `“Who should I put up instead?”`,
+                        options: options.filter((o) => o.id !== p.id),
+                        count: 1,
+                        noneLabel: "Leave it to them",
+                        confirmLabel: "Suggest",
+                        resolve: (ids) => answer(ids.length > 0 ? ids[0] : -1),
+                    }),
+                    (answers) => replace(choice, answers),
+                    () => -1
+                );
+            }
+            replace(choice, {});
+        };
+
+        // The HoH names a replacement, with their alliance's advice: `advice` is what players in it suggested.
+        const replace = (choice: { decision: Houseguest | null; reason: string }, advice: { [playerId: number]: number }) => {
+            if (!choice.decision) return generate(choice);
+            const options = exclude(nonEvictedHouseguests(gsAtStart), [...noms, pov, hoh]);
+            const said = Object.keys(advice)
+                .map(Number)
+                .filter((id) => options.some((o) => o.id === advice[id]))
+                .map((id) => ({ by: id, pick: advice[id] }));
             // the only one who can go up: naming them breaks no promise, and betrays nobody
             const forced = options.length === 1;
             const settle = (id: number) => {
@@ -5028,14 +5178,39 @@ export class PlayerModeController {
                 if (!s.week.secretHoh) this.settleRoom(hoh.id, [id], false);
             };
             if (!this.isHuman(hoh)) {
-                const { picks, betrayed } = botNominate(gsAtStart, s.book, hoh, options, 1, this.roomSway());
+                const sway = this.roomSway();
+                sway.targets = [...said.map((x) => x.pick), ...sway.targets]; // what their allies said, first
+                const { picks, betrayed } = botNominate(gsAtStart, s.book, hoh, options, 1, sway);
                 return renominate(choice, picks[0].id, options, (id) => {
+                    said.forEach((x) =>
+                        this.tell(
+                            [x.by],
+                            x.pick === id
+                                ? `👑 ${hoh.name} took your advice: ${this.player(id).name} went up.`
+                                : `👑 ${hoh.name} didn't take your advice (${this.player(x.pick).name}): ${this.player(id).name} went up.`
+                        )
+                    );
                     this.explainNoms(hoh.id, [id]);
                     if (id === picks[0].id && !forced) betrayed.forEach((victim) => this.backstab(hoh.id, victim, s.week.secretHoh ? 0.3 : 1));
                     settle(id);
                 });
             }
             const saved = choice.decision;
+            // what the HoH's alliance says: the players in it, and the bots
+            const bots = this.alliancesOf(hoh.id).reduce<{ by: number; pick: number }[]>((all, a) => {
+                aliveMembers(gsAtStart, a)
+                    .filter((m) => m.id !== hoh.id && !this.isHuman(m) && !all.some((x) => x.by === m.id))
+                    .forEach((m) => {
+                        const pick = botSuggestion(gsAtStart, a, m.id, options.map((o) => o.id));
+                        if (pick !== null && pick !== m.id) all.push({ by: m.id, pick });
+                    });
+                return all;
+            }, []);
+            const heard = [...said, ...bots];
+            const adviceLine =
+                this.allianceTimeOpen() && heard.length > 0
+                    ? ` Your alliance's advice: ${heard.map((x) => `${this.player(x.by).name} says ${this.player(x.pick).name}`).join(", ")}.`
+                    : "";
             this.privately(hoh.id, `${hoh.name}, Head of House`, () =>
                 this.show({
                     kind: "choose",
@@ -5043,7 +5218,7 @@ export class PlayerModeController {
                     title: "Replacement Nominee",
                     text:
                         `${pov.name} used the ${VETO} on ${saved.id === pov.id ? "themselves" : saved.name}: “Since I have just vetoed one of your nominations, you must name a replacement nominee.”` +
-                        (forced ? ` ${options[0].name} is the only one who can go up, so it breaks no promise.` : ""),
+                        (forced ? ` ${options[0].name} is the only one who can go up, so it breaks no promise.` : adviceLine),
                     options,
                     count: 1,
                     confirmLabel: "Nominate",
