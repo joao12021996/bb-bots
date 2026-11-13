@@ -33,6 +33,7 @@ export interface HohRoom {
     promised: number[]; // houseguests the HoH told they're safe this week
     safe: number[]; // bot HoH: the promises it actually means to keep
     targets: { fromId: number; targetId: number }[]; // nominees the HoH agreed to
+    pawns?: { id: number; yes: boolean }[]; // allies the HoH asked to go up as a pawn, and what they said
     done?: boolean;
 }
 
@@ -121,6 +122,22 @@ export function openHohRoom(
         came.forEach((bot) => shiftRelationship(gs, bot.id, hohId, 0.03 * socialFactor(bot) * (0.5 + rand())));
     }
     return room;
+}
+
+// A player HoH asks an ally whether they'd be okay going up as a pawn. They're likelier to say yes the more they
+// trust the HoH, and the fewer enemies they have in the house to vote them out.
+export function askPawn(gs: MutableGameState, room: HohRoom, botId: number): RoomOutcome {
+    const bot = getById(gs, botId);
+    const trust = bot.relationships[room.hohId] ?? 0;
+    const enemies = nonEvictedHouseguests(gs).filter((hg) => hg.id !== botId && hg.id !== room.hohId && (hg.relationships[botId] ?? 0) < -0.2).length;
+    const p = clamp(0.25 + 0.7 * trust - 0.08 * enemies - (room.promised.includes(botId) ? 0.2 : 0), 0.05, 0.9);
+    const yes = rand() < p;
+    room.pawns = [...(room.pawns || []), { id: botId, yes }];
+    if (yes) {
+        shiftRelationship(gs, room.hohId, botId, 0.02); // asking first shows respect
+        return { text: `${bot.name} will go up as a pawn: "I trust you. Just make sure I'm still here on eviction night."`, good: true };
+    }
+    return { text: `${bot.name} doesn't want to go up: "Please don't. I'm not risking my game on the block."`, good: false };
 }
 
 // A player HoH answers the visitor in front of them (a bot, or another player).

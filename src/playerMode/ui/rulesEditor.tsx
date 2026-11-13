@@ -29,6 +29,7 @@ export function RulesEditor(props: {
     onChange: (rules: SeasonRules) => void;
     jury?: { value: number; min: number; max: number; onChange: (n: number) => void };
     hohPlaysVeto?: { value: boolean; onChange: (on: boolean) => void };
+    online?: boolean; // social time can be everyone at once, or one player at a time
 }) {
     const { rules, onChange } = props;
     const [open, setOpen] = React.useState(!isDefaultRules(rules));
@@ -49,6 +50,12 @@ export function RulesEditor(props: {
                         <label className="bbb-toggle">
                             <input type="checkbox" checked={props.hohPlaysVeto.value} onChange={(e) => props.hohPlaysVeto!.onChange(e.target.checked)} />
                             <span>👑 {t("The {hoh} plays in the {veto} comp", { hoh: t(HOH), veto: t(VETO) })}</span>
+                        </label>
+                    )}
+                    {props.online && (
+                        <label className="bbb-toggle">
+                            <input type="checkbox" checked={rules.together} onChange={(e) => set({ together: e.target.checked })} />
+                            <span>👥 {t("Social time for everyone at once (off: players take turns)")}</span>
                         </label>
                     )}
                     <label className="bbb-toggle">
@@ -97,6 +104,7 @@ export function RulesEditor(props: {
 export function rulesSummary(rules: SeasonRules): string[] {
     const out: string[] = [];
     if (!rules.lastChance) out.push("always two nominees");
+    if (!rules.together) out.push("social time one player at a time");
     if (rules.actions !== DEFAULT_RULES.actions) out.push(`${rules.actions} actions per block`);
     if (rules.kinds.length < COMP_KINDS.length) out.push(`only ${COMP_KINDS.filter((k) => rules.kinds.includes(k.kind)).map((k) => k.label.split(" ")[1].toLowerCase()).join(", ")} comps`);
     if (rules.formats.length < SPECIAL_FORMATS.length) out.push("fewer special comps");

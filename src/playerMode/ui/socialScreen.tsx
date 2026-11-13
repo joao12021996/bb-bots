@@ -123,6 +123,22 @@ function ApproachCard(props: {
                 </button>
             </>
         );
+    } else if (approach.kind === "vetoPlea" || approach.kind === "vetoKeep") {
+        text = (
+            <>
+                <b>{from.name}</b> wants a word about the Veto: "{controller.approachText(approach)}"
+            </>
+        );
+        buttons = (
+            <>
+                <button type="button" className="button is-small is-success" onClick={() => props.onAnswer(true)}>
+                    {approach.kind === "vetoPlea" ? "🏅 I'll use it on you" : "👍 They'll stay the same"}
+                </button>
+                <button type="button" className="button is-small is-light" onClick={() => props.onAnswer(false)}>
+                    Can't promise
+                </button>
+            </>
+        );
     } else if (approach.kind === "votePlea") {
         text = (
             <>

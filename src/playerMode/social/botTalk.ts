@@ -225,7 +225,9 @@ export type Reply =
     | "meetingNo"
     | "pityYes"
     | "flirtAwkward"
-    | "flirtCreepy";
+    | "flirtCreepy"
+    | "vetoYes"
+    | "vetoNo";
 
 const GENERIC: { [r in Reply]: string[] } = {
     greet: ["Hey! What's up?", "Oh hey, you.", "Hi! Sit, sit."],
@@ -286,6 +288,8 @@ const GENERIC: { [r in Reply]: string[] } = {
     confrontNo: ["Oh, you want to do this? Let's do this.", "Excuse me? Who do you think you are?", "Wow. You picked the wrong person."],
     meetingYes: ["...Okay. Everyone heard that.", "I don't even know what to say to that."],
     meetingNo: ["Really? In front of everyone?", "That was a mistake, and the house saw it."],
+    vetoYes: ["Okay. You've convinced me.", "Alright. I hear you, and I'll do it.", "You make a good case. Fine."],
+    vetoNo: ["I have to do what's best for my game.", "I can't promise you anything. Sorry.", "I'm still thinking it over."],
     flirtAwkward: ["Oh. Um. Wow.", "...I'm going to pretend that didn't happen.", "Ha... no. That was weird."],
     flirtCreepy: ["Okay, you need to stop. Seriously.", "Again? That's honestly creepy.", "I'm going to go now. Please don't follow me."],
     pityYes: ["Aw... okay. I'll think about keeping you.", "I hear you. I really do."],

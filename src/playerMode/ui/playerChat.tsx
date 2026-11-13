@@ -1,7 +1,7 @@
 import React from "react";
 import { BehaviorSubject } from "rxjs";
 import { getById } from "../../model";
-import { isSocialStep, PlayerModeController } from "../playerModeController";
+import { PlayerModeController } from "../playerModeController";
 import { CHAT_MAX_LENGTH, ChatMessage, NetSession } from "../net/netSession";
 import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
 
@@ -200,7 +200,7 @@ export function SocialDoneScreen(props: { session: NetSession; controller: Playe
                     <Face key={id} hg={getById(controller.gameState, id)} small={true} />
                 ))}
             </Grid>
-            {isSocialStep(controller.state.step) && (
+            {controller.backToSocialOpen() && (
                 <>
                     <TextsBanner session={session} me={actorId} onOpen={() => controller.backToSocial()} action="Go back and answer" />
                     <BigButton kind="light" onClick={() => controller.backToSocial()}>

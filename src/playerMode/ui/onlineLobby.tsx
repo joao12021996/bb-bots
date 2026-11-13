@@ -458,6 +458,7 @@ function HostSettings(props: { session: NetSession; status: NetStatus }) {
                 onChange={(rules) => session.updateSetup({ rules })}
                 jury={{ value: jury, min: 1, max: maxJury, onChange: (n) => session.updateSetup({ jury: Math.max(1, Math.min(maxJury, n > jury ? jury + 2 : jury - 2)) }) }}
                 hohPlaysVeto={{ value: hohVeto, onChange: (on) => session.updateSetup({ hohPlaysVeto: on }) }}
+                online={true}
             />
         </div>
     );

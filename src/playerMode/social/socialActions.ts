@@ -22,9 +22,10 @@ export type DealAction =
     | { kind: "confront"; botId: number } // a blow-up: the house picks sides
     | { kind: "meeting"; botId: number } // a house meeting to call someone out (two actions, once a week)
     | { kind: "snoop" } // eavesdrop on an alliance meeting
-    | { kind: "rumour"; botId: number; targetId: number; rumour: "coming" | "secretAlliance" | "trashTalk" };
+    | { kind: "rumour"; botId: number; targetId: number; rumour: "coming" | "secretAlliance" | "trashTalk" }
+    | { kind: "vetoCase"; botId: number }; // to the veto holder: a nominee, "use it on me"; the HoH, "don't use it"
 
-export const DEAL_KINDS = ["final2", "voteDeal", "pity", "tellVote", "tellTarget", "flirt", "confront", "meeting", "snoop", "rumour"];
+export const DEAL_KINDS = ["final2", "voteDeal", "pity", "tellVote", "tellTarget", "flirt", "confront", "meeting", "snoop", "rumour", "vetoCase"];
 
 export function isDealAction(action: SocialAction): action is DealAction {
     return DEAL_KINDS.includes(action.kind);
@@ -54,6 +55,8 @@ export type Approach =
     | { kind: "invite"; fromId: number; allianceId?: number; name: string } // join an alliance (or start one)
     | { kind: "final2"; fromId: number } // "you and me, final two"
     | { kind: "votePlea"; fromId: number } // a nominee: "keep me, and you're safe if I win HoH"
+    | { kind: "vetoPlea"; fromId: number } // a nominee, to the veto holder: "use it on me"
+    | { kind: "vetoKeep"; fromId: number } // the HoH, to the veto holder: "keep the nominations the same"
     | { kind: "sides"; fromId: number; otherId: number }; // a blow-up between two houseguests: pick a side
 
 function rand(): number {

@@ -132,6 +132,7 @@ export const FR: { [english: string]: string } = {
     "The {hoh} plays in the {veto} comp": "Le {hoh} participe à l'épreuve du {veto}",
     "Big weeks: three nominees, and a {lastChance} after the {veto} (off: always two nominees)":
         "Grandes semaines : trois nominés, et une {lastChance} après le {veto} (désactivé : toujours deux nominés)",
+    "Social time for everyone at once (off: players take turns)": "Moments sociaux pour tout le monde en même temps (désactivé : chacun son tour)",
     "Comps that can come up": "Épreuves possibles",
     "🧠 Skill": "🧠 Adresse",
     "🧩 Memory": "🧩 Mémoire",

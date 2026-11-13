@@ -58,7 +58,13 @@ export function BotTalkPanel(props: {
     const campaign = step === Step.SocialCampaign;
     const nomsSet =
         nomineeIds.length > 0 &&
-        [Step.SocialAfternoon, Step.SocialBlockbuster, Step.SocialCampaign].includes(step);
+        [Step.SocialAfternoon, Step.SocialVeto, Step.SocialBlockbuster, Step.SocialCampaign].includes(step);
+    // before the Veto Ceremony, the nominees and the HoH make their case to the veto holder
+    const vetoCase =
+        step === Step.SocialVeto &&
+        botId === controller.state.week.povId &&
+        !nomineeIds.includes(botId) &&
+        (nomineeIds.includes(me.id) || me.id === hohId);
     const iAmNominee = nomineeIds.includes(me.id);
     const iAmHoh = me.id === hohId;
     const botVotes = botId !== hohId && !nomineeIds.includes(botId);
@@ -336,6 +342,22 @@ export function BotTalkPanel(props: {
                         🏁 Final two deal
                     </button>
                 )}
+                {vetoCase && (
+                    <button
+                        type="button"
+                        className={chip("success")}
+                        onClick={() =>
+                            doAction(
+                                iAmNominee
+                                    ? "You've got the veto. Please, use it on me."
+                                    : "Keep the nominations the same, okay? Don't use the veto.",
+                                { kind: "vetoCase", botId },
+                            )
+                        }
+                    >
+                        🏅 {iAmNominee ? "Ask them to use the veto on you" : "Ask them not to use the veto"}
+                    </button>
+                )}
                 {nomsSet && !iAmHoh && !iAmNominee && (
                     <button
                         type="button"
@@ -474,6 +496,10 @@ export function BotTalkPanel(props: {
                                               ? "🏁 Deal"
                                               : a.kind === "votePlea"
                                                 ? "🗳️ You have my vote"
+                                                : a.kind === "vetoPlea"
+                                                ? "🏅 I'll use it on you"
+                                                : a.kind === "vetoKeep"
+                                                ? "👍 They'll stay the same"
                                                 : "🤝 Accept"}
                                     </button>
                                     <button
@@ -485,7 +511,7 @@ export function BotTalkPanel(props: {
                                             ? "Not so sure"
                                             : a.kind === "final2"
                                               ? "Not yet"
-                                              : a.kind === "votePlea"
+                                              : a.kind === "votePlea" || a.kind === "vetoPlea" || a.kind === "vetoKeep"
                                                 ? "Can't promise"
                                                 : "Decline"}
                                     </button>

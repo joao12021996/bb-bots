@@ -1,6 +1,6 @@
 import React from "react";
 import { nonEvictedHouseguests } from "../../model";
-import { isSocialStep, PlayerModeController, Step } from "../playerModeController";
+import { PlayerModeController, Step } from "../playerModeController";
 import { sessionFor } from "../net/netSession";
 import { TextsBanner } from "./playerChat";
 import { Alliance, aliveMembers, botBackup, botSuggestion, chemistryLabel, meetingSplit, positionsOf } from "../social/alliances";
@@ -333,7 +333,8 @@ export function AllianceScreen(props: AllianceScreenProps) {
     const [, rerender] = React.useState(0);
     // online: social time is still on for the others, so you can go back to it (say, to answer a text)
     const session = controller.socialTogether ? sessionFor(controller) : null;
-    const backable = !!session && isSocialStep(controller.state.step);
+    const backable = !!session && controller.backToSocialOpen();
+    const round = controller.allianceRound();
     return (
         <Panel>
             <Title>🤝 Alliance time</Title>
@@ -347,6 +348,8 @@ export function AllianceScreen(props: AllianceScreenProps) {
                         : `👑 ${controller.player(hohId).name} won Head of House and wants your alliance's help: who should go up?`}
                 </Subtle>
             )}
+            {round === "before" && <Subtle>Alliances meet first: make a plan, then go work the house. You'll meet again after social time.</Subtle>}
+            {round === "after" && <Subtle>Back together after social time: stick with the plan, or change it.</Subtle>}
             <Subtle>
                 Your alliances meet to agree on a target. Allies protect each other, so a strong alliance keeps you safe. When
                 an alliance can't agree, its chemistry drops.

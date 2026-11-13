@@ -42,6 +42,7 @@ export interface SeasonRules {
     actions: number; // social actions per block
     kinds: CompKind[]; // which kinds of weekly comp can come up
     formats: SpecialFormat[]; // which special comp formats can come up
+    together: boolean; // online: everyone's social time at once (off: players take turns)
 }
 
 export const DEFAULT_RULES: SeasonRules = {
@@ -49,6 +50,7 @@ export const DEFAULT_RULES: SeasonRules = {
     actions: 3,
     kinds: COMP_KINDS.map((k) => k.kind),
     formats: SPECIAL_FORMATS.map((f) => f.id),
+    together: true,
 };
 
 export const MIN_ACTIONS = 1;
@@ -61,6 +63,7 @@ export function withDefaults(rules?: Partial<SeasonRules>): SeasonRules {
         actions: Math.max(MIN_ACTIONS, Math.min(MAX_ACTIONS, Math.round(r.actions))),
         kinds: r.kinds.length > 0 ? r.kinds : DEFAULT_RULES.kinds,
         formats: r.formats,
+        together: r.together !== false,
     };
 }
 

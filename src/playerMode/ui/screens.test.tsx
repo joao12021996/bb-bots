@@ -2,7 +2,10 @@ import React from "react";
 import ReactDOM from "react-dom";
 import { act } from "react-dom/test-utils";
 import { GameState, getById, MutableGameState, PlayerProfile } from "../../model";
-import { newPlayerSave, PlayerModeController, Prompt } from "../playerModeController";
+import { newPlayerSave, PlayerModeController, Prompt, Step } from "../playerModeController";
+import { generateNomCeremonyScene } from "../../components/episode/scenes/nomCeremonyScene";
+import { withDefaults } from "../rules";
+import { rulesSummary } from "./rulesEditor";
 import { createAlliance } from "../social/alliances";
 import { SocialScreen } from "./socialScreen";
 import { AllianceScreen } from "./allianceScreen";
@@ -189,6 +192,113 @@ describe("player mode screens", () => {
         expect(c.textContent).not.toContain("alliance time");
         click(c, "Skip the rest");
         expect(controller.state.step).not.toBe("SocialMorning");
+    });
+
+    it("nominations are revealed one at a time", () => {
+        const controller = controllerAtSocial();
+        const [, scene] = generateNomCeremonyScene(controller.gameState, [controller.player(0)], {
+            forcedNominees: [controller.player(1), controller.player(2)],
+            reveal: true,
+        });
+        const c = mount(<div>{scene.render}</div>);
+        const buttons = () => Array.from(c.querySelectorAll("button")).map((b) => b.textContent || "");
+        expect(buttons().some((b) => b.includes("Reveal the first nominee"))).toBe(true);
+        expect(buttons()).not.toContain("Continue");
+        expect(c.textContent).not.toContain("I have nominated you");
+        for (const which of ["first", "second"]) {
+            const b = Array.from(c.querySelectorAll("button")).find((x) => (x.textContent || "").includes(`Reveal the ${which}`))!;
+            act(() => b.click());
+        }
+        expect(buttons()).toContain("Continue");
+        expect(c.textContent).toContain("I have nominated you");
+    });
+
+    it("alliances meet before social time, then again after it", () => {
+        const controller = controllerAtSocial();
+        let prompt: Prompt | null = null;
+        controller.prompt$.subscribe((p) => (prompt = p));
+        const s = controller.state;
+        s.step = Step.SocialAfternoon;
+        s.week.hohId = 3;
+        s.week.nomineeIds = [4, 5];
+        controller.continue();
+        const first = prompt as unknown as Prompt;
+        expect(first.kind).toBe("alliance");
+        expect((first as { blockName: string }).blockName).toContain("alliances first");
+        expect(controller.allianceRound()).toBe("before");
+        controller.endAlliance();
+        expect((prompt as unknown as Prompt).kind).toBe("social");
+        expect(controller.allianceRound()).toBe("after");
+        controller.endSocial();
+        expect((prompt as unknown as Prompt).kind).toBe("alliance");
+    });
+
+    it("after the veto comp, the nominees and the HoH make their case to the veto holder", () => {
+        const controller = controllerAtSocial();
+        const s = controller.state;
+        s.step = Step.SocialVeto;
+        s.week.hohId = 1;
+        s.week.nomineeIds = [2, 3];
+        s.week.povId = 0;
+        s.approachKey = {};
+        s.approaches[0] = [];
+        (controller as any).startSocialTime(controller.player(0));
+        const list = controller.approachesFor(0);
+        expect(list.filter((a) => a.kind === "vetoPlea").map((a) => a.fromId).sort()).toEqual([2, 3]);
+        expect(list.some((a) => a.kind === "vetoKeep" && a.fromId === 1)).toBe(true);
+        // promise HG2 the veto, then don't use it: HG2 won't forget
+        const i = list.findIndex((a) => a.kind === "vetoPlea" && a.fromId === 2);
+        expect(controller.respondApproach(i, true)!.good).toBe(true);
+        const before = controller.player(2).relationships[0];
+        (controller as any).settleVetoPromises(0, null);
+        expect(controller.player(2).relationships[0]).toBeLessThan(before - 0.2);
+        // a nominee asks a bot veto holder: if it works, the bot uses the veto on them
+        s.week = { hohId: 1, nomineeIds: [0, 3], povId: 2 };
+        s.actionsLeft = 3;
+        const outcome = controller.socialAct({ kind: "vetoCase", botId: 2 })!;
+        expect(s.week.vetoCases![0]).toBe(outcome.good);
+        s.week.vetoCases = { 0: true };
+        const sway = (controller as any).swayVeto({ decision: null, reason: "" }, controller.player(2), [controller.player(0), controller.player(3)], controller.player(1));
+        expect(sway.decision.id).toBe(0);
+        // the HoH asked them to keep the nominations the same, and is closer to them
+        s.week.vetoCases = { 1: true };
+        const kept = (controller as any).swayVeto({ decision: controller.player(3), reason: "" }, controller.player(2), [controller.player(0), controller.player(3)], controller.player(1));
+        expect(kept.decision).toBeNull();
+    });
+
+    it("a HoH can ask allies to go up as a pawn, and they remember it when they win HoH", () => {
+        const controller = controllerAtSocial();
+        const s = controller.state;
+        s.step = Step.HohRoom;
+        s.week.hohId = 0;
+        s.week.room = openHohRoom(new MutableGameState(controller.gameState), s.book, 0, s.humanIds, []);
+        expect(controller.askPawn(5)).toBeNull(); // not an ally
+        expect(controller.askPawn(1)).not.toBeNull();
+        expect(controller.askPawn(1)).toBeNull(); // asked already
+        const c = mount(<HohRoomScreen controller={controller} actorId={0} />);
+        expect(c.textContent).toContain("Pawns");
+        expect(c.textContent).toContain("Ask HG2");
+        s.week.room!.pawns = [
+            { id: 1, yes: true },
+            { id: 2, yes: false },
+        ];
+        (controller as any).settlePawnAsks(0, [1, 2]);
+        expect(s.pawnFavors!.map((f) => [f.pawnId, f.agreed])).toEqual([
+            [1, true],
+            [2, false],
+        ]);
+        // HG1 went up for them: HG1 keeps them safe. HG2 said no and went up anyway: HG2 comes after them.
+        s.week = { hohId: 1 };
+        expect((controller as any).roomSway().protect).toContain(0);
+        s.week = { hohId: 2 };
+        expect((controller as any).roomSway().targets).toContain(0);
+    });
+
+    it("online, social time can be everyone at once or one player at a time", () => {
+        expect(withDefaults({}).together).toBe(true);
+        expect(withDefaults({ together: false }).together).toBe(false);
+        expect(rulesSummary(withDefaults({ together: false }))).toContain("social time one player at a time");
+        expect(controllerAtSocial().socialTogether).toBe(false); // one device: always turns
     });
 
     it("flirting again too soon is creepy, and creeping someone out twice is for good", () => {
@@ -765,6 +875,11 @@ describe("player mode screens", () => {
                 if (p.kind === "gameOver") break;
                 if (p.kind === "scene") {
                     titles.add(p.scene.title);
+                    // the nominations are revealed one at a time
+                    for (let r = 0; r < 3; r++) {
+                        const reveal = Array.from(container.querySelectorAll("button")).find((b) => (b.textContent || "").includes("Reveal the"));
+                        if (reveal) act(() => reveal.click());
+                    }
                     const button = Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Continue");
                     if (!button) throw new Error(`The "${p.scene.title}" scene has no Continue button`);
                     act(() => button.click());

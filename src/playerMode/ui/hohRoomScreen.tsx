@@ -28,8 +28,15 @@ function Outcomes(props: { outcomes: RoomOutcome[] }) {
 }
 
 // What the visitor says, and the two ways the HoH can answer.
-function visitorPitch(controller: PlayerModeController, v: HohVisitor): { line: string; yes: string; no?: string } {
-    if (v.kind === "chat") return { line: "Congrats on the win! I just came up to see the room and hang out.", yes: "Thanks for coming up" };
+function visitorPitch(
+    controller: PlayerModeController,
+    v: HohVisitor,
+): { line: string; yes: string; no?: string } {
+    if (v.kind === "chat")
+        return {
+            line: "Congrats on the win! I just came up to see the room and hang out.",
+            yes: "Thanks for coming up",
+        };
     if (v.kind === "plea")
         return {
             line: "I'm not coming after you, I swear. Can you keep me off the block this week?",
@@ -60,7 +67,9 @@ export function HohRoomScreen(props: HohRoomProps) {
     const hoh = controller.player(room.hohId);
     const visitor = room.visitors[room.index];
     const cameIds = room.visitors.map((v) => v.fromId);
-    const stayedAway = nonEvictedHouseguests(controller.gameState).filter((hg) => hg.id !== hoh.id && !cameIds.includes(hg.id));
+    const stayedAway = nonEvictedHouseguests(controller.gameState).filter(
+        (hg) => hg.id !== hoh.id && !cameIds.includes(hg.id),
+    );
     const allies = controller.allyIds(hoh.id);
 
     const answer = (accept: boolean) => {
@@ -69,6 +78,47 @@ export function HohRoomScreen(props: HohRoomProps) {
             rerender((n) => n + 1);
         });
     };
+
+    // allies (bots) the HoH can ask about going up as a pawn
+    const askable = allies.filter(
+        (id) => !controller.isHuman(controller.player(id)) && !controller.player(id).isEvicted,
+    );
+    const asked = room.pawns || [];
+    const ask = (id: number) => {
+        whenDone(controller.askPawn(id), (outcome) => {
+            if (outcome) setOutcomes((prev) => [outcome, ...prev]);
+            rerender((n) => n + 1);
+        });
+    };
+    const pawnBox = askable.length > 0 && (
+        <div className="bbb-card-box">
+            <div className="bbb-card-title">🙋 Pawns</div>
+            <Subtle>
+                Ask an ally if they're okay going up as a pawn. Whatever they say, they'll remember it if they
+                ever win HoH.
+            </Subtle>
+            <div>
+                {askable.map((id) => {
+                    const answer = asked.find((p) => p.id === id);
+                    const name = controller.player(id).name;
+                    return answer ? (
+                        <span key={id} className="bbb-chip">
+                            {answer.yes ? "🙋" : "🙅"} {name}
+                        </span>
+                    ) : (
+                        <button
+                            key={id}
+                            type="button"
+                            className="button is-small is-light"
+                            onClick={() => ask(id)}
+                        >
+                            Ask {name}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
 
     let body: JSX.Element;
     if (visitor) {
@@ -85,8 +135,14 @@ export function HohRoomScreen(props: HohRoomProps) {
                 <Face
                     hg={from}
                     caption={
-                        <span title={read ? `Your read on them, as of Day ${read.day}` : "No read on them yet"}>
-                            {controller.isHuman(from) ? "🎮 Player" : read ? `${read.emoji} ${read.label}` : "❓ No read"}
+                        <span
+                            title={read ? `Your read on them, as of Day ${read.day}` : "No read on them yet"}
+                        >
+                            {controller.isHuman(from)
+                                ? "🎮 Player"
+                                : read
+                                  ? `${read.emoji} ${read.label}`
+                                  : "❓ No read"}
                             {allies.includes(from.id) ? " 🤝" : ""}
                             {room.promised.includes(from.id) ? " 🛡️" : ""}
                         </span>
@@ -128,20 +184,26 @@ export function HohRoomScreen(props: HohRoomProps) {
             <Title>👑 HoH room one-on-ones</Title>
             {controller.multiplayer && <Subtle>{hoh.name}'s turn</Subtle>}
             <Subtle>
-                Before nominations, houseguests come up one by one to make their case. What you promise up here is remembered:
-                break your word and it will cost you.
+                Before nominations, houseguests come up one by one to make their case. What you promise up
+                here is remembered: break your word and it will cost you.
             </Subtle>
             {body}
+            {pawnBox}
             <Outcomes outcomes={outcomes} />
             {(room.promised.length > 0 || room.targets.length > 0 || (!visitor && stayedAway.length > 0)) && (
                 <div className="bbb-card-box">
                     <div className="bbb-card-title">📝 Where things stand</div>
-                    {room.promised.length > 0 && <p>🛡️ You owe safety to: {names(controller, room.promised)}</p>}
+                    {room.promised.length > 0 && (
+                        <p>🛡️ You owe safety to: {names(controller, room.promised)}</p>
+                    )}
                     {room.targets.length > 0 && (
                         <p>
                             🎯 You said you'd nominate:{" "}
                             {room.targets
-                                .map((t) => `${controller.player(t.targetId).name} (told ${controller.player(t.fromId).name})`)
+                                .map(
+                                    (t) =>
+                                        `${controller.player(t.targetId).name} (told ${controller.player(t.fromId).name})`,
+                                )
                                 .join(", ")}
                         </p>
                     )}
@@ -150,7 +212,7 @@ export function HohRoomScreen(props: HohRoomProps) {
                             🚪 Didn't come up:{" "}
                             {names(
                                 controller,
-                                stayedAway.map((hg) => hg.id)
+                                stayedAway.map((hg) => hg.id),
                             )}
                         </p>
                     )}
@@ -176,7 +238,9 @@ export function HohVisitScreen(props: HohRoomProps) {
     const hoh = controller.player(room.hohId);
     const hohIsPlayer = controller.isHuman(hoh);
     const read = controller.readOf(me.id, hoh.id);
-    const others = nonEvictedHouseguests(controller.gameState).filter((hg) => hg.id !== me.id && hg.id !== hoh.id);
+    const others = nonEvictedHouseguests(controller.gameState).filter(
+        (hg) => hg.id !== me.id && hg.id !== hoh.id,
+    );
     const allies = controller.allyIds(me.id);
 
     const go = (pitch: VisitPitch | null) => {
@@ -203,11 +267,14 @@ export function HohVisitScreen(props: HohRoomProps) {
             <div>
                 {hohFace}
                 <Subtle>
-                    {hoh.name} is Head of House and is taking one-on-ones before nominations. Do you go up? A good pitch can
-                    keep you off the block. A bad one can put you on {hoh.name}'s radar.
+                    {hoh.name} is Head of House and is taking one-on-ones before nominations. Do you go up? A
+                    good pitch can keep you off the block. A bad one can put you on {hoh.name}'s radar.
                 </Subtle>
                 {room.promised.includes(me.id) && (
-                    <Subtle>🛡️ {hoh.name} owes you safety this week from your deal. Whether they keep their word is up to them.</Subtle>
+                    <Subtle>
+                        🛡️ {hoh.name} owes you safety this week from your deal. Whether they keep their word
+                        is up to them.
+                    </Subtle>
                 )}
                 <div>
                     <BigButton kind="info" onClick={() => go({ kind: "plea" })}>
@@ -222,7 +289,10 @@ export function HohVisitScreen(props: HohRoomProps) {
                         </BigButton>
                     )}
                 </div>
-                <Subtle>A deal: {hoh.name} keeps you safe this week, and you keep them safe if you win HoH next week.</Subtle>
+                <Subtle>
+                    A deal: {hoh.name} keeps you safe this week, and you keep them safe if you win HoH next
+                    week.
+                </Subtle>
                 <BigButton kind="light" onClick={() => go(null)}>
                     Stay downstairs
                 </BigButton>
@@ -258,7 +328,11 @@ export function HohVisitScreen(props: HohRoomProps) {
                 </Subtle>
                 <div>
                     {PITCH_REASONS.map((r) => (
-                        <BigButton key={r.id} kind="warning" onClick={() => go({ kind: "target", targetId: target.id, reason: r.id })}>
+                        <BigButton
+                            key={r.id}
+                            kind="warning"
+                            onClick={() => go({ kind: "target", targetId: target.id, reason: r.id })}
+                        >
                             {r.label}
                         </BigButton>
                     ))}

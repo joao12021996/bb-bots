@@ -5,6 +5,7 @@ import { NetSession, SessionOptions, stateHash } from "./netSession";
 import { FakeHub } from "./room";
 import { buildOnlineSeason, defaultSetup, houseOf } from "./lobby";
 import { cast as testCast } from "../testing";
+import { SeasonRules, withDefaults } from "../rules";
 
 const opts: SessionOptions = { launch: (controller) => controller.start(), hostWaitMs: 50, hashDelayMs: 10 };
 
@@ -113,10 +114,18 @@ function expectInSync(sessions: NetSession[]) {
     });
 }
 
-function setup(n: number, humanIds: number[], seed: number, pace?: { gapMs: number; startedAt: number }, turnLimit?: number) {
+function setup(
+    n: number,
+    humanIds: number[],
+    seed: number,
+    pace?: { gapMs: number; startedAt: number },
+    turnLimit?: number,
+    rules?: Partial<SeasonRules>
+) {
     const hub = new FakeHub();
     const save = newPlayerSave(newGame(n), humanIds);
     save.seed = seed;
+    if (rules) save.rules = withDefaults(rules);
     if (pace) save.pace = pace;
     if (turnLimit) save.turnLimit = turnLimit;
     const host = NetSession.host(hub.join("h"), "TEST", save, opts);
@@ -156,6 +165,25 @@ describe("online play", () => {
         all.forEach((s) => expect(s.controller!.state.step).toBe(Step.GameOver));
         expectInSync(all);
         // nobody ever needed the season sent again
+        all.forEach((s) => expect(s.resyncs).toBe(0));
+    });
+
+    it("with social time one player at a time, players take turns and every device stays in sync", () => {
+        const { hub, host, all } = setup(8, [0, 3], 17, undefined, undefined, { together: false });
+        expect(host.controller!.socialTogether).toBe(false);
+        let guard = 0;
+        let turns = 0;
+        while (guard++ < 5000 && step(hub, all)) {
+            // one player's turn at a time, on the screen everyone shares: nobody has social time of their own
+            const own = host.controller!.personal$.value;
+            expect([0, 3].some((id) => own[id] && (own[id].kind === "social" || own[id].kind === "alliance"))).toBe(false);
+            const p = prompt(host);
+            if (p.kind === "social" || p.kind === "alliance") turns++;
+            if (guard % 25 === 0) expectInSync(all);
+        }
+        expect(turns).toBeGreaterThan(0);
+        all.forEach((s) => expect(s.controller!.state.step).toBe(Step.GameOver));
+        expectInSync(all);
         all.forEach((s) => expect(s.resyncs).toBe(0));
     });
 

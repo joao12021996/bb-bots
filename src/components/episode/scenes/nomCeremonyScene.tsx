@@ -21,12 +21,51 @@ interface NomCeremonyOptions {
     thirdNominee?: boolean;
     splitIndex?: number;
     forcedNominees?: Houseguest[]; // player mode: nominees chosen by the human HoH
+    reveal?: boolean; // player mode: the nominees are revealed one at a time, like on the show
+}
+
+// The keys come out of the box one at a time: each nominee stays hidden until the one before them is named.
+function NomReveal(props: {
+    noms: Houseguest[];
+    texts: string[];
+    finalStatement: string;
+    showContinue: boolean;
+}) {
+    const [shown, setShown] = React.useState(0);
+    const { noms, texts } = props;
+    const done = shown >= noms.length;
+    return (
+        <div>
+            <div className="columns is-marginless is-centered">
+                {noms.map((n, i) =>
+                    i < shown ? (
+                        <DividerBox className="column" key={n.id}>
+                            <Centered>{texts[i]}</Centered>
+                            <Portrait centered={true} houseguest={n} />
+                        </DividerBox>
+                    ) : i === shown ? (
+                        <DividerBox className="column" key={n.id}>
+                            <Centered>{texts[i]}</Centered>
+                            <Centered>
+                                <button className="button is-warning" onClick={() => setShown(shown + 1)}>
+                                    🔑 Reveal the {["first", "second", "third"][i] || "next"} nominee
+                                </button>
+                            </Centered>
+                        </DividerBox>
+                    ) : null,
+                )}
+            </div>
+            {done && <CenteredBold>{props.finalStatement}</CenteredBold>}
+            <br />
+            {done && props.showContinue && <NextEpisodeButton />}
+        </div>
+    );
 }
 
 export function generateNomCeremonyScene(
     initialGameState: GameState,
     hohList: Houseguest[],
-    options: NomCeremonyOptions
+    options: NomCeremonyOptions,
 ): [GameState, Scene, Houseguest[]] {
     const newGameState = new MutableGameState(initialGameState);
     const HoH = hohList[0];
@@ -43,20 +82,21 @@ export function generateNomCeremonyScene(
         : getById(
               newGameState,
               backdoorNPlayers(HoH, exclude(houseguests, coHoH ? [HoH, coHoH] : [HoH]), newGameState, 1)[0]
-                  .decision
+                  .decision,
           );
 
     const nom2 = forced
         ? getById(newGameState, forced[1].id)
         : coHoH
-        ? getById(
-              newGameState,
-              backdoorNPlayers(coHoH, exclude(houseguests, [HoH, coHoH, nom1]), newGameState, 1)[0].decision
-          )
-        : getById(
-              newGameState,
-              backdoorNPlayers(HoH, exclude(houseguests, [HoH, nom1]), newGameState, 1)[0].decision
-          );
+          ? getById(
+                newGameState,
+                backdoorNPlayers(coHoH, exclude(houseguests, [HoH, coHoH, nom1]), newGameState, 1)[0]
+                    .decision,
+            )
+          : getById(
+                newGameState,
+                backdoorNPlayers(HoH, exclude(houseguests, [HoH, nom1]), newGameState, 1)[0].decision,
+            );
     nom1.nominations++;
     nom2.nominations++;
     newGameState.currentLog.nominationsPreVeto = [nom1.name, nom2.name];
@@ -67,13 +107,15 @@ export function generateNomCeremonyScene(
             newGameState,
             forced && forced[2]
                 ? forced[2].id
-                : backdoorNPlayers(HoH, exclude(houseguests, [HoH, nom1, nom2]), newGameState, 1)[0].decision
+                : backdoorNPlayers(HoH, exclude(houseguests, [HoH, nom1, nom2]), newGameState, 1)[0].decision,
         );
         nom3.nominations++;
         newGameState.currentLog.nominationsPreVeto.push(nom3.name);
     }
     newGameState.currentLog.nominationsPreVeto = sortAlphaNum(newGameState.currentLog.nominationsPreVeto);
-    const shuffleOrDont = coHoH ? (a: Houseguest[]): Houseguest[] => a : (a: Houseguest[]) => rng().shuffle(a);
+    const shuffleOrDont = coHoH
+        ? (a: Houseguest[]): Houseguest[] => a
+        : (a: Houseguest[]) => rng().shuffle(a);
     const noms = nom3 ? shuffleOrDont([nom1, nom2, nom3]) : shuffleOrDont([nom1, nom2]);
     const weI = coHoH ? "We" : "I";
     const finalStatement = `${weI} have nominated you, ${listNames(noms.map((n) => n.name))} for eviction. `;
@@ -92,25 +134,36 @@ export function generateNomCeremonyScene(
                     nominate ${thirdNominee ? `three` : `two`} houseguests for eviction.`}
                 </Centered>
                 {!doubleEviction && <Portraits centered={true} houseguests={hohList} />}
-                <div className="columns is-marginless is-centered">
-                    <DividerBox className="column">
-                        <Centered>{firstText}</Centered>
-                        <Portrait centered={true} houseguest={noms[0]} />
-                    </DividerBox>
-                    <DividerBox className="column">
-                        <Centered>{secondText}</Centered>
-                        <Portrait centered={true} houseguest={noms[1]} />
-                    </DividerBox>
-                    {thirdNominee && (
-                        <DividerBox className="column">
-                            <Centered>My third nominee is...</Centered>
-                            <Portrait centered={true} houseguest={noms[2]} />
-                        </DividerBox>
-                    )}
-                </div>
-                <CenteredBold>{finalStatement}</CenteredBold>
-                <br />
-                {!doubleEviction && <NextEpisodeButton />}
+                {options.reveal ? (
+                    <NomReveal
+                        noms={noms}
+                        texts={[firstText, secondText, "My third nominee is..."].slice(0, noms.length)}
+                        finalStatement={finalStatement}
+                        showContinue={!doubleEviction}
+                    />
+                ) : (
+                    <>
+                        <div className="columns is-marginless is-centered">
+                            <DividerBox className="column">
+                                <Centered>{firstText}</Centered>
+                                <Portrait centered={true} houseguest={noms[0]} />
+                            </DividerBox>
+                            <DividerBox className="column">
+                                <Centered>{secondText}</Centered>
+                                <Portrait centered={true} houseguest={noms[1]} />
+                            </DividerBox>
+                            {thirdNominee && (
+                                <DividerBox className="column">
+                                    <Centered>My third nominee is...</Centered>
+                                    <Portrait centered={true} houseguest={noms[2]} />
+                                </DividerBox>
+                            )}
+                        </div>
+                        <CenteredBold>{finalStatement}</CenteredBold>
+                        <br />
+                        {!doubleEviction && <NextEpisodeButton />}
+                    </>
+                )}
             </div>
         ),
     });
