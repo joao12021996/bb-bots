@@ -240,6 +240,7 @@ export function SocialScreen(props: SocialScreenProps) {
             hasFinal2(controller.ledger, human.id, hg.id) ? "🏁" : "",
             controller.showmancePartner(hg.id) !== undefined ? "💕" : "",
             hg.id === hohId ? "👑" : "",
+            controller.isCreepTo(human.id, hg.id) ? "🚩" : "", // they think you're a creep, for good
             nomineeIds.includes(hg.id) ? "🎯" : "",
         ].join("");
         if (controller.isHuman(hg)) return <span>{unreadFrom.includes(hg.id) ? "📩 Texted you" : "🎮 Player"} {tags}</span>;

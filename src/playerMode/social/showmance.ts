@@ -40,8 +40,8 @@ export function botShowmances(gs: MutableGameState, list: Showmance[], humanIds:
 }
 
 // A player flirts with a bot. Enough chemistry, and it becomes a showmance. It can also backfire (likelier the
-// less they like you), and flirting with someone again the same week (`before`: how many times you already have)
-// just comes off as creepy, and gets worse, and talked about, every time.
+// less they like you), and flirting with someone again too soon (`before`: how many times you already have,
+// lately) just comes off as creepy, and gets worse, and talked about, every time.
 export function flirt(
     gs: MutableGameState,
     list: Showmance[],
@@ -80,7 +80,7 @@ export function flirt(
                 text:
                     before >= 2
                         ? `${bot.name} is creeped out, and is telling everyone you won't take the hint.`
-                        : `Again? ${bot.name} is creeped out. Flirting twice in one week came off as desperate.`,
+                        : `Again? ${bot.name} is creeped out. Flirting again so soon came off as desperate.`,
                 good: false,
                 tone: "creepy",
             },

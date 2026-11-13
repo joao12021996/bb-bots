@@ -49,6 +49,7 @@ import {
     botSocialTime,
     performSocialAction,
     shiftRelationship,
+    setRelationship,
     socialFactor,
     DealAction,
     isDealAction,
@@ -203,6 +204,11 @@ import { nextTip, Tip, tipIdsFor } from "./coach";
 
 export type { Difficulty } from "./rules";
 
+// Flirting with someone again within this many weeks is creepy (see flirt), and someone a player creeped out
+// twice holds their relationship at this, for good.
+const CREEP_WEEKS = 2;
+const CREEP_LEVEL = -0.8;
+
 // How a player's answer to an approach reads in the conversation: [yes, no].
 const APPROACH_ANSWERS: { [kind: string]: [string, string] } = {
     pitch: ["I'm in.", "I'm not so sure."],
@@ -302,7 +308,6 @@ interface WeekProgress {
     // final-two speeches and jury questions, in progress
     finalTwo?: { spoke: number[]; questions: JuryQuestion[]; qIndex: number; transcript: string[] };
     meetingBy?: number[]; // players who called a house meeting this week
-    flirts?: { [pair: string]: number }; // how many times a player flirted with a houseguest this week ("player:bot")
     secretHoh?: boolean; // nobody knows who the Head of House is this week
     audienceNominee?: boolean; // the audience names one of this week's nominees
     initialNoms?: number[]; // the nominees named at the nomination ceremony
@@ -350,6 +355,9 @@ export interface PlayerSave {
     ledger?: Ledger; // every promise and claim, kept or broken, and everyone's reputation
     personalities?: { [id: number]: PersonalityId }; // every bot's (secret) personality
     showmances?: Showmance[];
+    flirts?: { [pair: string]: number[] }; // the weeks a player flirted with a houseguest ("player:bot")
+    creeped?: { [pair: string]: number }; // how many times a player creeped a houseguest out ("player:bot")
+    creeps?: { playerId: number; botId: number }[]; // ...twice: they can't stand the player, for good
     jury?: JuryBook; // what every juror holds against (or for) everyone, and why they voted
     overheard?: { [playerId: number]: number[] }; // alliances each player has overheard
     // What each player has picked up from talking to people: how they seemed (v) and how much they seemed
@@ -868,7 +876,23 @@ export class PlayerModeController {
         this.run();
     }
 
+    // Someone a player creeped out for good (see flirts) can't stand them for the rest of the season, whatever
+    // else happens between them.
+    public isCreepTo(playerId: number, botId: number): boolean {
+        return (this.state.creeps || []).some((c) => c.playerId === playerId && c.botId === botId);
+    }
+
+    private holdGrudges() {
+        const creeps = this.state.creeps || [];
+        const above = creeps.filter((c) => {
+            const bot = this.state.gameState.houseguests.find((hg) => hg.id === c.botId);
+            return bot && (bot.relationships[c.playerId] ?? 0) > CREEP_LEVEL;
+        });
+        if (above.length > 0) this.mutate((gs) => above.forEach((c) => setRelationship(gs, c.playerId, c.botId, CREEP_LEVEL)));
+    }
+
     private save() {
+        this.holdGrudges();
         if (this.net) this.net.saved(this.state);
         else writeSave(this.state);
         this.changed$.next();
@@ -3219,10 +3243,22 @@ export class PlayerModeController {
             case "rumour":
                 return spreadRumour(gs, this.ledger, this.book, actorId, action.botId, action.targetId, action.rumour);
             case "flirt": {
-                const flirts = (this.state.week.flirts = this.state.week.flirts || {});
+                // flirting with them again within two weeks is creepy; creep them out twice and it's for good
+                const s = this.state;
+                const flirts = (s.flirts = s.flirts || {});
                 const pair = `${actorId}:${action.botId}`;
-                const result = flirt(gs, this.showmances, actorId, action.botId, flirts[pair] || 0);
-                flirts[pair] = (flirts[pair] || 0) + 1;
+                const recent = (flirts[pair] || []).filter((w) => gs.phase - w < CREEP_WEEKS).length;
+                const result = flirt(gs, this.showmances, actorId, action.botId, recent);
+                flirts[pair] = [...(flirts[pair] || []).filter((w) => gs.phase - w < CREEP_WEEKS), gs.phase];
+                if (result.outcome.tone === "creepy") {
+                    const creeped = (s.creeped = s.creeped || {});
+                    creeped[pair] = (creeped[pair] || 0) + 1;
+                    if (creeped[pair] >= 2 && !this.isCreepTo(actorId, action.botId)) {
+                        s.creeps = [...(s.creeps || []), { playerId: actorId, botId: action.botId }];
+                        setRelationship(gs, actorId, action.botId, CREEP_LEVEL);
+                        result.outcome.text += ` To ${getById(gs, action.botId).name}, you're a creep now, and nothing will change that.`;
+                    }
+                }
                 if (result.showmance) {
                     this.showmances.push(result.showmance);
                     this.tell(

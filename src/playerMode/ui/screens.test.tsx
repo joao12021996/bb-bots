@@ -191,6 +191,29 @@ describe("player mode screens", () => {
         expect(controller.state.step).not.toBe("SocialMorning");
     });
 
+    it("flirting again too soon is creepy, and creeping someone out twice is for good", () => {
+        const controller = controllerAtSocial();
+        controller.state.actionsLeft = 10;
+        controller.socialAct({ kind: "flirt", botId: 4 });
+        const second = controller.socialAct({ kind: "flirt", botId: 4 })!;
+        expect(second.tone).toBe("creepy");
+        expect(controller.isCreepTo(0, 4)).toBe(false); // once: they'll get over it
+        // a week later still counts as too soon
+        (controller.state.gameState as { phase: number }).phase += 1;
+        const third = controller.socialAct({ kind: "flirt", botId: 4 })!;
+        expect(third.tone).toBe("creepy");
+        expect(third.text).toContain("you're a creep now");
+        expect(controller.isCreepTo(0, 4)).toBe(true);
+        expect(controller.player(4).relationships[0]).toBeLessThanOrEqual(-0.8);
+        // and nothing changes that
+        controller.socialAct({ kind: "chat", botId: 4 });
+        controller.socialAct({ kind: "final2", botId: 4 });
+        expect(controller.player(4).relationships[0]).toBeLessThanOrEqual(-0.8);
+        const c = mount(<SocialScreen controller={controller} blockName="Morning in the house" />);
+        const face = Array.from(c.querySelectorAll("button")).find((b) => (b.textContent || "").startsWith("HG4"))!;
+        expect(face.textContent).toContain("🚩");
+    });
+
     it("talking takes one action per houseguest: then the conversation goes on for free", () => {
         const controller = controllerAtSocial();
         controller.state.actionsLeft = 1;
