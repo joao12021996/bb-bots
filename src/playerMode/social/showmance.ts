@@ -39,15 +39,20 @@ export function botShowmances(gs: MutableGameState, list: Showmance[], humanIds:
     return fresh;
 }
 
+// Flirting with the same person this many times lately is fine with everyone; past that, it depends on them.
+export const FLIRTS_OK = 2;
+
 // A player flirts with a bot. Enough chemistry, and it becomes a showmance. It can also backfire (likelier the
-// less they like you), and flirting with someone again too soon (`before`: how many times you already have,
-// lately) just comes off as creepy, and gets worse, and talked about, every time.
+// less they like you). Keep at it (`before`: how many times you already have, lately) past FLIRTS_OK, and it
+// depends on the person: some don't mind (`okWithIt`), the rest are creeped out, worse, and talked about, every
+// time.
 export function flirt(
     gs: MutableGameState,
     list: Showmance[],
     playerId: number,
     botId: number,
-    before: number = 0
+    before: number = 0,
+    okWithIt: boolean = false
 ): { outcome: SocialOutcome; showmance?: Showmance } {
     const bot = getById(gs, botId);
     const player = getById(gs, playerId);
@@ -67,9 +72,10 @@ export function flirt(
         shiftRelationship(gs, playerId, botId, 0.03);
         return { outcome: { text: `${getById(gs, mine).name} saw you flirting with ${bot.name}. That did not go over well.`, good: false } };
     }
-    if (before > 0) {
-        shiftRelationship(gs, playerId, botId, -0.07 * before);
-        if (before >= 2) {
+    if (before >= FLIRTS_OK && !okWithIt) {
+        const times = before - FLIRTS_OK + 1;
+        shiftRelationship(gs, playerId, botId, -0.07 * times);
+        if (times >= 2) {
             // word gets around
             nonEvictedHouseguests(gs)
                 .filter((hg) => hg.id !== playerId && hg.id !== botId)
@@ -78,9 +84,9 @@ export function flirt(
         return {
             outcome: {
                 text:
-                    before >= 2
+                    times >= 2
                         ? `${bot.name} is creeped out, and is telling everyone you won't take the hint.`
-                        : `Again? ${bot.name} is creeped out. Flirting again so soon came off as desperate.`,
+                        : `Again? ${bot.name} is creeped out. That many flirts in a row came off as desperate.`,
                 good: false,
                 tone: "creepy",
             },

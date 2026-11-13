@@ -465,26 +465,35 @@ describe("player mode screens", () => {
         }
     });
 
-    it("flirting again too soon is creepy, and creeping someone out twice is for good", () => {
+    it("past two flirts in a row, some people are creeped out (others don't mind), and twice is for good", () => {
         const controller = controllerAtSocial();
-        controller.state.actionsLeft = 10;
-        controller.socialAct({ kind: "flirt", botId: 4 });
-        const second = controller.socialAct({ kind: "flirt", botId: 4 })!;
-        expect(second.tone).toBe("creepy");
-        expect(controller.isCreepTo(0, 4)).toBe(false); // once: they'll get over it
+        controller.state.actionsLeft = 20;
+        const bots = [1, 2, 3, 4, 5, 6];
+        const shy = bots.find((id) => !controller.okWithFlirts(id))!;
+        const fine = bots.find((id) => controller.okWithFlirts(id))!;
+        expect(shy).toBeDefined();
+        expect(fine).toBeDefined();
+        // someone who doesn't mind: flirt all you like
+        for (let i = 0; i < 4; i++) expect(controller.socialAct({ kind: "flirt", botId: fine })!.tone).not.toBe("creepy");
+        expect(controller.isCreepTo(0, fine)).toBe(false);
+        // someone who does: twice is fine, the third time is creepy
+        for (let i = 0; i < 2; i++) expect(controller.socialAct({ kind: "flirt", botId: shy })!.tone).not.toBe("creepy");
+        const third = controller.socialAct({ kind: "flirt", botId: shy })!;
+        expect(third.tone).toBe("creepy");
+        expect(controller.isCreepTo(0, shy)).toBe(false); // once: they'll get over it
         // a week later still counts as too soon
         (controller.state.gameState as { phase: number }).phase += 1;
-        const third = controller.socialAct({ kind: "flirt", botId: 4 })!;
-        expect(third.tone).toBe("creepy");
-        expect(third.text).toContain("you're a creep now");
-        expect(controller.isCreepTo(0, 4)).toBe(true);
-        expect(controller.player(4).relationships[0]).toBeLessThanOrEqual(-0.8);
+        const fourth = controller.socialAct({ kind: "flirt", botId: shy })!;
+        expect(fourth.tone).toBe("creepy");
+        expect(fourth.text).toContain("you're a creep now");
+        expect(controller.isCreepTo(0, shy)).toBe(true);
+        expect(controller.player(shy).relationships[0]).toBeLessThanOrEqual(-0.8);
         // and nothing changes that
-        controller.socialAct({ kind: "chat", botId: 4 });
-        controller.socialAct({ kind: "final2", botId: 4 });
-        expect(controller.player(4).relationships[0]).toBeLessThanOrEqual(-0.8);
+        controller.socialAct({ kind: "chat", botId: shy });
+        controller.socialAct({ kind: "final2", botId: shy });
+        expect(controller.player(shy).relationships[0]).toBeLessThanOrEqual(-0.8);
         const c = mount(<SocialScreen controller={controller} blockName="Morning in the house" />);
-        const face = Array.from(c.querySelectorAll("button")).find((b) => (b.textContent || "").startsWith("HG4"))!;
+        const face = Array.from(c.querySelectorAll("button")).find((b) => (b.textContent || "").startsWith(`HG${shy}`))!;
         expect(face.textContent).toContain("🚩");
     });
 

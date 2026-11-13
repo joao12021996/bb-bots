@@ -2343,7 +2343,7 @@ describe("showmances", () => {
         expect(formed).toBeGreaterThan(10);
     });
 
-    it("a flirt can backfire, and flirting again the same week is creepy", () => {
+    it("a flirt can backfire, and past two flirts in a row it's creepy, unless they don't mind", () => {
         let awkward = 0;
         for (let seed = 0; seed < 40; seed++) {
             const gs = new MutableGameState(prepareNextWeek(newGame(10), BigBrotherVanilla));
@@ -2352,15 +2352,20 @@ describe("showmances", () => {
             if (flirt(gs, [], 0, 3).outcome.tone === "awkward") awkward++;
         }
         expect(awkward).toBeGreaterThan(5);
-        // once is fine, twice is creepy, three times and the house hears about it
+        // twice is fine, a third time is creepy, a fourth and the house hears about it
         const gs = new MutableGameState(prepareNextWeek(newGame(10), BigBrotherVanilla));
         getById(gs, 3).relationships[0] = 0.5;
-        const second = flirt(gs, [], 0, 3, 1);
-        expect(second.outcome).toEqual(expect.objectContaining({ good: false, tone: "creepy" }));
+        seedRng("flirt:second");
+        expect(flirt(gs, [], 0, 3, 1).outcome.tone).not.toBe("creepy");
+        getById(gs, 3).relationships[0] = 0.5;
+        const third = flirt(gs, [], 0, 3, 2);
+        expect(third.outcome).toEqual(expect.objectContaining({ good: false, tone: "creepy" }));
         expect(getById(gs, 3).relationships[0]).toBeLessThan(0.5);
         const others = getById(gs, 5).relationships[0];
-        flirt(gs, [], 0, 3, 2);
+        flirt(gs, [], 0, 3, 3);
         expect(getById(gs, 5).relationships[0]).toBeLessThan(others);
+        // someone who doesn't mind: never creepy
+        for (let before = 2; before < 6; before++) expect(flirt(gs, [], 0, 4, before, true).outcome.tone).not.toBe("creepy");
     });
 
     it("close bots pair off on their own", () => {

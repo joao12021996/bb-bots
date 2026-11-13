@@ -217,8 +217,8 @@ import {
 export type { Difficulty } from "./rules";
 export { Step, isSocialStep, BLOCKBUSTER_MIN_PLAYERS } from "./week";
 
-// Flirting with someone again within this many weeks is creepy (see flirt), and someone a player creeped out
-// twice holds their relationship at this, for good.
+// Flirts with someone within this many weeks add up (see flirt: past FLIRTS_OK, some people are creeped out),
+// and someone a player creeped out twice holds their relationship at this, for good.
 const CREEP_WEEKS = 2;
 const CREEP_LEVEL = -0.8;
 
@@ -828,6 +828,15 @@ export class PlayerModeController {
 
     // Someone a player creeped out for good (see flirts) can't stand them for the rest of the season, whatever
     // else happens between them.
+    // Whether a houseguest doesn't mind being flirted with a lot. Charmers never do; for everyone else it's a coin
+    // flip, fixed for the season.
+    public okWithFlirts(botId: number): boolean {
+        if (this.personalities[botId] === "charmer") return true;
+        let h = 2166136261;
+        for (const ch of `${this.state.seed}:flirts:${botId}`) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+        return (h >>> 0) % 2 === 0;
+    }
+
     public isCreepTo(playerId: number, botId: number): boolean {
         return (this.state.creeps || []).some((c) => c.playerId === playerId && c.botId === botId);
     }
@@ -3295,12 +3304,13 @@ export class PlayerModeController {
             case "vetoCase":
                 return this.vetoCase(gs, actorId, action.botId);
             case "flirt": {
-                // flirting with them again within two weeks is creepy; creep them out twice and it's for good
+                // a couple of flirts within two weeks is fine; more is creepy to some people (not others), and
+                // creep someone out twice and it's for good
                 const s = this.state;
                 const flirts = (s.flirts = s.flirts || {});
                 const pair = `${actorId}:${action.botId}`;
                 const recent = (flirts[pair] || []).filter((w) => gs.phase - w < CREEP_WEEKS).length;
-                const result = flirt(gs, this.showmances, actorId, action.botId, recent);
+                const result = flirt(gs, this.showmances, actorId, action.botId, recent, this.okWithFlirts(action.botId));
                 flirts[pair] = [...(flirts[pair] || []).filter((w) => gs.phase - w < CREEP_WEEKS), gs.phase];
                 if (result.outcome.tone === "creepy") {
                     const creeped = (s.creeped = s.creeped || {});
