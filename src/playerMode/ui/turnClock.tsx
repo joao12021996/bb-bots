@@ -105,3 +105,17 @@ export function PauseBar(props: { session: NetSession; controller: PlayerModeCon
         </div>
     );
 }
+
+// Online: back after being away, halfway through a comp. The bot standing in finishes it; then it's theirs again.
+export function BackAfterComp(props: { session: NetSession; controller: PlayerModeController }) {
+    const { session, controller } = props;
+    const status = useStatus(session);
+    const me = status.localPlayerId;
+    if (me === null || !status.started || !controller.isAutopilot(me) || !controller.compOn()) return null;
+    return (
+        <div className="bbb-turn-clock" role="status">
+            🤖 You're back! You can't join a comp halfway through, so the bot playing for you finishes this one (it can't win it for
+            you). You're in control again right after.
+        </div>
+    );
+}

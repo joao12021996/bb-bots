@@ -1228,7 +1228,10 @@ export class NetSession {
             if (c.isRuleBreaker(id)) return;
             if (this.connected(this.claims[id])) {
                 delete this.awaySince[id];
-                if (c.isAutopilot(id)) this.sequence({ kind: "method", name: "autopilot", args: [id, false], owner: null }, this.room.selfId);
+                if (!c.isAutopilot(id)) return;
+                // back halfway through a comp: the bot finishes it for them, and they're back after
+                if (c.mayComeBack(id)) this.sequence({ kind: "method", name: "autopilot", args: [id, false], owner: null }, this.room.selfId);
+                else next = Math.min(next, now + 1000);
                 return;
             }
             if (c.isAutopilot(id)) return;

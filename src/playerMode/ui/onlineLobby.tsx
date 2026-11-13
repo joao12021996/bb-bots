@@ -646,7 +646,12 @@ export function OnlineBar(props: { session: NetSession; controller: PlayerModeCo
                 {status.slots.map((slot) => {
                     const on = props.session.isConnected(slot.id);
                     const bot = props.controller.isAutopilot(slot.id);
-                    const title = on ? `${slot.name} is connected` : bot ? `${slot.name} isn't connected: a bot is playing for them` : `${slot.name} isn't connected`;
+                    const title = on && bot
+                        ? `${slot.name} is back: a bot finishes this comp for them, then they're in control again`
+                        : on
+                        ? `${slot.name} is connected`
+                        : bot
+                        ? `${slot.name} isn't connected: a bot is playing for them` : `${slot.name} isn't connected`;
                     return (
                         <span key={slot.id} className={on ? "is-on" : ""} title={title}>
                             <img src={getById(props.controller.gameState, slot.id).imageURL} alt="" />

@@ -188,7 +188,7 @@ export const SECTIONS_FR: Section[] = [
                     L'hôte peut attendre tout le monde, ou commencer plus tôt avec des bots aux places vides. Avec ⏱️
                     Temps pour agir, qui met trop longtemps à décider laisse un bot faire ce choix-là. Un bot joue aussi pour
                     qui se déconnecte, mais une compétition jouée par un bot à ta place ne se gagne pas : tu finis dernier,
-                    quel que soit son score. Besoin d'une
+                    quel que soit son score. De retour en pleine compétition ? Le bot la termine, puis tu reprends la main. Besoin d'une
                     pause ? ⏸️ Demande-la : elle commence dès que la moitié des joueurs encore dans la maison
                     l'acceptent.
                 </li>

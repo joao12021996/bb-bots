@@ -362,6 +362,9 @@ export interface PlayerSave {
     castOptions?: CastOptionsOverride;
     // online: players whose device is away, so a bot plays for them until they're back
     autopilot?: number[];
+    // the step a comp is being played in (phase:step), from its start until its winner is known. Players coming
+    // back while it's on wait for the end of it: the bot standing in for them finishes it.
+    compAt?: string;
     // the diary room: what houseguests said about each week, revealed when the season ends
     diary?: DiaryEntry[];
     // everything that happened in the jury house, for the jury's chat
@@ -1631,6 +1634,33 @@ export class PlayerModeController {
 
     // ---------- stand-ins: a player can't win a comp a bot played for them ----------
 
+    private stepKey(): string {
+        return `${this.gameState.phase}:${this.state.step}`;
+    }
+
+    // A comp is being played right now (from its start until its winner is known).
+    public compOn(): boolean {
+        return this.state.compAt === this.stepKey();
+    }
+
+    // Can a player a bot is playing for take back control now? Not halfway through a comp: the bot finishes it.
+    public mayComeBack(id: number): boolean {
+        return !(this.isAutopilot(id) && this.compOn());
+    }
+
+    // A comp starts: until its winner is known, nobody comes back from away. Returns `onWinner`, ending it first.
+    private compStarts<A extends any[]>(onWinner: (...args: A) => void): (...args: A) => void {
+        if (this.state.compAt !== this.stepKey()) {
+            this.state.compAt = this.stepKey();
+            this.save();
+        }
+        return (...args: A) => {
+            this.state.compAt = undefined;
+            this.save();
+            onWinner(...args);
+        };
+    }
+
     // The players a bot stood in for during this step (away, or out of time on a decision), saved so a reload or
     // their coming back in the middle of it doesn't change anything.
     private standInKey(): string {
@@ -1678,6 +1708,7 @@ export class PlayerModeController {
         const s = this.state;
         if (!s.humanIds.includes(id) || this.isRuleBreaker(id) || s.step === Step.GameOver) return;
         if (on === this.isAutopilot(id)) return;
+        if (!on && !this.mayComeBack(id)) return;
         const list = s.autopilot || [];
         s.autopilot = on ? [...list, id] : list.filter((x) => x !== id);
         const name = this.player(id).name;
@@ -1792,6 +1823,7 @@ export class PlayerModeController {
         role: CompRole = "other"
     ) {
         const seed = hashcode(`${this.state.seed}:${this.gameState.phase}:${this.state.step}:${comp.id}`);
+        onWinner = this.compStarts(onWinner);
         this.noteStandIns(participants);
         const bots = this.simulateBots(comp, participants, seed, role);
         // bots who dropped off the wall for a deal
@@ -2013,6 +2045,7 @@ export class PlayerModeController {
         const picks: { pickerId: number; ids: number[] }[] = [];
         let lines: string[] = [KNOCKOUT_RULES];
         let round = 0;
+        onWinner = this.compStarts(onWinner);
         this.noteStandIns(participants);
 
         // shows what happened since the players last looked, then carries on. `stage`: a board shown after each
@@ -2202,6 +2235,7 @@ export class PlayerModeController {
         const offered: { pourerId: number; targetId: number }[] = [];
         let lines: string[] = [TAINTED_WINE_RULES];
         let round = 0;
+        onWinner = this.compStarts(onWinner);
         this.noteStandIns(participants);
         const skillOf = (id: number) => (this.isHuman({ id }) ? 0.5 : this.botSkill(this.player(id), `${seed}`));
 
@@ -2365,6 +2399,7 @@ export class PlayerModeController {
         ];
         let champ = queue[0];
         let next = 2;
+        onWinner = this.compStarts(onWinner);
         this.noteStandIns(participants);
 
         // as in Tainted Wine: the board shows what happened since it was last shown

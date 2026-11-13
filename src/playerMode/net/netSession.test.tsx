@@ -710,6 +710,39 @@ describe("online play", () => {
         expect(prompt(host).kind).toBe("gameOver");
     });
 
+    it("a player back halfway through a comp doesn't join it: the bot finishes it, then they're in control", () => {
+        const { hub, host, clients } = setup(8, [0, 3, 5], 19);
+        let all = [host, ...clients];
+        let guard = 0;
+        while (guard++ < 5000 && !(host.controller!.compOn() && host.controller!.personal$.value[5])) step(hub, all);
+        expect(host.controller!.compOn()).toBe(true);
+        clients[1].leave();
+        hub.flush();
+        jest.advanceTimersByTime(16000);
+        hub.flush();
+        expect(host.controller!.isAutopilot(5)).toBe(true);
+        const back = NetSession.join(hub.join("c9"), "TEST", opts, { playerId: 5, json: "{}" });
+        hub.flush();
+        all = [host, clients[0], back];
+        expect(back.localPlayerId).toBe(5);
+        // still the bot's comp
+        jest.advanceTimersByTime(3000);
+        hub.flush();
+        expect(host.controller!.compOn()).toBe(true);
+        expect(host.controller!.isAutopilot(5)).toBe(true);
+        expect(host.controller!.personal$.value[5]).toBeUndefined();
+        // once it's over, they're back
+        while (guard++ < 5000 && host.controller!.compOn()) {
+            expect(host.controller!.isAutopilot(5)).toBe(true);
+            step(hub, all);
+        }
+        jest.advanceTimersByTime(2000);
+        hub.flush();
+        expect(host.controller!.isAutopilot(5)).toBe(false);
+        settle(hub, host);
+        expectInSync(all);
+    });
+
     it("a device whose connection drops and comes back gets its seat back", () => {
         const { hub, host, clients, all } = setup(8, [0, 3], 5);
         for (let i = 0; i < 20; i++) step(hub, all);
