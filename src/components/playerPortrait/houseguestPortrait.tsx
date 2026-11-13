@@ -18,7 +18,7 @@ const Subtitle = styled.small`
 const MemoryWallPortrait = styled.div`
     margin: 5px;
     border: 1px solid ${({ theme }: { theme: ColorTheme }) => theme.portraitBorder};
-    color: black;
+    color: ${({ theme }: { theme: ColorTheme }) => theme.text};
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
@@ -204,11 +204,14 @@ export class HouseguestPortrait extends React.Component<PortraitProps, PortraitS
         ) : undefined;
         const imageStyle: any = { height: 100, width: "-moz-available" };
         if (props.tribe) imageStyle["display"] = "block";
+        // names in dark text on a colored card, or in the theme's text color with no card color (player mode)
+        const background = this.controller.backgroundColor(props);
         return (
             <Portrait
                 onClick={() => this.onClick()}
                 style={{
-                    backgroundColor: this.controller.backgroundColor(props),
+                    backgroundColor: background,
+                    color: background && Portrait !== Editable ? textColor(background) : undefined,
                 }}
             >
                 <Img src={props.imageURL} style={imageStyle} />

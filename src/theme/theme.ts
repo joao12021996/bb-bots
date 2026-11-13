@@ -19,25 +19,26 @@ export interface ColorTheme {
     tableCellBorder: string;
 }
 
-// export const lightTheme: ColorTheme = {
-//     name: "light",
-//     bg: "#fff",
-//     text: "#363537",
-//     toggleBorder: "#FFF",
-//     bodyArea: "#fff",
-//     link: "blue",
-//     mark: "yellow",
-//     overlay: "fff",
-//     evictedCell: "#fa8072",
-//     grayCell: "#eaecf0",
-//     lightGrayCell: "#f8f9fa",
-//     winnerCell: "#73fb76",
-//     runnerUpCell: "#d1e8ef",
-//     nomineeCell: "#959ffd",
-//     hohCell: "#CCFFCC",
-//     portraitBorder: "gray",
-//     tableCellBorder: "#a2a9b1",
-// };
+export const lightTheme: ColorTheme = {
+    name: "light",
+    bg: "#f6f4fd",
+    saveCell: "#bfdbfe",
+    text: "#1d1838",
+    bodyArea: "#ffffff",
+    toggleBorder: "#c4bfe0",
+    link: "#6d28d9",
+    mark: "#ddd6fe",
+    overlay: "#f1eefb",
+    evictedCell: "#fca5a5",
+    grayCell: "#e4e1ef",
+    lightGrayCell: "#f4f2fa",
+    runnerUpCell: "#d1e8ef",
+    nomineeCell: "#c7d2fe",
+    winnerCell: "#86efac",
+    hohCell: "#bbf7d0",
+    portraitBorder: "#d6d1ea",
+    tableCellBorder: "#cfc9e4",
+};
 
 export const darkTheme: ColorTheme = {
     name: "dark",

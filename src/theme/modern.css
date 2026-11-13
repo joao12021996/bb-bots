@@ -1,10 +1,20 @@
-/* Site-wide modern styling. Colors come from the dark theme in theme.ts; these are layout and polish. */
+/* Site-wide modern styling. Dark by default; the light palette is at the end of this file. Which one shows is
+   ⚙️ Settings > Theme (the device's setting unless the player picks), set as data-theme on <html>. */
 
 :root {
+    --bbb-ink: 255, 255, 255; /* tints and hairlines: white on dark, ink on light */
+    --bbb-lilac: #c4b5fd;
+    --bbb-lilac-2: #ddd6fe;
+    --bbb-gold-text: #fde68a;
+    --bbb-rose-text: #fda4af;
+    --bbb-pink-text: #f9a8d4;
+    --bbb-sky-text: #bae6fd;
+    --bbb-indigo-text: #a5b4fc;
+    --bbb-green-text: #6ee7b7;
     --bbb-bg: #0c0a1a;
     --bbb-card: #17142b;
     --bbb-card-2: #201c3b;
-    --bbb-border: rgba(255, 255, 255, 0.08);
+    --bbb-border: rgba(var(--bbb-ink), 0.08);
     --bbb-text: #f4f2ff;
     --bbb-muted: #a9a3c7;
     --bbb-accent: #8b5cf6;
@@ -41,11 +51,11 @@ h4 {
 }
 
 a {
-    color: #c4b5fd;
+    color: var(--bbb-lilac);
     cursor: pointer;
 }
 a:hover {
-    color: #ddd6fe;
+    color: var(--bbb-lilac-2);
 }
 
 /* cards */
@@ -53,7 +63,7 @@ a:hover {
     border-radius: var(--bbb-radius) !important;
     border: 1px solid var(--bbb-border);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent), var(--bbb-card) !important;
+    background: linear-gradient(180deg, rgba(var(--bbb-ink), 0.02), transparent), var(--bbb-card) !important;
     padding: 1.1rem 1.25rem;
 }
 
@@ -107,7 +117,7 @@ mark {
     box-shadow: 0 6px 16px rgba(2, 132, 199, 0.3);
 }
 .button.is-light {
-    background: rgba(255, 255, 255, 0.08) !important;
+    background: rgba(var(--bbb-ink), 0.08) !important;
     color: var(--bbb-text) !important;
     border: 1px solid var(--bbb-border) !important;
 }
@@ -180,7 +190,7 @@ input[type="number"] {
     transition: background 120ms, color 120ms;
 }
 .bbb-nav > a:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(var(--bbb-ink), 0.06);
     color: var(--bbb-text) !important;
 }
 .bbb-nav > mark {
@@ -207,7 +217,7 @@ input[type="number"] {
 }
 .bbb-sidebar b:hover,
 .bbb-sidebar a:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(var(--bbb-ink), 0.05);
 }
 .bbb-sidebar mark {
     display: inline-block;
@@ -224,7 +234,7 @@ input[type="number"] {
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: #c4b5fd;
+    color: var(--bbb-lilac);
     background: rgba(139, 92, 246, 0.15);
     border: 1px solid rgba(139, 92, 246, 0.35);
     border-radius: 999px;
@@ -236,7 +246,7 @@ input[type="number"] {
     font-weight: 800;
     line-height: 1.05;
     margin: 0 0 8px;
-    background: linear-gradient(90deg, #fff, #c4b5fd 50%, #f9a8d4);
+    background: linear-gradient(90deg, var(--bbb-text), #c4b5fd 50%, #f9a8d4);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -293,7 +303,7 @@ input[type="number"] {
     border-radius: 12px;
     background: rgba(251, 191, 36, 0.1);
     border: 1px solid rgba(251, 191, 36, 0.35);
-    color: #fde68a;
+    color: var(--bbb-gold-text);
     text-align: center;
     font-size: 0.9rem;
 }
@@ -313,14 +323,14 @@ input[type="number"] {
     margin: 10px auto;
     padding: 12px 14px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(var(--bbb-ink), 0.04);
     border: 1px solid var(--bbb-border);
 }
 .bbb-countdown {
     font-family: var(--bbb-display);
     font-size: 6rem;
     font-weight: 800;
-    background: linear-gradient(90deg, #fff, #c4b5fd);
+    background: linear-gradient(90deg, var(--bbb-text), #c4b5fd);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -332,7 +342,7 @@ input[type="number"] {
     padding: 8px 12px;
     margin-bottom: 6px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(var(--bbb-ink), 0.04);
     border: 1px solid var(--bbb-border);
 }
 .bbb-timer {
@@ -341,7 +351,7 @@ input[type="number"] {
     font-weight: 700;
 }
 .bbb-timer.is-low {
-    color: #fb7185;
+    color: var(--bbb-rose-text);
 }
 
 .bbb-winner {
@@ -394,7 +404,7 @@ input[type="number"] {
     border-radius: 10px;
 }
 .bbb-leaderboard li:nth-child(odd) {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(var(--bbb-ink), 0.03);
 }
 .bbb-leaderboard li::before {
     content: counter(rank);
@@ -437,7 +447,7 @@ input[type="number"] {
     gap: 6px;
     padding: 4px 10px 4px 4px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(var(--bbb-ink), 0.05);
     border: 1px solid var(--bbb-border);
     font-size: 0.85rem;
 }
@@ -521,11 +531,11 @@ input[type="number"] {
     display: inline-block;
     font-weight: 600;
     background: rgba(251, 113, 133, 0.14);
-    color: #fda4af;
+    color: var(--bbb-rose-text);
 }
 .bbb-handoff-shared .bbb-handoff-note {
     background: rgba(52, 211, 153, 0.14);
-    color: #6ee7b7;
+    color: var(--bbb-green-text);
 }
 .bbb-handoff-shared img {
     border-color: #34d399;
@@ -534,7 +544,7 @@ input[type="number"] {
 .bbb-setup-mode {
     margin: 10px auto;
     font-weight: 700;
-    color: #c4b5fd;
+    color: var(--bbb-lilac);
 }
 
 /* player setup */
@@ -551,7 +561,7 @@ input[type="number"] {
     gap: 8px;
     padding: 6px 10px;
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(var(--bbb-ink), 0.05);
     border: 1px solid var(--bbb-border);
 }
 .bbb-stepper-label {
@@ -582,7 +592,7 @@ input[type="number"] {
 .bbb-add-yourself .input {
     flex: 1;
     min-width: 0;
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(var(--bbb-ink), 0.06);
     border: 1px solid var(--bbb-border);
     color: var(--bbb-text);
 }
@@ -596,7 +606,7 @@ input[type="number"] {
     border-radius: 999px;
     background: rgba(139, 92, 246, 0.16);
     border: 1px solid rgba(139, 92, 246, 0.4);
-    color: #ddd6fe;
+    color: var(--bbb-lilac-2);
 }
 
 @media (max-width: 600px) {
@@ -614,7 +624,7 @@ input[type="number"] {
     margin: 12px auto;
     padding: 12px 14px;
     border-radius: var(--bbb-radius);
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(var(--bbb-ink), 0.04);
     border: 1px solid var(--bbb-border);
     text-align: left;
 }
@@ -671,7 +681,7 @@ input[type="number"] {
 .bbb-inline-form .input {
     flex: 1;
     min-width: 0;
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(var(--bbb-ink), 0.06);
     border: 1px solid var(--bbb-border);
     color: var(--bbb-text);
 }
@@ -693,7 +703,7 @@ input[type="number"] {
 .bbb-chemistry-bar {
     height: 6px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(var(--bbb-ink), 0.1);
     overflow: hidden;
     margin-top: 3px;
 }
@@ -754,7 +764,7 @@ input[type="number"] {
 .bbb-face-editor-top .input {
     flex: 1;
     min-width: 0;
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(var(--bbb-ink), 0.06);
     border: 1px solid var(--bbb-border);
     color: var(--bbb-text);
 }
@@ -771,7 +781,7 @@ input[type="number"] {
     padding: 0;
     border-radius: 10px;
     border: 2px solid transparent;
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(var(--bbb-ink), 0.06);
     cursor: pointer;
     overflow: hidden;
     display: flex;
@@ -796,7 +806,7 @@ input[type="number"] {
     margin: 10px auto;
     padding: 8px 12px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(var(--bbb-ink), 0.04);
     border: 1px solid var(--bbb-border);
     text-align: left;
     cursor: pointer;
@@ -869,7 +879,7 @@ input[type="number"] {
     width: 62px;
     padding: 6px 0 4px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(var(--bbb-ink), 0.05);
     border: 2px solid var(--bbb-border);
     color: var(--bbb-text);
     font: inherit;
@@ -930,7 +940,7 @@ input[type="number"] {
     gap: 2px;
     padding: 8px 10px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(var(--bbb-ink), 0.05);
     border: 2px solid var(--bbb-border);
     color: var(--bbb-text);
     font: inherit;
@@ -1093,7 +1103,7 @@ input[type="number"] {
     display: block;
 }
 .bbb-comic-title.is-villain b {
-    color: #a3e635;
+    color: var(--bbb-green-text);
     text-shadow: 2px 2px 0 #111;
 }
 .bbb-comic-rival span {
@@ -1294,7 +1304,7 @@ input[type="number"] {
 }
 .bbb-feed-live {
     flex: none;
-    color: #f87171;
+    color: var(--bbb-rose-text);
     font-weight: 800;
     letter-spacing: 0.5px;
 }
@@ -1326,7 +1336,7 @@ input[type="number"] {
     align-items: flex-start;
     padding: 10px 12px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(var(--bbb-ink), 0.04);
     border: 1px solid var(--bbb-border);
 }
 .bbb-award-emoji {
@@ -1370,7 +1380,7 @@ input[type="number"] {
     gap: 10px;
     padding: 6px 10px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(var(--bbb-ink), 0.04);
     border: 1px solid var(--bbb-border);
     animation: bbb-badge-in 300ms ease-out;
 }
@@ -1760,7 +1770,7 @@ input[type="number"] {
     font-weight: 800;
     letter-spacing: 0.5px;
     text-transform: uppercase;
-    color: #fbbf24;
+    color: var(--bbb-gold-text);
 }
 .bbb-veto-winner-photo {
     position: relative;
@@ -1869,7 +1879,7 @@ input[type="number"] {
     gap: 4px;
     padding: 2px 8px 2px 2px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(var(--bbb-ink), 0.05);
     opacity: 0.5;
 }
 .bbb-online-players > span.is-on {
@@ -1914,7 +1924,7 @@ input[type="number"] {
     gap: 6px;
     padding: 2px 10px 2px 2px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.07);
+    background: rgba(var(--bbb-ink), 0.07);
 }
 .bbb-waiting-on img {
     width: 28px;
@@ -1986,7 +1996,7 @@ input[type="number"] {
     gap: 5px;
     padding: 2px 10px 2px 2px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.07);
+    background: rgba(var(--bbb-ink), 0.07);
     font-size: 0.85rem;
 }
 .bbb-live-chip img {
@@ -2008,7 +2018,7 @@ input[type="number"] {
 .bbb-banner.bbb-rule-breaker {
     background: rgba(239, 68, 68, 0.12);
     border-color: rgba(239, 68, 68, 0.45);
-    color: #fecaca;
+    color: var(--bbb-rose-text);
 }
 
 /* online: a Continue that's been pressed, waiting for the other players to press theirs */
@@ -2120,7 +2130,7 @@ input[type="number"] {
     text-align: left;
 }
 .bbb-chat-person:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(var(--bbb-ink), 0.05);
 }
 .bbb-chat-person span:first-of-type {
     flex: 1;
@@ -2153,7 +2163,7 @@ input[type="number"] {
     max-width: 85%;
     padding: 6px 10px;
     border-radius: 12px 12px 12px 4px;
-    background: rgba(255, 255, 255, 0.07);
+    background: rgba(var(--bbb-ink), 0.07);
     word-break: break-word;
 }
 .bbb-chat-msg.is-mine {
@@ -2242,7 +2252,7 @@ input[type="number"] {
     padding: 0.4rem 0.8rem 0.4rem 0.4rem;
     border-radius: 999px;
     border: 2px solid var(--bbb-border);
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(var(--bbb-ink), 0.04);
     opacity: 0.65;
     transition: opacity 0.2s, border-color 0.2s, transform 0.2s;
     min-width: 0;
@@ -2294,9 +2304,9 @@ input[type="number"] {
 .bbb-duel-card {
     aspect-ratio: 3 / 4;
     border-radius: 10px;
-    border: 2px solid rgba(255, 255, 255, 0.12);
+    border: 2px solid rgba(var(--bbb-ink), 0.12);
     background:
-        repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.06) 0 6px, transparent 6px 12px),
+        repeating-linear-gradient(45deg, rgba(var(--bbb-ink), 0.06) 0 6px, transparent 6px 12px),
         linear-gradient(160deg, var(--bbb-accent), #4c1d95);
     color: #1f1b33;
     font-size: clamp(1.4rem, 5vw, 2.2rem);
@@ -2623,7 +2633,7 @@ input[type="number"] {
 }
 .bbb-review-tip {
     margin-top: 6px;
-    color: #fde68a;
+    color: var(--bbb-gold-text);
 }
 .bbb-why-week {
     margin: 6px 0;
@@ -2651,7 +2661,7 @@ input[type="number"] {
     background: none;
     border: none;
     padding: 0;
-    color: #a5b4fc;
+    color: var(--bbb-indigo-text);
     cursor: pointer;
     font: inherit;
     text-decoration: underline;
@@ -2737,7 +2747,7 @@ body.bbb-reduce-motion *::after {
 }
 .bbb-season-card-place {
     font-weight: 800;
-    color: #f9a8d4;
+    color: var(--bbb-pink-text);
 }
 .is-winner .bbb-season-card-place {
     color: var(--bbb-gold);
@@ -2989,6 +2999,13 @@ body.bbb-reduce-motion *::after {
     justify-content: space-between;
     gap: 10px;
 }
+.bbb-settings-language .bbb-segmented {
+    margin: 0;
+    font-size: 0.85rem;
+}
+.bbb-settings-language .bbb-segmented button {
+    padding: 4px 10px;
+}
 .bbb-select {
     background: var(--bbb-card-2);
     color: var(--bbb-text);
@@ -3068,9 +3085,9 @@ input[type="number"],
 input[type="search"],
 input[type="url"],
 textarea {
-    background-color: rgba(255, 255, 255, 0.06);
+    background-color: rgba(var(--bbb-ink), 0.06);
     color: var(--bbb-text);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(var(--bbb-ink), 0.14);
     border-radius: var(--bbb-radius-sm);
     box-shadow: none;
     transition: border-color 120ms ease, box-shadow 120ms ease;
@@ -3098,7 +3115,7 @@ textarea:focus {
     outline: none;
 }
 .input[readonly] {
-    background-color: rgba(255, 255, 255, 0.03);
+    background-color: rgba(var(--bbb-ink), 0.03);
     color: var(--bbb-muted);
 }
 .select select option {
@@ -3120,13 +3137,13 @@ textarea:focus {
 /* soft variants: a tint of the color, not the full gradient */
 .button.is-info.is-light {
     background: rgba(56, 189, 248, 0.14) !important;
-    color: #bae6fd !important;
+    color: var(--bbb-sky-text) !important;
     border: 1px solid rgba(56, 189, 248, 0.35) !important;
     box-shadow: none;
 }
 .button.is-link.is-light {
     background: rgba(139, 92, 246, 0.16) !important;
-    color: #ddd6fe !important;
+    color: var(--bbb-lilac-2) !important;
     border: 1px solid rgba(139, 92, 246, 0.4) !important;
 }
 .button.is-text {
@@ -3253,7 +3270,7 @@ table td {
     touch-action: none;
 }
 .bbb-pack-space {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(var(--bbb-ink), 0.03);
     border-radius: 2px;
 }
 .bbb-pack-box {
@@ -3344,12 +3361,12 @@ table td {
     max-width: 100%;
     font-size: 0.9rem;
     font-variant-numeric: tabular-nums;
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(var(--bbb-ink), 0.06);
     border: 1px solid var(--bbb-border);
 }
 .bbb-turn-clock.is-urgent {
     border-color: #fb7185;
-    color: #fda4af;
+    color: var(--bbb-rose-text);
 }
 .bbb-pause-row,
 .bbb-pause-ask {
@@ -3392,4 +3409,50 @@ table td {
 /* the chat stays usable over the pause screen */
 body:has(.bbb-pause-cover) .bbb-chat {
     z-index: 160;
+}
+
+/* ==========================================================================
+   Light theme: the same tokens, retuned for a light page. Comp boards and the comic-style panels keep their
+   own colors.
+   ========================================================================== */
+:root[data-theme="light"] {
+    color-scheme: light;
+    --bbb-ink: 40, 28, 90;
+    --bbb-bg: #f6f4fd;
+    --bbb-card: #ffffff;
+    --bbb-card-2: #f1eefb;
+    --bbb-border: rgba(40, 28, 90, 0.12);
+    --bbb-text: #1d1838;
+    --bbb-muted: #5d5780;
+    --bbb-accent: #7c3aed;
+    --bbb-accent-2: #db2777;
+    --bbb-lilac: #6d28d9;
+    --bbb-lilac-2: #5b21b6;
+    --bbb-gold-text: #a16207;
+    --bbb-rose-text: #be123c;
+    --bbb-pink-text: #be185d;
+    --bbb-sky-text: #0369a1;
+    --bbb-indigo-text: #4338ca;
+    --bbb-green-text: #047857;
+    --bbb-success: #059669;
+    --bbb-danger: #e11d48;
+    --bbb-info: #0284c7;
+    --bbb-shadow: 0 6px 18px rgba(40, 28, 90, 0.1);
+}
+:root[data-theme="light"] body {
+    background: radial-gradient(1200px 600px at 10% -10%, rgba(139, 92, 246, 0.12), transparent 60%),
+        radial-gradient(900px 500px at 110% 10%, rgba(236, 72, 153, 0.08), transparent 60%), var(--bbb-bg) !important;
+}
+:root[data-theme="light"] .box {
+    box-shadow: var(--bbb-shadow) !important;
+}
+:root[data-theme="light"] a:hover {
+    color: var(--bbb-accent);
+}
+:root[data-theme="light"] ::selection {
+    background: rgba(124, 58, 237, 0.25);
+    color: inherit;
+}
+:root[data-theme="light"] .bbb-settings-panel {
+    box-shadow: 0 12px 30px rgba(40, 28, 90, 0.18);
 }

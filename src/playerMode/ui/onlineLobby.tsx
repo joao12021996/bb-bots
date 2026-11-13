@@ -66,7 +66,7 @@ export function HostOnlineButton(props: { disabled?: boolean }) {
             >
                 {busy ? t("Opening a room…") : t("Host a game")}
             </button>
-            {error && <span style={{ color: "#f87171", flexBasis: "100%" }}>{error}</span>}
+            {error && <span style={{ color: "var(--bbb-rose-text)", flexBasis: "100%" }}>{error}</span>}
         </>
     );
 }
@@ -305,7 +305,7 @@ function LobbyRoom(props: { session: NetSession; status: NetStatus }) {
                         <Subtle>…or tap a houseguest below to play as them.</Subtle>
                     </>
                 )}
-                {status.notice && <Subtle style={{ color: "#fbbf24" }}>{status.notice}</Subtle>}
+                {status.notice && <Subtle style={{ color: "var(--bbb-gold-text)" }}>{status.notice}</Subtle>}
             </div>
 
             {status.isHost ? (
@@ -361,7 +361,7 @@ function LobbyRoom(props: { session: NetSession; status: NetStatus }) {
             {status.isHost ? (
                 <>
                     {!mine && <Subtle>Join the house yourself before you start.</Subtle>}
-                    {startError && <Subtle style={{ color: "#f87171" }}>{startError}</Subtle>}
+                    {startError && <Subtle style={{ color: "var(--bbb-rose-text)" }}>{startError}</Subtle>}
                     <BigButton kind="success" disabled={!mine || starting || !hostCast} onClick={start}>
                         {starting
                             ? "Starting…"
@@ -624,7 +624,7 @@ export function JoinOnline(props: { initialCode?: string; autoJoin?: boolean }) 
                     </button>
                 </p>
             )}
-            {error && <Subtle style={{ color: "#f87171" }}>{error}</Subtle>}
+            {error && <Subtle style={{ color: "var(--bbb-rose-text)" }}>{error}</Subtle>}
         </Panel>
     );
 }

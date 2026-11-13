@@ -12,6 +12,7 @@ import { TutorialPage } from "../tutorial/tutorialPage";
 import { StatsPage } from "../../career/statsPage";
 import { muted$, play } from "../../sound/sound";
 import { reduceMotion$ } from "../../prefs/motion";
+import { ThemeChoice, themeChoice$ } from "../../prefs/colorScheme";
 import { Lang, language$, LANGUAGES, setLanguage, t } from "../../i18n/i18n";
 import { names$, renameCount } from "../../i18n/rename";
 import { NamesDialog } from "./namesDialog";
@@ -160,11 +161,12 @@ function useSubject<T>(subject: BehaviorSubject<T>): T {
     return value;
 }
 
-// ⚙️ Settings: sound, motion, and (see i18n) the language. Remembered on this device.
+// ⚙️ Settings: sound, motion, light or dark, and (see i18n) the language. Remembered on this device.
 export function SettingsMenu(): JSX.Element {
     const [open, setOpen] = React.useState(false);
     const muted = useSubject(muted$);
     const calm = useSubject(reduceMotion$);
+    const themeChoice = useSubject(themeChoice$);
     const lang = useSubject(language$);
     const renamed = renameCount(useSubject(names$));
     const [renaming, setRenaming] = React.useState(false);
@@ -185,6 +187,22 @@ export function SettingsMenu(): JSX.Element {
                         <input type="checkbox" checked={calm} onChange={(e) => reduceMotion$.next(e.target.checked)} />
                         <span>🧘 {t("Reduce motion (no sliding, spinning or pulsing)")}</span>
                     </label>
+                    <div className="bbb-settings-language">
+                        <span>🌗 {t("Theme")}</span>
+                        <div className="bbb-segmented" role="group" aria-label={t("Theme")}>
+                            {(["system", "light", "dark"] as ThemeChoice[]).map((c) => (
+                                <button
+                                    key={c}
+                                    type="button"
+                                    className={themeChoice === c ? "is-active" : ""}
+                                    aria-pressed={themeChoice === c}
+                                    onClick={() => themeChoice$.next(c)}
+                                >
+                                    {c === "system" ? t("Device") : c === "light" ? t("Light") : t("Dark")}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                     <label className="bbb-settings-language">
                         <span>🌍 {t("Language")}</span>
                         <select className="bbb-select" value={lang} disabled={inComp} onChange={(e) => setLanguage(e.target.value as Lang)}>

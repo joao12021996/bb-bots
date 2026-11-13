@@ -21,7 +21,7 @@ export const Title = styled.h3`
 `;
 
 export const Subtle = styled.p`
-    color: #a9a3c7;
+    color: var(--bbb-muted);
     margin: 4px auto 12px;
     max-width: 600px;
 `;
@@ -96,7 +96,7 @@ export function Face(props: {
         >
             <FaceImg src={props.hg.imageURL} alt={props.hg.name} small={props.small} />
             {!props.hideName && <FaceName>{props.hg.name}</FaceName>}
-            {props.caption && <div style={{ fontSize: "0.72rem", color: "#c9c3e6", marginTop: 2 }}>{props.caption}</div>}
+            {props.caption && <div style={{ fontSize: "0.72rem", color: "var(--bbb-muted)", marginTop: 2 }}>{props.caption}</div>}
         </FaceCard>
     );
 }
