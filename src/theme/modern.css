@@ -3334,3 +3334,62 @@ table td {
     border-radius: 50%;
     object-fit: cover;
 }
+
+/* ---- online: time to act, and pauses ---- */
+.bbb-turn-clock {
+    margin: 0 auto 8px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    width: fit-content;
+    max-width: 100%;
+    font-size: 0.9rem;
+    font-variant-numeric: tabular-nums;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--bbb-border);
+}
+.bbb-turn-clock.is-urgent {
+    border-color: #fb7185;
+    color: #fda4af;
+}
+.bbb-pause-row,
+.bbb-pause-ask {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 0 auto 8px;
+    font-size: 0.9rem;
+}
+.bbb-pause-ask {
+    padding: 6px 12px;
+    border-radius: 10px;
+    background: rgba(250, 204, 21, 0.12);
+    border: 1px solid rgba(250, 204, 21, 0.4);
+    width: fit-content;
+}
+.bbb-pause-cover {
+    position: fixed;
+    inset: 0;
+    z-index: 150;
+    background: rgba(5, 5, 15, 0.82);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+.bbb-pause-card {
+    width: min(420px, 100%);
+    text-align: center;
+    background: var(--bbb-card-2);
+    border: 1px solid var(--bbb-border);
+    border-radius: 14px;
+    padding: 22px 18px;
+}
+.bbb-lobby-waiting {
+    text-align: center;
+}
+/* the chat stays usable over the pause screen */
+body:has(.bbb-pause-cover) .bbb-chat {
+    z-index: 160;
+}

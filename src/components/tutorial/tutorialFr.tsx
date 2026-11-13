@@ -185,6 +185,10 @@ export const SECTIONS_FR: Section[] = [
                     en direct. Pour un grand groupe, règle le <b>⏰ Rythme</b> sur le temps réel : une pause d'une heure
                     à deux jours avant chaque épreuve et chaque expulsion (Chef de la maison un jour, Veto le
                     lendemain…), sauf si tous les joueurs votent pour avancer plus tôt.
+                    L'hôte peut attendre tout le monde, ou commencer plus tôt avec des bots aux places vides. Avec ⏱️
+                    Temps pour agir, qui met trop longtemps à décider laisse un bot faire ce choix-là. Besoin d'une
+                    pause ? ⏸️ Demande-la : elle commence dès que la moitié des joueurs encore dans la maison
+                    l'acceptent.
                 </li>
                 <li>
                     <b>🎓 Saison guidée</b> : nouveau ? Active la saison guidée à la préparation (elle est activée tant

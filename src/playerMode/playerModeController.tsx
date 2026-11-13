@@ -352,6 +352,8 @@ export interface PlayerSave {
     // on. `startedAt`: when the host started the season. `nextAt`: when the next break ends (left out: the first
     // comp hasn't started yet; it doesn't wait).
     pace?: { gapMs: number; startedAt: number; nextAt?: number };
+    // online: seconds a player has to act before a bot decides for them (left out: no limit). See netSession.
+    turnLimit?: number;
     powers?: PowersState; // the season's secret powers: which, when, and who holds them
     announce?: { title: string; lines: string[] }[]; // the host's announcements, shown before the next step
     moves?: MoveRecord[]; // big moves and backstabs, for the season awards
@@ -1652,6 +1654,29 @@ export class PlayerModeController {
             // their decision on the screen everyone shares: the step starts again, with a bot deciding for them
             this.clearAllPersonal();
             this.run();
+        }
+    }
+
+    // Online: a player took too long over a decision (sent by the host; see netSession's checkIdle). A bot makes
+    // that one decision for them, as it would for a player who'd gone away, and then they're back in control.
+    public timedOut(id: number) {
+        const s = this.state;
+        if (!s.humanIds.includes(id) || this.isRuleBreaker(id) || this.isAutopilot(id) || s.step === Step.GameOver) return;
+        const shared = this.prompt$.value;
+        const personal = id in this.personal$.value;
+        if (!personal && !(shared && actorOf(shared) === id)) return;
+        this.feedPush(`⏱️ ${this.player(id).name} ran out of time, so a bot made that call for them.`);
+        s.autopilot = [...(s.autopilot || []), id];
+        try {
+            if (personal && this.gatherBot) {
+                this.gatherBot(id);
+            } else if (shared && actorOf(shared) === id) {
+                this.clearAllPersonal();
+                this.run();
+            }
+        } finally {
+            s.autopilot = (s.autopilot || []).filter((x) => x !== id);
+            this.save();
         }
     }
 

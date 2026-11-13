@@ -189,6 +189,9 @@ const SECTIONS_EN: Section[] = [
                     friend who joins takes the place of one. Late to the party? Tap 👀 Just watch to follow the season live.
                     For a big group, set the <b>⏰ Pace</b> to real time: a break of an hour to two days before each comp
                     and eviction (Head of House one day, Veto the next…), unless every player votes to move on sooner.
+                    The host can wait for everyone, or start early with bots in the empty spots. With ⏱️ Time to act,
+                    anyone who takes too long over a decision gets a bot to make that one call. Need a break? ⏸️ Ask
+                    for a pause: it starts once half the players still in the house agree.
                 </li>
                 <li>
                     <b>🎓 Guided season</b>: new to the game? Turn on Guided season when you set up (it's on until you've

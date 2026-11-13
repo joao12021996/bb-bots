@@ -98,11 +98,12 @@ function expectInSync(sessions: NetSession[]) {
     });
 }
 
-function setup(n: number, humanIds: number[], seed: number, pace?: { gapMs: number; startedAt: number }) {
+function setup(n: number, humanIds: number[], seed: number, pace?: { gapMs: number; startedAt: number }, turnLimit?: number) {
     const hub = new FakeHub();
     const save = newPlayerSave(newGame(n), humanIds);
     save.seed = seed;
     if (pace) save.pace = pace;
+    if (turnLimit) save.turnLimit = turnLimit;
     const host = NetSession.host(hub.join("h"), "TEST", save, opts);
     const clients = humanIds.slice(1).map((_, i) => NetSession.join(hub.join(`c${i}`), "TEST", opts));
     hub.flush();
@@ -863,4 +864,93 @@ describe("real time", () => {
         expectInSync(all);
     });
 });
+
+    describe("time limits and pauses", () => {
+
+        // plays on until a player (not a bot) has a decision up, on the shared screen or their own
+        function untilDecision(hub: FakeHub, all: NetSession[]): { owner: number | null; id: number } {
+            for (let guard = 0; guard < 5000; guard++) {
+                const host = all[0];
+                const c = host.controller!;
+                const shared = prompt(host);
+                const actor = actorOf(shared);
+                if (actor !== null && c.state.humanIds.includes(actor) && host.deadline(null) !== null) return { owner: null, id: actor };
+                const own = Object.keys(c.personal$.value).map(Number).find((id) => host.deadline(id) !== null);
+                if (own !== undefined) return { owner: own, id: own };
+                if (!step(hub, all)) throw new Error("Season ended");
+            }
+            throw new Error("No decision came up");
+        }
+
+        it("a bot makes the call for a player who runs out of time, and they're back in control after", () => {
+            const { hub, host, all } = setup(8, [0, 3, 5], 41, undefined, 60);
+            const { owner, id } = untilDecision(hub, all);
+            const before = owner === null ? prompt(host) : host.controller!.personal$.value[owner];
+            const due = host.deadline(owner)!;
+            jest.advanceTimersByTime(Math.max(0, due - Date.now()) - 1000);
+            hub.flush();
+            const still = owner === null ? prompt(host) : host.controller!.personal$.value[owner];
+            expect(still).toBe(before);
+            jest.advanceTimersByTime(2000);
+            hub.flush();
+            const after = owner === null ? prompt(host) : host.controller!.personal$.value[owner];
+            expect(after).not.toBe(before);
+            expect(host.controller!.isAutopilot(id)).toBe(false);
+            expect(host.controller!.state.gameState.log && JSON.stringify(host.controller!.state)).toContain("ran out of time");
+            settle(hub, host);
+            expectInSync(all);
+        });
+
+        it("a pause needs half the players in the house (not the bots), and stops everything until it's over", () => {
+            const { hub, host, clients, all } = setup(8, [0, 3, 5], 43, undefined, 60);
+            for (let i = 0; i < 30; i++) step(hub, all);
+            expect(host.pauseVoters()).toEqual([0, 3, 5]);
+            clients[0].pause("ask");
+            hub.flush();
+            const asked = host.status$.value.pause!;
+            expect(asked).toMatchObject({ by: 3, yes: [3], needed: 2, on: false });
+            expect(clients[1].status$.value.pause!.on).toBe(false);
+            // a second vote: on, for everyone
+            clients[1].pause("yes");
+            hub.flush();
+            all.forEach((s) => expect(s.status$.value.pause!.on).toBe(true));
+            // nothing moves while it's on, not even the clocks
+            const applied = host.appliedInputs;
+            const shownPrompt = prompt(host);
+            // (no auto-playing here: it would keep trying moves that are turned down)
+            const away = clients[0];
+            away.leave(); // a device going away doesn't get a bot either, while paused
+            jest.advanceTimersByTime(10 * 60000);
+            hub.flush();
+            expect(host.appliedInputs).toBe(applied);
+            expect(prompt(host)).toBe(shownPrompt);
+            expect(host.controller!.isAutopilot(3)).toBe(false);
+            // only someone who agreed (or the host) ends it
+            clients[1].pause("end");
+            hub.flush();
+            [host, clients[1]].forEach((s) => expect(s.status$.value.pause).toBeNull());
+            // the clocks run again: the player who left gets a bot, and the season moves on
+            jest.advanceTimersByTime(20000);
+            hub.flush();
+            expect(host.controller!.isAutopilot(3)).toBe(true);
+            step(hub, [host, clients[1]]);
+            expect(host.appliedInputs).toBeGreaterThan(applied);
+            settle(hub, host);
+            expectInSync([host, clients[1]]);
+        });
+
+        it("a pause most players turn down is dropped", () => {
+            const { hub, host, clients } = setup(8, [0, 3, 5], 47);
+            hub.flush();
+            host.pause("ask");
+            hub.flush();
+            clients[0].pause("no");
+            hub.flush();
+            expect(host.status$.value.pause!.on).toBe(false);
+            clients[1].pause("no");
+            hub.flush();
+            expect(host.status$.value.pause).toBeNull();
+            expect(clients[0].status$.value.pause).toBeNull();
+        });
+    });
 });

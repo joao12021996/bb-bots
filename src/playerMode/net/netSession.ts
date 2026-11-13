@@ -89,7 +89,22 @@ export interface NetStatus {
     cast: CastCard[];
     mySeat: LobbySeat | null;
     spectating: boolean; // watching the season live, without a seat
+    pause: PauseState | null; // a pause asked for, or on
 }
+
+// A pause: asked for by a player, on once at least half the human players still in the house agree (bots don't
+// count). While it's on, nothing happens in the season, timers included.
+export interface PauseState {
+    by: number; // who asked
+    yes: number[]; // who agreed (the one who asked included)
+    no: number[];
+    needed: number; // agreements needed
+    on: boolean;
+    askedAt: number; // the host's clock
+    onAt?: number; // when it went on (the host's clock)
+}
+
+const PAUSE_ASK_MS = 90000; // a pause nobody agrees to in time is dropped
 
 export interface SessionOptions {
     // shows the game screen and starts the controller
@@ -101,6 +116,9 @@ export interface SessionOptions {
     // how long a player's device can be gone before a bot plays for them
     awayMs?: number;
 }
+
+// screens that don't wait on anyone in particular, or that wait on purpose: no time limit
+const UNTIMED = ["break", "breakVote", "handoff", "waiting", "scene", "gameOver"];
 
 // Chat between players, outside the season itself (it never changes the game, so it doesn't go through the
 // inputs): private messages between houseguests still in the house, and the jury house, for evicted players.
@@ -290,6 +308,14 @@ export class NetSession {
     // the host: since when each player's device has been gone (a bot plays for them after a while)
     private awaySince: { [playerId: number]: number } = {};
     private awayTimer: any = null;
+    // turn time limits (the host): when each screen went up, and each player's last move
+    private shownAt: { [slot: string]: { at: number; time: number } } = {};
+    private lastMove: { [playerId: number]: number } = {};
+    private timedOutAt: { [slot: string]: number } = {}; // the screen (its stamp) last timed out, per slot
+    private idleTimer: any = null;
+    private idleBeat: any = null; // checks the clocks every second, whatever else happens
+    private pauseState: PauseState | null = null;
+    private pauseTimer: any = null;
     // chat: every message this device has (the host: all of them), and the evicted players the host has sent
     // the jury house to so far
     private allChat: ChatMessage[] = [];
@@ -379,6 +405,7 @@ export class NetSession {
             cast: this.cast,
             mySeat: (this.setup && this.setup.seats.find((s) => s.peerId === this.room.selfId)) || null,
             spectating: this.spectating,
+            pause: this.pauseState,
         };
     }
 
@@ -389,6 +416,7 @@ export class NetSession {
         if (this.isHost) {
             this.checkReady();
             this.checkAway();
+            this.checkIdle();
         }
     }
 
@@ -496,6 +524,9 @@ export class NetSession {
         clearTimeout(this.reportTimer);
         clearTimeout(this.hostWaitTimer);
         clearTimeout(this.awayTimer);
+        clearTimeout(this.idleTimer);
+        clearInterval(this.idleBeat);
+        clearTimeout(this.pauseTimer);
         continueWaiting$.next(null);
         if (this.controller) this.controller.net = null;
         this.room.leave();
@@ -529,7 +560,10 @@ export class NetSession {
     }
 
     private onPeerJoin(peerId: string) {
-        if (this.isHost) this.room.send("lobby", this.lobbyData(), peerId);
+        if (this.isHost) {
+            this.room.send("lobby", this.lobbyData(), peerId);
+            if (this.pauseState) this.room.send("pauseState", this.pauseState, peerId);
+        }
         this.emit();
     }
 
@@ -633,6 +667,15 @@ export class NetSession {
                 return this.sendSnapshot(from);
             case "chatSend":
                 return this.receiveChat(data as ChatMessage, from);
+            case "pause":
+                if (this.isHost && data) this.onPause(data.playerId, data.action, from);
+                return;
+            case "pauseState":
+                if (from === this.hostId) {
+                    this.pauseState = data || null;
+                    this.emit();
+                }
+                return;
             case "chat":
             case "chatLog":
                 if (from === this.hostId && Array.isArray(data)) this.addChat(data);
@@ -768,6 +811,8 @@ export class NetSession {
 
     private attach(controller: PlayerModeController) {
         this.controller = controller;
+        clearInterval(this.idleBeat);
+        if (controller.state.turnLimit) this.idleBeat = setInterval(() => this.checkIdle(), 1000);
         controller.net = {
             wrapPrompt: (p, owner) => this.wrapPrompt(p, owner),
             dropPersonal: (owner) => {
@@ -792,12 +837,18 @@ export class NetSession {
         this.rawMethods.ruleBreak = c.ruleBreak.bind(controller);
         // sent by the host itself, when a player's device has been gone a while, or is back (see checkAway)
         this.rawMethods.autopilot = c.autopilot.bind(controller);
+        // sent by the host itself, when a player has taken too long over a decision (see checkIdle)
+        this.rawMethods.timedOut = c.timedOut.bind(controller);
     }
 
     // owner: a player's own screen (undefined: the screen everyone shares)
     private wrapPrompt(prompt: Prompt, owner?: number): Prompt {
         const slot = owner === undefined ? null : owner;
         const stamp: Stamp = { at: this.applied };
+        const shownKey = slot === null ? "shared" : String(slot);
+        const was = this.shownAt[shownKey];
+        if (!was || was.at !== stamp.at) this.shownAt[shownKey] = { at: stamp.at, time: Date.now() };
+        if (this.isHost) Promise.resolve().then(() => this.checkIdle());
         if (slot === null) {
             this.rawPrompt = prompt;
             this.sharedStamp = stamp;
@@ -850,7 +901,8 @@ export class NetSession {
 
     // Whether an input can be applied now: sent by a device allowed to, for a screen that's still showing.
     private valid(p: Proposal, from: string): boolean {
-        if (p.kind === "method" && p.name === "autopilot") return false; // only ever the host's own doing
+        if (p.kind === "method" && (p.name === "autopilot" || p.name === "timedOut")) return false; // only ever the host's own doing
+        if (this.pauseState && this.pauseState.on) return false; // paused: nothing happens
         if (!this.allowed(p.owner, from)) return false;
         if (p.kind === "method" && p.name === "ruleBreak") {
             // only ever about the sender's own player
@@ -943,6 +995,7 @@ export class NetSession {
     // A shared screen's Continue, the same as any input on it except that any player's device may press it.
     // `from` null: the host, moving on once everyone has pressed it.
     private validContinue(p: Proposal, from: string | null): boolean {
+        if (this.pauseState && this.pauseState.on) return false;
         if (from !== null && !Object.keys(this.claims).some((id) => this.claims[Number(id)] === from)) return false;
         const prompt: any = this.rawPrompt;
         if (!prompt || actorOf(prompt) !== null || p.at !== this.sharedStamp.at) return false;
@@ -1021,6 +1074,7 @@ export class NetSession {
 
     // The host: numbers an input, sends it to everyone and applies it.
     private sequence(p: Proposal, from: string): any {
+        if (p.owner !== null && p.owner !== undefined) this.lastMove[p.owner] = Date.now();
         const input: Input = { ...p, seq: this.applied + 1, by: from };
         this.room.send("input", toWireInput(input));
         return this.exec(input);
@@ -1162,6 +1216,7 @@ export class NetSession {
         clearTimeout(this.awayTimer);
         const c = this.controller;
         if (!this.isHost || !this.started || !c || c.state.step === Step.GameOver) return;
+        if (this.pauseState && this.pauseState.on) return; // nothing changes while paused
         if (this.depth > 0) {
             Promise.resolve().then(() => this.checkAway());
             return;
@@ -1184,6 +1239,139 @@ export class NetSession {
         });
         if (next < Infinity) this.awayTimer = setTimeout(() => this.checkAway(), next - now + 20);
     }
+
+    // ---------- turn time limits ----------
+
+    // The host: a player who's had a decision up longer than the season's limit, without a move, gets a bot to
+    // make that decision (sent as an input, so every device does the same). A screen everyone watches, that some
+    // have pressed on from, moves on without whoever's holding it up.
+    private checkIdle() {
+        clearTimeout(this.idleTimer);
+        const c = this.controller;
+        const limit = c ? c.state.turnLimit : undefined;
+        if (!this.isHost || !this.started || !c || !limit || c.state.step === Step.GameOver) return;
+        if (this.pauseState && this.pauseState.on) return; // the clock stops while paused
+        if (this.depth > 0) {
+            Promise.resolve().then(() => this.checkIdle());
+            return;
+        }
+        const now = Date.now();
+        let next = Infinity;
+        const late: number[] = [];
+        const shared = this.rawPrompt;
+        const actor = shared ? actorOf(shared) : null;
+        const sharedDue = this.deadline(null);
+        const once = (key: string, at: number | undefined) => at !== undefined && this.timedOutAt[key] !== at;
+        if (shared && sharedDue !== null && actor !== null && c.state.humanIds.includes(actor) && !c.isRuleBreaker(actor)) {
+            if (sharedDue <= now) {
+                if (once("shared", this.sharedStamp.at)) {
+                    this.timedOutAt.shared = this.sharedStamp.at;
+                    late.push(actor);
+                }
+            }
+            else next = Math.min(next, sharedDue);
+        } else if (shared && actor === null && this.readyProposal && this.readyAt === this.sharedStamp.at && this.everyoneContinues) {
+            const shown = this.shownAt.shared;
+            const due = (shown ? shown.time : now) + limit * 1000;
+            if (due <= now) {
+                // moving on without the ones who haven't pressed Continue
+                this.readyIds = [...this.readyIds, ...this.continuers()];
+                this.checkReady();
+            } else next = Math.min(next, due);
+        }
+        Object.keys(this.rawPersonal).forEach((key) => {
+            const id = Number(key);
+            const due = this.deadline(id);
+            if (due === null || !c.state.humanIds.includes(id) || c.isRuleBreaker(id)) return;
+            const stamp = this.personalStamp[id];
+            if (due <= now) {
+                if (once(key, stamp && stamp.at)) {
+                    this.timedOutAt[key] = stamp.at;
+                    late.push(id);
+                }
+            }
+            else next = Math.min(next, due);
+        });
+        late.forEach((id) => this.sequence({ kind: "method", name: "timedOut", args: [id], owner: null }, this.room.selfId));
+        if (late.length > 0) Promise.resolve().then(() => this.checkIdle());
+        else if (next < Infinity) this.idleTimer = setTimeout(() => this.checkIdle(), next - now + 20);
+    }
+
+    // When the decision up for `owner` (null: the screen everyone shares) runs out of time, by this device's
+    // clock (screens show it; the host's clock is the one that counts). null: no limit.
+    public deadline(owner: number | null): number | null {
+        const c = this.controller;
+        const limit = c ? c.state.turnLimit : undefined;
+        if (!c || !limit) return null;
+        const prompt = owner === null ? this.rawPrompt : this.rawPersonal[owner];
+        const id = owner === null ? (prompt ? actorOf(prompt) : null) : owner;
+        if (!prompt || UNTIMED.includes(prompt.kind) || id === null || c.isAutopilot(id)) return null;
+        const shown = this.shownAt[owner === null ? "shared" : String(owner)];
+        if (!shown) return null;
+        const extra = prompt.kind === "compPlay" ? prompt.comp.maxSeconds : 0;
+        return Math.max(shown.time, this.lastMove[id] || 0) + (limit + extra) * 1000;
+    }
+
+    // ---------- pause ----------
+
+    // The human players whose say counts for a pause: still in the house, not expelled. Bots never count.
+    public pauseVoters(): number[] {
+        const c = this.controller;
+        if (!c) return [];
+        return c.state.humanIds.filter((id) => !c.isRuleBreaker(id) && !getById(c.gameState, id).isEvicted);
+    }
+
+    // This device's player asks for a pause, agrees or says no to one, or ends it.
+    public pause(action: "ask" | "yes" | "no" | "end") {
+        const id = this.localPlayerId;
+        if (!this.started || id === null) return;
+        if (this.isHost) this.onPause(id, action, this.room.selfId);
+        else if (this.hostId) this.room.send("pause", { playerId: id, action }, this.hostId);
+    }
+
+    private onPause(id: number, action: string, from: string) {
+        if (!this.controller || !this.started || this.claims[id] !== from) return;
+        const voters = this.pauseVoters();
+        const p = this.pauseState;
+        let next: PauseState;
+        if (action === "ask") {
+            if (p || !voters.includes(id)) return;
+            next = { by: id, yes: [id], no: [], needed: Math.max(1, Math.ceil(voters.length / 2)), on: false, askedAt: Date.now() };
+            clearTimeout(this.pauseTimer);
+            this.pauseTimer = setTimeout(() => {
+                if (this.pauseState && !this.pauseState.on) this.setPause(null);
+            }, PAUSE_ASK_MS);
+        } else if (action === "yes" || action === "no") {
+            if (!p || p.on || !voters.includes(id) || p.yes.includes(id) || p.no.includes(id)) return;
+            next = action === "yes" ? { ...p, yes: [...p.yes, id] } : { ...p, no: [...p.no, id] };
+        } else if (action === "end") {
+            // whoever asked, anyone who agreed, or the host
+            if (!p || !(p.yes.includes(id) || from === this.room.selfId)) return;
+            return this.setPause(null);
+        } else return;
+        if (!next.on && next.yes.length >= next.needed) {
+            clearTimeout(this.pauseTimer);
+            next = { ...next, on: true, onAt: Date.now() };
+        } else if (!next.on && voters.length - next.no.length < next.needed) {
+            return this.setPause(null); // it can't get enough agreements any more
+        }
+        this.setPause(next);
+    }
+
+    private setPause(state: PauseState | null) {
+        const was = this.pauseState;
+        if (was && was.on && !state && was.onAt !== undefined) {
+            // the clocks pick up where they were
+            const gap = Date.now() - was.onAt;
+            Object.values(this.shownAt).forEach((x) => (x.time += gap));
+            Object.keys(this.lastMove).forEach((k) => (this.lastMove[Number(k)] += gap));
+        }
+        if (!state) clearTimeout(this.pauseTimer);
+        this.pauseState = state;
+        if (this.isHost) this.room.send("pauseState", state);
+        this.emit();
+    }
+
 
     // ---------- chat ----------
 

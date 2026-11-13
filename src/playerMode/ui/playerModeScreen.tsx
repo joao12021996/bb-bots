@@ -5,6 +5,7 @@ import { CompPlay, CompResults, LiveStandings } from "../comps/compRunner";
 import { isStaged } from "../comps/compTypes";
 import { actorOf, PlayerModeController, Prompt } from "../playerModeController";
 import { sessionFor } from "../net/netSession";
+import { PauseBar, TurnClock } from "./turnClock";
 import { watchForInspector } from "../net/inspectWatch";
 import { OnlineBar, WaitingFor, WaitingOnPlayers } from "./onlineLobby";
 import { ChatDock } from "./chatDock";
@@ -109,10 +110,13 @@ function BreakScreen(props: {
         return () => window.clearInterval(timer);
     }, []);
     const due = now >= prompt.until;
+    // the host's device ends the break once time's up (and tries again every few seconds: it's turned down while
+    // the season is paused)
+    const tick = Math.floor(now / 5000);
     React.useEffect(() => {
         if (props.host && due && prompt.kind === "break") prompt.timeUp(Date.now());
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [due]);
+    }, [due, tick]);
     const voters = prompt.kind === "break" ? prompt.voters : controller.breakVoters();
     const voted = prompt.kind === "break" ? prompt.voted : [];
     const when = new Date(prompt.until);
@@ -676,6 +680,8 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                         }}
                     />
                 )}
+                {session && <PauseBar session={session} controller={controller} />}
+                {session && <TurnClock session={session} controller={controller} owner={owner} />}
                 {body}
                 {session && <ChatDock session={session} controller={controller} />}
             </div>

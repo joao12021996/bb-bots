@@ -27,6 +27,8 @@ export interface LobbySetup {
     jury?: number; // jury size, when the host changed it
     hohPlaysVeto?: boolean; // left out: the cast's setting
     paceHours?: number; // real time: hours between comps (left out or 0: no waiting, play straight through)
+    turnSeconds?: number; // seconds a player has for each decision before a bot makes it (left out or 0: no limit)
+    wantPlayers?: number; // how many players the host is waiting for (bots take any spots still empty at the start)
     seats: LobbySeat[]; // the players, in the order they joined
     botOrder: number[]; // cast indexes, in the order bots are picked
 }
@@ -50,6 +52,7 @@ export function defaultSetup(castCount: number): LobbySetup {
         powers: "off",
         battleBack: true,
         hideSkills: false,
+        turnSeconds: 120,
         seats: [],
         botOrder: order,
     };
@@ -115,6 +118,7 @@ export function buildOnlineSeason(
         battleBack: !!setup.battleBack,
         rules: withDefaults(setup.rules),
     });
+    if (setup.turnSeconds && setup.turnSeconds > 0) save.turnLimit = setup.turnSeconds;
     if (setup.paceHours && setup.paceHours > 0) save.pace = { gapMs: Math.round(setup.paceHours * 3600000), startedAt: Date.now() };
     const claims: { [playerId: number]: string } = {};
     season.humanIds.forEach((id, i) => (claims[id] = setup.seats[i].peerId));

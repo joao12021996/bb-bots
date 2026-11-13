@@ -210,6 +210,8 @@ function LobbyRoom(props: { session: NetSession; status: NetStatus }) {
     const house = houseOf(setup, cast);
     const players = setup.seats.length;
     const bots = house.length - players;
+    const wanted = Math.min(house.length, Math.max(players, setup.wantPlayers || 0));
+    const missing = wanted - players;
     const connected = (peerId: string) => peerId === status.selfId || status.peers.includes(peerId);
 
     const joinAsMe = () => {
@@ -312,6 +314,7 @@ function LobbyRoom(props: { session: NetSession; status: NetStatus }) {
                 <Subtle>
                     <b>{house.length}</b> houseguests · {difficultyLabel(setup.difficulty)} difficulty · jury of {lobbyJury(setup, house.length)}
                     {(setup.paceHours || 0) > 0 && <> · ⏰ {PACES.find((p) => p.hours === setup.paceHours)?.label || `${setup.paceHours} hours`} between comps</>}
+                    {(setup.turnSeconds || 0) > 0 && <> · ⏱️ {TURN_LIMITS.find((x) => x.seconds === setup.turnSeconds)?.label || `${setup.turnSeconds}s`} to act</>}
                     {setup.powers === "surprise" && " · secret powers"}
                     {setup.battleBack && " · battle back"}
                     {setup.hideSkills && " · skill randomizer"}
@@ -323,6 +326,12 @@ function LobbyRoom(props: { session: NetSession; status: NetStatus }) {
             <div className="bbb-setup-summary">
                 🎮 <b>{players}</b> player{players === 1 ? "" : "s"} · 🤖 <b>{bots}</b> bot{bots === 1 ? "" : "s"}
             </div>
+            {missing > 0 && (
+                <Subtle className="bbb-lobby-waiting">
+                    ⏳ Waiting for {missing} more player{missing === 1 ? "" : "s"} ({players} of {wanted} here).{" "}
+                    {status.isHost ? "Wait for them, or start now and bots take the empty spots." : "The host can wait, or start now with bots in the empty spots."}
+                </Subtle>
+            )}
             <Grid>
                 {house.map((spot) =>
                     spot.kind === "player" ? (
@@ -354,11 +363,15 @@ function LobbyRoom(props: { session: NetSession; status: NetStatus }) {
                     {!mine && <Subtle>Join the house yourself before you start.</Subtle>}
                     {startError && <Subtle style={{ color: "#f87171" }}>{startError}</Subtle>}
                     <BigButton kind="success" disabled={!mine || starting || !hostCast} onClick={start}>
-                        {starting ? "Starting…" : `Start the season (${players} player${players === 1 ? "" : "s"})`}
+                        {starting
+                            ? "Starting…"
+                            : missing > 0
+                            ? `Start now: bots take the ${missing} empty spot${missing === 1 ? "" : "s"}`
+                            : `Start the season (${players} player${players === 1 ? "" : "s"})`}
                     </BigButton>
                 </>
             ) : (
-                <Subtle>⏳ The host starts the season when everyone's in.</Subtle>
+                <Subtle>⏳ The host starts the season when everyone's in, or earlier with bots.</Subtle>
             )}
         </Panel>
     );
@@ -372,6 +385,7 @@ function HostSettings(props: { session: NetSession; status: NetStatus }) {
     const jury = lobbyJury(setup, setup.size);
     const maxJury = Math.max(1, setup.size - 2 - ((setup.size - 2) % 2 === 0 ? 1 : 0));
     const hohVeto = setup.hohPlaysVeto ?? castSource().hohPlaysVeto;
+    const players = setup.seats.length;
     return (
         <div className="bbb-lobby-settings">
             <div className="bbb-steppers">
@@ -387,6 +401,30 @@ function HostSettings(props: { session: NetSession; status: NetStatus }) {
                         </button>
                     ))}
                 </div>
+            </div>
+            <div className="bbb-steppers">
+                <Stepper
+                    label="👥 Players to wait for"
+                    value={Math.max(players, setup.wantPlayers || players)}
+                    min={Math.max(1, players)}
+                    max={setup.size}
+                    onChange={(wantPlayers) => session.updateSetup({ wantPlayers })}
+                />
+            </div>
+            <div className="bbb-setting">
+                <b>⏱️ Time to act</b>
+                <div className="bbb-segmented">
+                    {TURN_LIMITS.map((x) => (
+                        <button key={x.seconds} type="button" className={(setup.turnSeconds || 0) === x.seconds ? "is-active" : ""} onClick={() => session.updateSetup({ turnSeconds: x.seconds })}>
+                            {x.label}
+                        </button>
+                    ))}
+                </div>
+                <small className="bbb-subtle">
+                    {(setup.turnSeconds || 0) > 0
+                        ? "Each decision (a social turn, an alliance meeting, a vote, a ceremony, a comp on top of its own clock) has this long. Every move resets the clock. When time's up, a bot makes that one call, and the player's back in control after."
+                        : "No limit: the season waits for everyone, however long they take."}
+                </small>
             </div>
             <div className="bbb-setting">
                 <b>⏰ Pace</b>
@@ -424,6 +462,16 @@ function HostSettings(props: { session: NetSession; status: NetStatus }) {
         </div>
     );
 }
+
+// How long players have for each decision.
+const TURN_LIMITS = [
+    { seconds: 0, label: "No limit" },
+    { seconds: 60, label: "1 min" },
+    { seconds: 120, label: "2 min" },
+    { seconds: 300, label: "5 min" },
+    { seconds: 900, label: "15 min" },
+    { seconds: 3600, label: "1 hour" },
+];
 
 // Real time: how long the breaks between comps last.
 const PACES = [
