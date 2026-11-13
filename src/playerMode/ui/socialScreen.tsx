@@ -261,8 +261,10 @@ export function SocialScreen(props: SocialScreenProps) {
                 )}
                 <Subtle>
                     {actionsLeft > 0
-                        ? `Who do you want to talk to? (${actionsLeft} action${actionsLeft === 1 ? "" : "s"} left)`
-                        : "You're out of actions, but you can still talk to people."}
+                        ? `Who do you want to talk to? Talking to someone uses 1 action, then talk for as long as they'll listen. (${actionsLeft} action${
+                              actionsLeft === 1 ? "" : "s"
+                          } left)`
+                        : "You're out of actions. You can still answer whoever came to talk to you, and finish conversations you've started."}
                 </Subtle>
                 <Grid>
                     {everyoneElse.map((hg) => (
@@ -272,7 +274,9 @@ export function SocialScreen(props: SocialScreenProps) {
                             caption={caption(hg)}
                             onClick={
                                 !controller.isHuman(hg)
-                                    ? () => setMode({ kind: "talk", botId: hg.id })
+                                    ? actionsLeft > 0 || controller.talkStarted(human.id, hg.id) || approachers.includes(hg.id)
+                                        ? () => setMode({ kind: "talk", botId: hg.id })
+                                        : undefined // out of actions: no new conversations
                                     : session
                                     ? () => setMode({ kind: "player", id: hg.id }) // online: text them (and invite them from there)
                                     : actionsLeft > 0
@@ -302,7 +306,13 @@ export function SocialScreen(props: SocialScreenProps) {
                     {readLine(bot.name, controller.readOf(human.id, bot.id), controller.trustReadOf(human.id, bot.id))}
                     {partner !== undefined && ` ${bot.name} is in a showmance with ${partner === human.id ? "you" : controller.player(partner).name}.`}
                 </Subtle>
-                <Subtle>{actionsLeft > 0 ? `${actionsLeft} action${actionsLeft === 1 ? "" : "s"} left` : "Out of actions: offers will have to wait."}</Subtle>
+                <Subtle>
+                    {controller.talkStarted(human.id, bot.id)
+                        ? `You're talking: say all you want, while ${bot.name} will listen. ${actionsLeft} action${actionsLeft === 1 ? "" : "s"} left.`
+                        : actionsLeft > 0
+                        ? `Talking to ${bot.name} uses 1 action (${actionsLeft} left).`
+                        : "You're out of actions."}
+                </Subtle>
                 <BotTalkPanel key={bot.id} controller={controller} botId={bot.id} onOutcome={record} />
                 <BigButton kind="light" onClick={() => setMode({ kind: "pickBot" })}>
                     Back

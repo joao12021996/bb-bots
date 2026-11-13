@@ -24,7 +24,11 @@ const chip = (kind: string) => `button is-small is-${kind}`;
 // Talking to a houseguest, on the social screen: whatever they came to tell you, everything you can do with
 // them (a deal, a pitch, a rumour... each uses up a social action, like it says), quick questions, and your own
 // words. Questions and small talk are free.
-export function BotTalkPanel(props: { controller: PlayerModeController; botId: number; onOutcome: (o: SocialOutcome | null) => void }) {
+export function BotTalkPanel(props: {
+    controller: PlayerModeController;
+    botId: number;
+    onOutcome: (o: SocialOutcome | null) => void;
+}) {
     const { controller, botId } = props;
     const me = controller.socialActor;
     const bot = controller.player(botId);
@@ -47,16 +51,23 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
     const everyoneElse = nonEvictedHouseguests(gs).filter((hg) => hg.id !== me.id);
     const others = everyoneElse.filter((hg) => hg.id !== botId);
     const hohId = controller.publicHohId(me.id); // a secret HoH stays secret
-    const nomineeIds = (controller.state.week.nomineeIds || []).filter((id) => !controller.player(id).isEvicted);
+    const nomineeIds = (controller.state.week.nomineeIds || []).filter(
+        (id) => !controller.player(id).isEvicted,
+    );
     const step = controller.state.step;
     const campaign = step === Step.SocialCampaign;
-    const nomsSet = nomineeIds.length > 0 && [Step.SocialAfternoon, Step.SocialBlockbuster, Step.SocialCampaign].includes(step);
+    const nomsSet =
+        nomineeIds.length > 0 &&
+        [Step.SocialAfternoon, Step.SocialBlockbuster, Step.SocialCampaign].includes(step);
     const iAmNominee = nomineeIds.includes(me.id);
     const iAmHoh = me.id === hohId;
     const botVotes = botId !== hohId && !nomineeIds.includes(botId);
     const otherNoms = nomineeIds.filter((id) => id !== me.id);
     const joinable = controller.alliancesOf(me.id).filter((a) => !a.memberIds.includes(botId));
     const name = (id: number) => controller.player(id).name;
+    // talking takes an action (once a block); then say all you want, for as long as they'll listen
+    const started = controller.talkStarted(me.id, botId);
+    const canTalk = started || actionsLeft > 0;
 
     const done = (result: { outcome?: SocialOutcome } | null) => {
         if (result && result.outcome) props.onOutcome(result.outcome);
@@ -75,12 +86,17 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
     const pitch = (targetId: number, reason: PitchReason, bus?: boolean) =>
         doAction(
             `${bus ? `Vote out ${name(targetId)}, not me.` : `We should go after ${name(targetId)}.`} ${reasonLine(reason, name(targetId))}`,
-            { kind: "pitch", botId, targetId, reason }
+            { kind: "pitch", botId, targetId, reason },
         );
-    const answer = (index: number, accept: boolean) => whenDone(controller.respondApproach(index, accept), (o) => done(o ? { outcome: o } : null));
-    const sides = (index: number, side: "a" | "b" | null) => whenDone(controller.respondSides(index, side), (o) => done(o ? { outcome: o } : null));
+    const answer = (index: number, accept: boolean) =>
+        whenDone(controller.respondApproach(index, accept), (o) => done(o ? { outcome: o } : null));
+    const sides = (index: number, side: "a" | "b" | null) =>
+        whenDone(controller.respondSides(index, side), (o) => done(o ? { outcome: o } : null));
 
-    const faces = (people: { id: number; name: string; imageURL: string }[], onPick: (id: number) => void) => (
+    const faces = (
+        people: { id: number; name: string; imageURL: string }[],
+        onPick: (id: number) => void,
+    ) => (
         <Grid>
             {people.map((hg) => (
                 <Face key={hg.id} hg={hg} small={true} onClick={() => onPick(hg.id)} />
@@ -93,7 +109,11 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
         const pool = others.filter((hg) => !picker.only || picker.only.includes(hg.id));
         menu = (
             <>
-                <Subtle>{picker.bus ? "Who do you throw under the bus?" : `Who do you want to turn ${bot.name} against?`}</Subtle>
+                <Subtle>
+                    {picker.bus
+                        ? "Who do you throw under the bus?"
+                        : `Who do you want to turn ${bot.name} against?`}
+                </Subtle>
                 {faces(pool, (id) => setPicker({ kind: "reason", targetId: id, bus: picker.bus }))}
             </>
         );
@@ -101,11 +121,17 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
         menu = (
             <>
                 <Subtle>
-                    Why should {bot.name} go after {name(picker.targetId)}? Pick an argument {bot.name} will believe.
+                    Why should {bot.name} go after {name(picker.targetId)}? Pick an argument {bot.name} will
+                    believe.
                 </Subtle>
                 <div className="bbb-talk-chips">
                     {PITCH_REASONS.map((r) => (
-                        <button key={r.id} type="button" className={chip("warning")} onClick={() => pitch(picker.targetId, r.id, picker.bus)}>
+                        <button
+                            key={r.id}
+                            type="button"
+                            className={chip("warning")}
+                            onClick={() => pitch(picker.targetId, r.id, picker.bus)}
+                        >
                             {r.label}
                         </button>
                     ))}
@@ -115,7 +141,10 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
     } else if (picker && picker.kind === "rumour") {
         menu = (
             <>
-                <Subtle>Who do you want {bot.name} to hear a rumour about? It doesn't have to be true, but if it isn't, it may come back to you.</Subtle>
+                <Subtle>
+                    Who do you want {bot.name} to hear a rumour about? It doesn't have to be true, but if it
+                    isn't, it may come back to you.
+                </Subtle>
                 {faces(others, (id) => setPicker({ kind: "rumourKind", targetId: id }))}
             </>
         );
@@ -132,7 +161,14 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
                             key={r.id}
                             type="button"
                             className={chip("warning")}
-                            onClick={() => doAction(r.line(about), { kind: "rumour", botId, targetId: picker.targetId, rumour: r.id })}
+                            onClick={() =>
+                                doAction(r.line(about), {
+                                    kind: "rumour",
+                                    botId,
+                                    targetId: picker.targetId,
+                                    rumour: r.id,
+                                })
+                            }
                         >
                             {r.label}
                         </button>
@@ -142,16 +178,26 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
         );
     } else if (picker && picker.kind === "tell") {
         const vote = picker.what === "tellVote";
-        const pool = vote ? nomineeIds.filter((id) => id !== botId).map((id) => controller.player(id)) : others;
+        const pool = vote
+            ? nomineeIds.filter((id) => id !== botId).map((id) => controller.player(id))
+            : others;
         menu = (
             <>
                 <Subtle>
-                    {vote ? `Who do you tell ${bot.name} you're voting to evict?` : `Who do you tell ${bot.name} is your real target?`} It doesn't have
-                    to be true, but tell different people different things and they may compare notes.
-                    {vote && nomineeIds.includes(botId) ? ` ${bot.name} is on the block: telling them you'll vote the other way is a promise.` : ""}
+                    {vote
+                        ? `Who do you tell ${bot.name} you're voting to evict?`
+                        : `Who do you tell ${bot.name} is your real target?`}{" "}
+                    It doesn't have to be true, but tell different people different things and they may
+                    compare notes.
+                    {vote && nomineeIds.includes(botId)
+                        ? ` ${bot.name} is on the block: telling them you'll vote the other way is a promise.`
+                        : ""}
                 </Subtle>
                 {faces(pool, (id) =>
-                    doAction(vote ? `I'm voting to evict ${name(id)}.` : `Between us, my target is ${name(id)}.`, { kind: picker.what, botId, targetId: id })
+                    doAction(
+                        vote ? `I'm voting to evict ${name(id)}.` : `Between us, my target is ${name(id)}.`,
+                        { kind: picker.what, botId, targetId: id },
+                    ),
                 )}
             </>
         );
@@ -159,14 +205,19 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
         menu = (
             <>
                 <Subtle>
-                    Ask {bot.name} to start a new alliance with you{joinable.length > 0 ? ", or to join one of yours" : ""}.
+                    Ask {bot.name} to start a new alliance with you
+                    {joinable.length > 0 ? ", or to join one of yours" : ""}.
                 </Subtle>
                 <form
                     className="bbb-inline-form"
                     onSubmit={(e) => {
                         e.preventDefault();
                         const named = allianceName.trim() || suggestAllianceName(controller.book);
-                        doAction(`You and me: an alliance. Let's call it ${named}.`, { kind: "alliance", botId, name: named });
+                        doAction(`You and me: an alliance. Let's call it ${named}.`, {
+                            kind: "alliance",
+                            botId,
+                            name: named,
+                        });
                     }}
                 >
                     <input
@@ -187,7 +238,13 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
                             key={a.id}
                             type="button"
                             className={chip("info")}
-                            onClick={() => doAction(`Want to join ${a.name}?`, { kind: "alliance", botId, allianceId: a.id })}
+                            onClick={() =>
+                                doAction(`Want to join ${a.name}?`, {
+                                    kind: "alliance",
+                                    botId,
+                                    allianceId: a.id,
+                                })
+                            }
                         >
                             ➕ Invite to {a.name}
                         </button>
@@ -195,11 +252,16 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
                 </div>
             </>
         );
-    } else if (actionsLeft > 0) {
-        const meeting = actionsLeft >= 2 && !(controller.state.week.meetingBy || []).includes(me.id);
+    } else if (canTalk) {
+        const meeting =
+            actionsLeft >= (started ? 1 : 2) && !(controller.state.week.meetingBy || []).includes(me.id);
         menu = (
             <div className="bbb-talk-chips" aria-label="Actions">
-                <button type="button" className={chip("info")} onClick={() => doAction("Got a minute? Let's hang out.", { kind: "chat", botId })}>
+                <button
+                    type="button"
+                    className={chip("info")}
+                    onClick={() => doAction("Got a minute? Let's hang out.", { kind: "chat", botId })}
+                >
                     💬 Chat
                 </button>
                 <button
@@ -212,23 +274,41 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
                 >
                     🤝 Alliance
                 </button>
-                <button type="button" className={chip("warning")} onClick={() => setPicker({ kind: "pitch" })}>
+                <button
+                    type="button"
+                    className={chip("warning")}
+                    onClick={() => setPicker({ kind: "pitch" })}
+                >
                     🗡️ Pitch a target
                 </button>
                 <button
                     type="button"
                     className={chip("danger")}
-                    onClick={() => doAction("Is it just me, or is there something between us? 😏", { kind: "flirt", botId })}
+                    onClick={() =>
+                        doAction("Is it just me, or is there something between us? 😏", {
+                            kind: "flirt",
+                            botId,
+                        })
+                    }
                 >
                     💕 Flirt
                 </button>
-                <button type="button" className={chip("warning")} onClick={() => setPicker({ kind: "rumour" })}>
+                <button
+                    type="button"
+                    className={chip("warning")}
+                    onClick={() => setPicker({ kind: "rumour" })}
+                >
                     🗯️ Start a rumour
                 </button>
                 <button
                     type="button"
                     className={chip("danger")}
-                    onClick={() => doAction("We need to talk. I don't like how you've been playing me.", { kind: "confront", botId })}
+                    onClick={() =>
+                        doAction("We need to talk. I don't like how you've been playing me.", {
+                            kind: "confront",
+                            botId,
+                        })
+                    }
                 >
                     🔥 Confront
                 </button>
@@ -236,23 +316,40 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
                     <button
                         type="button"
                         className={chip("danger")}
-                        onClick={() => doAction(`House meeting! Everyone needs to hear about ${bot.name}.`, { kind: "meeting", botId })}
+                        onClick={() =>
+                            doAction(`House meeting! Everyone needs to hear about ${bot.name}.`, {
+                                kind: "meeting",
+                                botId,
+                            })
+                        }
                     >
-                        📣 House meeting (2 actions)
+                        📣 House meeting ({started ? "1 more action" : "2 actions"})
                     </button>
                 )}
                 {everyoneElse.length >= 3 && !hasFinal2(controller.ledger, me.id, botId) && (
-                    <button type="button" className={chip("success")} onClick={() => doAction("You and me, final two. Deal?", { kind: "final2", botId })}>
+                    <button
+                        type="button"
+                        className={chip("success")}
+                        onClick={() => doAction("You and me, final two. Deal?", { kind: "final2", botId })}
+                    >
                         🏁 Final two deal
                     </button>
                 )}
                 {nomsSet && !iAmHoh && !iAmNominee && (
-                    <button type="button" className={chip("light")} onClick={() => setPicker({ kind: "tell", what: "tellVote" })}>
+                    <button
+                        type="button"
+                        className={chip("light")}
+                        onClick={() => setPicker({ kind: "tell", what: "tellVote" })}
+                    >
                         🗣️ Tell them my vote
                     </button>
                 )}
                 {nomsSet && iAmHoh && (
-                    <button type="button" className={chip("light")} onClick={() => setPicker({ kind: "tell", what: "tellTarget" })}>
+                    <button
+                        type="button"
+                        className={chip("light")}
+                        onClick={() => setPicker({ kind: "tell", what: "tellTarget" })}
+                    >
                         🎯 Tell them the target
                     </button>
                 )}
@@ -261,14 +358,24 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
                         <button
                             type="button"
                             className={chip("success")}
-                            onClick={() => doAction(`Keep me this week, and you're safe if I win ${HOH}.`, { kind: "voteDeal", botId })}
+                            onClick={() =>
+                                doAction(`Keep me this week, and you're safe if I win ${HOH}.`, {
+                                    kind: "voteDeal",
+                                    botId,
+                                })
+                            }
                         >
                             🤝 Vote deal
                         </button>
                         <button
                             type="button"
                             className={chip("info")}
-                            onClick={() => doAction("Please... I really need your vote this week.", { kind: "pity", botId })}
+                            onClick={() =>
+                                doAction("Please... I really need your vote this week.", {
+                                    kind: "pity",
+                                    botId,
+                                })
+                            }
                         >
                             🥺 Pity pitch
                         </button>
@@ -289,15 +396,19 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
                 )}
             </div>
         );
-    } else menu = <Subtle>You're out of actions: deals and pitches will have to wait. You can still talk.</Subtle>;
+    } else
+        menu = (
+            <Subtle>You're out of actions: talking to {bot.name} will have to wait until next time.</Subtle>
+        );
 
     return (
         <div className="bbb-talk">
             <div className="bbb-chat-thread">
-                {lines.length === 0 && approaches.length === 0 && (
+                {!started && canTalk && (
                     <div className="bbb-chat-system">
-                        Pick something to do below, or say it yourself. Keep it short and about the game: ask {bot.name} who they're targeting or
-                        voting for, how they feel about you or someone else, or make them an offer. Questions are free; offers use an action.
+                        Talking to {bot.name} uses 1 action. Then say all you want, for as long as they'll
+                        listen: questions, deals, pitches, rumours. Pick something below, or say it yourself
+                        (short, and about the game).
                     </div>
                 )}
                 {lines.map((l, i) =>
@@ -309,35 +420,71 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
                         <div key={i} className={`bbb-chat-msg${l.who === "me" ? " is-mine" : ""}`}>
                             {l.text}
                         </div>
-                    )
+                    ),
                 )}
                 {approaches.map(({ a, index }) => (
                     <div key={`${a.kind}-${index}`} className="bbb-chat-approach">
                         <div className="bbb-chat-msg">{controller.approachText(a)}</div>
                         <div className="bbb-talk-chips">
                             {a.kind === "chat" ? (
-                                <button type="button" className={chip("light")} onClick={() => answer(index, true)}>
+                                <button
+                                    type="button"
+                                    className={chip("light")}
+                                    onClick={() => answer(index, true)}
+                                >
                                     OK
                                 </button>
                             ) : a.kind === "sides" ? (
                                 <>
-                                    <button type="button" className={chip("warning")} onClick={() => sides(index, "a")}>
+                                    <button
+                                        type="button"
+                                        className={chip("warning")}
+                                        onClick={() => sides(index, "a")}
+                                    >
                                         {bot.name}
                                     </button>
-                                    <button type="button" className={chip("warning")} onClick={() => sides(index, "b")}>
+                                    <button
+                                        type="button"
+                                        className={chip("warning")}
+                                        onClick={() => sides(index, "b")}
+                                    >
                                         {name(a.otherId)}
                                     </button>
-                                    <button type="button" className={chip("light")} onClick={() => sides(index, null)}>
+                                    <button
+                                        type="button"
+                                        className={chip("light")}
+                                        onClick={() => sides(index, null)}
+                                    >
                                         Stay out of it
                                     </button>
                                 </>
                             ) : (
                                 <>
-                                    <button type="button" className={chip("success")} onClick={() => answer(index, true)}>
-                                        {a.kind === "pitch" ? "I'm in" : a.kind === "final2" ? "🏁 Deal" : a.kind === "votePlea" ? "🗳️ You have my vote" : "🤝 Accept"}
+                                    <button
+                                        type="button"
+                                        className={chip("success")}
+                                        onClick={() => answer(index, true)}
+                                    >
+                                        {a.kind === "pitch"
+                                            ? "I'm in"
+                                            : a.kind === "final2"
+                                              ? "🏁 Deal"
+                                              : a.kind === "votePlea"
+                                                ? "🗳️ You have my vote"
+                                                : "🤝 Accept"}
                                     </button>
-                                    <button type="button" className={chip("light")} onClick={() => answer(index, false)}>
-                                        {a.kind === "pitch" ? "Not so sure" : a.kind === "final2" ? "Not yet" : a.kind === "votePlea" ? "Can't promise" : "Decline"}
+                                    <button
+                                        type="button"
+                                        className={chip("light")}
+                                        onClick={() => answer(index, false)}
+                                    >
+                                        {a.kind === "pitch"
+                                            ? "Not so sure"
+                                            : a.kind === "final2"
+                                              ? "Not yet"
+                                              : a.kind === "votePlea"
+                                                ? "Can't promise"
+                                                : "Decline"}
                                     </button>
                                 </>
                             )}
@@ -354,33 +501,39 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
                     </button>
                 )}
             </div>
-            <div className="bbb-talk-chips" aria-label="Questions">
-                {TALK_SUGGESTIONS.map((t) => (
-                    <button key={t} type="button" className={chip("light")} onClick={() => send(t)}>
-                        {t}
+            {canTalk && (
+                <div className="bbb-talk-chips" aria-label="Questions">
+                    {TALK_SUGGESTIONS.map((t) => (
+                        <button key={t} type="button" className={chip("light")} onClick={() => send(t)}>
+                            {t}
+                        </button>
+                    ))}
+                </div>
+            )}
+            {canTalk && (
+                <form
+                    className="bbb-chat-form"
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        send(text);
+                    }}
+                >
+                    <input
+                        type="text"
+                        value={text}
+                        maxLength={TALK_MAX_LENGTH}
+                        placeholder={`Say something to ${bot.name}…`}
+                        aria-label={`Message to ${bot.name}`}
+                        onChange={(e) => setText(e.target.value)}
+                    />
+                    {text.length > TALK_MAX_LENGTH - 30 && (
+                        <span className="bbb-talk-count">{TALK_MAX_LENGTH - text.length}</span>
+                    )}
+                    <button type="submit" className="button is-small is-warning" disabled={!text.trim()}>
+                        Send
                     </button>
-                ))}
-            </div>
-            <form
-                className="bbb-chat-form"
-                onSubmit={(e) => {
-                    e.preventDefault();
-                    send(text);
-                }}
-            >
-                <input
-                    type="text"
-                    value={text}
-                    maxLength={TALK_MAX_LENGTH}
-                    placeholder={`Say something to ${bot.name}…`}
-                    aria-label={`Message to ${bot.name}`}
-                    onChange={(e) => setText(e.target.value)}
-                />
-                {text.length > TALK_MAX_LENGTH - 30 && <span className="bbb-talk-count">{TALK_MAX_LENGTH - text.length}</span>}
-                <button type="submit" className="button is-small is-warning" disabled={!text.trim()}>
-                    Send
-                </button>
-            </form>
+                </form>
+            )}
         </div>
     );
 }

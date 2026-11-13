@@ -394,6 +394,7 @@ export interface BotTalk {
     n: number;
     warm?: boolean; // they've had a friendly word this block
     max?: number; // how many messages they have time for this block (see talkPatience)
+    paid?: boolean; // the player spent the action it takes to talk to them this block
     target?: number | null; // what they said about their target this block (null: they wouldn't say)
 }
 
@@ -2879,11 +2880,14 @@ export class PlayerModeController {
     }
 
     // Called by the social screen.
-    public socialAct(action: SocialAction): SocialOutcome | null {
+    // `talking`: done in a conversation (see talkToBot), which already took its action: only a house meeting's
+    // second action is left to pay.
+    public socialAct(action: SocialAction, talking: boolean = false): SocialOutcome | null {
         const s = this.state;
         const actor = this.socialActor;
-        if (!actor || this.actionsOf(actor.id) <= 0) return null;
-        if (action.kind === "meeting" && (this.actionsOf(actor.id) < 2 || (s.week.meetingBy || []).includes(actor.id))) return null;
+        const cost = (action.kind === "meeting" ? 2 : 1) - (talking ? 1 : 0);
+        if (!actor || this.actionsOf(actor.id) < cost || (!talking && cost <= 0)) return null;
+        if (action.kind === "meeting" && (s.week.meetingBy || []).includes(actor.id)) return null;
         this.reseed("act");
         let outcome: SocialOutcome;
         if (action.kind === "alliance" && this.isHuman({ id: action.botId })) {
@@ -2907,7 +2911,7 @@ export class PlayerModeController {
         } else {
             outcome = this.mutate((gs) => performSocialAction(gs, actor.id, action, this.socialMemory(actor.id)));
         }
-        this.spendActions(actor.id, action.kind === "meeting" ? 2 : 1);
+        this.spendActions(actor.id, cost);
         const withId = (action as { botId?: number }).botId;
         if (withId !== undefined) this.noteRead(actor.id, withId, action.kind !== "chat");
         s.socialLog.push(`${outcome.good ? "👍" : "👎"} ${outcome.text}`);
@@ -3424,14 +3428,21 @@ export class PlayerModeController {
 
     // ---------- talking to bots in your own words ----------
 
+    // Whether a player has started talking with a bot this block (and so spent the action it takes).
+    public talkStarted(viewerId: number, botId: number): boolean {
+        const mine = this.state.talks && this.state.talks[viewerId];
+        const talk = mine && mine[botId];
+        return !!talk && !!talk.paid && talk.key === `${this.gameState.phase}:${this.state.step}`;
+    }
+
     public talkWith(viewerId: number, botId: number): TalkLine[] {
         const mine = this.state.talks && this.state.talks[viewerId];
         return (mine && mine[botId] && mine[botId].lines) || [];
     }
 
     // The current player says something to a bot during social time. The message is read for what it's
-    // about (see botTalk.ts), and the bot reacts by the same rules as the social buttons: questions and small
-    // talk are free, while deals, pitches and the like use up a social action, just like the buttons do.
+    // about (see botTalk.ts), and the bot reacts by the same rules as the social actions. Talking to a bot takes
+    // one action a block; then everything said is part of it (deals and pitches too), for as long as they listen.
     // `action`: what the player picked from the talk menu (a deal, a pitch...), said in `text`, and done as is,
     // without reading the message for it.
     public talkToBot(botId: number, text: string, action?: SocialAction): { lines: TalkLine[]; outcome?: SocialOutcome } | null {
@@ -3455,10 +3466,17 @@ export class PlayerModeController {
             talk.key = block;
             talk.n = 0;
             talk.warm = false;
+            talk.paid = false;
             delete talk.target;
             // how much time they have for you: decided when you start talking, so it doesn't move mid-chat
             const traits = this.traitsOf(botId);
             talk.max = talkPatience(bot.relationships[actor.id] ?? 0, traits ? traits.chats : 1, hash01(`${s.seed}:${block}:${actor.id}:${botId}:patience`));
+        }
+        // talking to someone takes an action, once per houseguest a block: then say all they'll listen to
+        if (!talk.paid) {
+            if (this.actionsOf(actor.id) <= 0) return null;
+            this.spendActions(actor.id, 1);
+            talk.paid = true;
         }
         const day = this.currentDay();
         const said: TalkLine[] = [];
@@ -3480,7 +3498,7 @@ export class PlayerModeController {
             return { lines: said, outcome };
         };
 
-        if (!action && talk.n > (talk.max ?? TALKS_MIN)) {
+        if (talk.n > (talk.max ?? TALKS_MIN)) {
             botSays(line("tired"));
             return finish();
         }
@@ -3498,13 +3516,13 @@ export class PlayerModeController {
         const info = this.traitsOf(botId);
         const lies = info ? info.lies : 1;
 
-        // an action, as if the player had pressed its button (no actions left: the bot puts it off)
+        // an action, done in the conversation: talking already took its action (a house meeting takes one more)
         const act = (action: SocialAction, yes: Reply, no: Reply, about: string = "") => {
-            if (this.actionsOf(actor.id) <= 0) {
+            if (action.kind === "meeting" && this.actionsOf(actor.id) <= 0) {
                 botSays(line("busy"));
                 return finish();
             }
-            const outcome = this.socialAct(action);
+            const outcome = this.socialAct(action, true);
             if (!outcome) {
                 botSays(line("notNow"));
                 return finish();

@@ -99,6 +99,9 @@ describe("talking to bots in a season", () => {
                 const before = controller.state.actionsLeft;
                 const hi = controller.talkToBot(bot.id, "hey, how are you?")!;
                 expect(hi.lines.map((l) => l.who)).toEqual(["me", "bot"]);
+                // starting to talk takes an action; then the whole conversation is covered
+                expect(controller.state.actionsLeft).toBe(before - 1);
+                expect(controller.talkStarted(0, bot.id)).toBe(true);
                 // how long they'll talk for: set when you start, between 2 and 12
                 const max = controller.state.talks![0][bot.id].max!;
                 expect(max).toBeGreaterThanOrEqual(TALKS_MIN);
@@ -113,12 +116,12 @@ describe("talking to bots in a season", () => {
                     if (told !== null && told !== undefined) expect(again.lines[1].text).toContain(controller.player(told).name);
                     expect(again.lines.length).toBe(2);
                 }
-                expect(controller.state.actionsLeft).toBe(before); // questions are free
-                if (max >= 4 && before > 0 && bots.length >= 3) {
+                expect(controller.state.actionsLeft).toBe(before - 1);
+                if (max >= 4 && bots.length >= 3) {
                     const offer = controller.talkToBot(bot.id, "final two, you and me?")!;
                     if (offer.outcome) {
                         deals++;
-                        expect(controller.state.actionsLeft).toBe(before - 1);
+                        expect(controller.state.actionsLeft).toBe(before - 1); // part of the conversation
                         expect(offer.lines.map((l) => l.who)).toEqual(["me", "bot", "note"]);
                     }
                 }
