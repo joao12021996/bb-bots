@@ -300,7 +300,7 @@ const LINES: { [p in PersonalityId]: { [s in Situation]: string[] } } = {
         flirt: ["blushed and changed the subject, but they meant it."],
     },
     villain: {
-        chat: ["made a snide comment about everyone else, then smiled at you.", "told you exactly who in this house they can't stand."],
+        chat: ["made a snide comment about everyone else, then smiled at you.", "told you exactly who in this house they can't stand: {name}."],
         pitch: ["I'll say what everyone's thinking.", "Somebody has to say it, so I will."],
         final2: ["I'd rather sit next to you than any of these clowns. Don't make me regret it."],
         votePlea: ["Keep me, or I'll make this house miserable for whoever's left."],

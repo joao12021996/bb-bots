@@ -214,6 +214,40 @@ describe("player mode screens", () => {
         expect(controller.alliancesOf(0).length).toBe(before); // nobody started a new one
     });
 
+    it("a secret Head of House comp is played blind: nobody else's score, and no deals on the wall", () => {
+        const { compById } = require("../comps");
+        const wall = compById("hold-the-wall");
+        const play = (secret: boolean) => {
+            const controller = controllerAtSocial();
+            let prompt: Prompt | null = null;
+            controller.prompt$.subscribe((p) => (prompt = p));
+            controller.state.step = Step.Hoh;
+            controller.state.week.secretHoh = secret;
+            const everyone = [0, 1, 2, 3, 4, 5, 6].map((id) => controller.player(id));
+            (controller as any).runComp("Head of House Competition", wall, everyone, () => undefined, "hoh");
+            let p = prompt as unknown as Prompt;
+            if (p.kind === "handoff") {
+                p.next();
+                p = prompt as unknown as Prompt;
+            }
+            if (p.kind !== "compPlay") throw new Error(`expected the comp, got ${p.kind}`);
+            return p;
+        };
+        const open = play(false);
+        expect(open.opponents.length).toBe(6);
+        expect(open.deals).toBeDefined();
+        const secret = play(true);
+        expect(secret.opponents).toEqual([]);
+        expect(secret.deals).toBeUndefined();
+    });
+
+    it("a bot who chats about who they can't stand names them", () => {
+        const { voice } = require("../social/personality");
+        let line = "";
+        for (let i = 0; i < 50 && !line.includes("can't stand"); i++) line = voice("villain", "chat", `k${i}`, "HG5");
+        expect(line).toBe("told you exactly who in this house they can't stand: HG5.");
+    });
+
     it("nominations are revealed one at a time", () => {
         const controller = controllerAtSocial();
         const [, scene] = generateNomCeremonyScene(controller.gameState, [controller.player(0)], {

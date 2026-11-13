@@ -1906,7 +1906,10 @@ export class PlayerModeController {
                 onDone: tiebreak ? () => this.tiebreak(title, tiedIds, seed, done) : () => done(tiedIds[0]),
             });
         };
-        const deals = (player: Houseguest) => (role === "hoh" && comp.kind === "endurance" ? this.wallDeals(player, bots, seed) : undefined);
+        // a secret Head of House comp: you play blind (nobody else's score) and there are no deals on the wall
+        const blind = this.sealed();
+        const deals = (player: Houseguest) =>
+            role === "hoh" && comp.kind === "endurance" && !blind ? this.wallDeals(player, bots, seed) : undefined;
         const dealPrompt = (d: EnduranceDeals | undefined) =>
             d
                 ? {
@@ -1940,7 +1943,7 @@ export class PlayerModeController {
                         participants,
                         playerId: player.id,
                         seed,
-                        opponents: bots.map((r) => ({ hg: byId(r.id), score: r.score, answers: r.answers, picks: r.picks })),
+                        opponents: blind ? [] : bots.map((r) => ({ hg: byId(r.id), score: r.score, answers: r.answers, picks: r.picks })),
                         moreToPlay: false,
                         live: sealed ? undefined : { humanIds: humanIds.filter((id) => id !== player.id) },
                         forfeitScore,
@@ -1994,7 +1997,7 @@ export class PlayerModeController {
                 return record({ id: player.id, score });
             }
             let lastSaved = 0;
-            const opponents: Opponent[] = [...bots, ...humanResults].map((r) => ({
+            const opponents: Opponent[] = (blind ? [] : [...bots, ...humanResults]).map((r) => ({
                 hg: byId(r.id),
                 score: r.score,
                 answers: r.answers,
@@ -2823,7 +2826,7 @@ export class PlayerModeController {
             this.reseed(`approach:${actor.id}`);
             const fresh = this.mutate((gs) => botApproaches(gs, s.book, actor.id, s.humanIds)).map((a) =>
                 a.kind === "chat" && this.personalities[a.fromId]
-                    ? { ...a, text: `${this.player(a.fromId).name} ${this.say(a.fromId, "chat", `${s.step}:${actor.id}`)}` }
+                    ? { ...a, text: `${this.player(a.fromId).name} ${this.say(a.fromId, "chat", `${s.step}:${actor.id}`, this.leastLiked(a.fromId, actor.id))}` }
                     : a
             );
             const deals = botDealApproaches(
@@ -4041,6 +4044,14 @@ export class PlayerModeController {
     }
 
     // A line in a bot's own voice. `key` keeps the choice of line stable for a given moment.
+    // Who a houseguest likes least in the house, besides the one they're talking to (for lines that name them).
+    private leastLiked(id: number, exceptId: number): string {
+        const hg = this.player(id);
+        const others = nonEvictedHouseguests(this.gameState).filter((o) => o.id !== id && o.id !== exceptId);
+        if (others.length === 0) return "";
+        return others.reduce((a, b) => ((hg.relationships[b.id] ?? 0) < (hg.relationships[a.id] ?? 0) ? b : a)).name;
+    }
+
     public say(botId: number, situation: Situation, key: string, name: string = ""): string {
         return voice(this.personalities[botId], situation, `${this.state.seed}:${this.gameState.phase}:${botId}:${key}`, name);
     }
