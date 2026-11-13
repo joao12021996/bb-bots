@@ -179,6 +179,10 @@ describe("player mode screens", () => {
         expect(labels()).not.toContain("💬 Chat");
         expect(labels()).not.toContain("🤝 Alliance");
         expect(labels()).toContain("Want to join The Vault?");
+        const row = (label: string) => Array.from(c.querySelectorAll(`[aria-label="${label}"] button`)).map((b) => b.textContent || "");
+        expect(row("Questions")).toEqual(expect.arrayContaining(["🗡️ Pitch a target", "🗯️ Start a rumour"]));
+        expect(row("Actions")).not.toContain("🗡️ Pitch a target");
+        expect(row("Actions")).not.toContain("🗯️ Start a rumour");
         click(c, "Hey, how are you?");
         expect(controller.state.actionsLeft).toBe(2);
         click(c, "Want to join The Vault?");

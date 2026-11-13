@@ -212,13 +212,6 @@ export function BotTalkPanel(props: {
             <div className="bbb-talk-chips" aria-label="Actions">
                 <button
                     type="button"
-                    className={chip("warning")}
-                    onClick={() => setPicker({ kind: "pitch" })}
-                >
-                    🗡️ Pitch a target
-                </button>
-                <button
-                    type="button"
                     className={chip("danger")}
                     onClick={() =>
                         doAction("Is it just me, or is there something between us? 😏", {
@@ -228,13 +221,6 @@ export function BotTalkPanel(props: {
                     }
                 >
                     💕 Flirt
-                </button>
-                <button
-                    type="button"
-                    className={chip("warning")}
-                    onClick={() => setPicker({ kind: "rumour" })}
-                >
-                    🗯️ Start a rumour
                 </button>
                 <button
                     type="button"
@@ -285,24 +271,6 @@ export function BotTalkPanel(props: {
                         }
                     >
                         🏅 {iAmNominee ? "Ask them to use the veto on you" : "Ask them not to use the veto"}
-                    </button>
-                )}
-                {nomsSet && !iAmHoh && !iAmNominee && (
-                    <button
-                        type="button"
-                        className={chip("light")}
-                        onClick={() => setPicker({ kind: "tell", what: "tellVote" })}
-                    >
-                        🗣️ Tell them my vote
-                    </button>
-                )}
-                {nomsSet && iAmHoh && (
-                    <button
-                        type="button"
-                        className={chip("light")}
-                        onClick={() => setPicker({ kind: "tell", what: "tellTarget" })}
-                    >
-                        🎯 Tell them the target
                     </button>
                 )}
                 {campaign && iAmNominee && botVotes && (
@@ -466,6 +434,31 @@ export function BotTalkPanel(props: {
                             {t}
                         </button>
                     ))}
+                    {/* these need a who: pick them next */}
+                    <button type="button" className={chip("light")} onClick={() => setPicker({ kind: "pitch" })}>
+                        🗡️ Pitch a target
+                    </button>
+                    <button type="button" className={chip("light")} onClick={() => setPicker({ kind: "rumour" })}>
+                        🗯️ Start a rumour
+                    </button>
+                    {nomsSet && !iAmHoh && !iAmNominee && (
+                        <button
+                            type="button"
+                            className={chip("light")}
+                            onClick={() => setPicker({ kind: "tell", what: "tellVote" })}
+                        >
+                            🗣️ Tell them my vote
+                        </button>
+                    )}
+                    {nomsSet && iAmHoh && (
+                        <button
+                            type="button"
+                            className={chip("light")}
+                            onClick={() => setPicker({ kind: "tell", what: "tellTarget" })}
+                        >
+                            🎯 Tell them the target
+                        </button>
+                    )}
                 </div>
             )}
             {canTalk && (
