@@ -260,6 +260,33 @@ describe("knockout rounds", () => {
         expect(r.out.map((o: any) => o.score)).toEqual([5]);
         expect(r.still.map((o: any) => o.score)).toEqual([6, 8]);
     });
+
+    it("ends once the player is the last one standing", () => {
+        const { KnockoutPause } = require("./compUi");
+        const opp = [3, 5].map((score, i) => ({ hg: { id: i, name: `B${i}`, imageURL: "" }, score }));
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        let won = 0;
+        let next = 0;
+        const show = (cleared: number) =>
+            syncAct(() => {
+                ReactDOM.render(
+                    <KnockoutPause opponents={opp} cleared={cleared} first={false} what={(n: number) => `${n}`} onNext={() => next++} onWin={() => won++} />,
+                    container
+                );
+            });
+        show(5); // B1 is still in
+        expect(container.textContent).toContain("1 still in with you");
+        expect(container.textContent).not.toContain("Finish");
+        show(6); // nobody is
+        expect(container.textContent).toContain("you win");
+        const finish = Array.from(container.querySelectorAll("button")).find((b) => b.textContent!.includes("Finish"))!;
+        syncAct(() => finish.click());
+        expect(won).toBe(1);
+        expect(next).toBe(0);
+        ReactDOM.unmountComponentAtNode(container);
+        container.remove();
+    });
 });
 
 describe("Fact or Fiction", () => {

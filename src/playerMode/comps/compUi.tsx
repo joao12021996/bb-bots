@@ -340,8 +340,11 @@ export function KnockoutPause(props: {
     first: boolean; // the first round: everyone who couldn't even do that is out
     what: (n: number) => string; // "sequence of 5"
     onNext: () => void;
+    onWin: () => void; // nobody's left in: the comp is over, and the player won it
 }) {
     const { out, still } = knockoutRound(props.opponents, props.cleared, props.first);
+    const rivals = useRivalsPlaying(); // online: players still playing may still be in
+    const won = still.length === 0 && !rivals;
     const face = (o: { hg: { id: number; name: string; imageURL: string } }, isOut: boolean) => (
         <div key={o.hg.id} className={`bbb-answer ${isOut ? "is-wrong" : "is-right"}`}>
             <img src={o.hg.imageURL} alt="" />
@@ -355,16 +358,22 @@ export function KnockoutPause(props: {
             <Title>✅ You got the {props.what(props.cleared)}!</Title>
             <Subtle>
                 {out.length === 0 ? "Nobody dropped out this round." : `${out.map((o) => o.hg.name).join(", ")} ${out.length === 1 ? "is" : "are"} out.`}{" "}
-                {still.length === 0 ? "You're the last one standing! Keep going for the record." : `${still.length} still in with you.`}
+                {won ? "You're the last one standing: you win!" : still.length === 0 ? "Nobody else is still in so far." : `${still.length} still in with you.`}
             </Subtle>
             <div className="bbb-answers">
                 {out.map((o) => face(o, true))}
                 {still.map((o) => face(o, false))}
             </div>
             <StageScores cleared={props.cleared} />
-            <BigButton kind="success" onClick={props.onNext}>
-                Next round
-            </BigButton>
+            {won ? (
+                <BigButton kind="success" onClick={props.onWin}>
+                    🏆 Finish
+                </BigButton>
+            ) : (
+                <BigButton kind="success" onClick={props.onNext}>
+                    Next round
+                </BigButton>
+            )}
         </div>
     );
 }

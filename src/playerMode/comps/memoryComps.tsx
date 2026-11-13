@@ -109,6 +109,7 @@ function SimonSays(props: CompProps) {
                 cleared={cleared}
                 first={cleared === SIMON_FIRST}
                 what={(n) => `sequence of ${n}`}
+                onWin={() => props.finish(cleared)}
                 onNext={() => {
                     if (props.pauseClock) props.pauseClock(false);
                     setCleared(null);
@@ -158,7 +159,7 @@ export const SimonSaysComp: CompDefinition = {
     name: "Simon Says",
     emoji: "🟩",
     kind: "memory",
-    rules: `Watch the pads light up, then tap them back in the same order. Each round adds one more. One mistake and you're out: the last one standing wins. Get through all ${KNOCKOUT_ROUNDS} rounds and the fastest tapper wins.`,
+    rules: `Watch the pads light up, then tap them back in the same order. Each round adds one more. One mistake and you're out: the last one standing wins, and the comp ends there. Get through all ${KNOCKOUT_ROUNDS} rounds and the fastest tapper wins.`,
     maxSeconds: 180,
     Component: SimonSays,
     simulate: simulateSimonSays,
@@ -350,6 +351,7 @@ function DigitSpan(props: CompProps) {
                 cleared={cleared}
                 first={cleared === DIGITS_FIRST}
                 what={(n) => `${n} digits`}
+                onWin={() => props.finish(cleared)}
                 onNext={() => {
                     if (props.pauseClock) props.pauseClock(false);
                     setCleared(null);
@@ -614,6 +616,7 @@ function FindTheKey(props: CompProps) {
                 cleared={cleared}
                 first={cleared === 1}
                 what={(n) => `key in round ${n}`}
+                onWin={() => finish(cleared)}
                 onNext={() => {
                     if (pauseClock) pauseClock(false);
                     setCleared(null);
