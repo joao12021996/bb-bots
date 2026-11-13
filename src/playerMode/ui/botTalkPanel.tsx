@@ -30,8 +30,8 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
             <div className="bbb-chat-thread">
                 {lines.length === 0 && (
                     <div className="bbb-chat-system">
-                        Say anything to {bot.name}. Ask who they're targeting or voting for, how they feel about you or someone else, or make them
-                        an offer (a final two, an alliance, a target). Small talk and questions are free; offers use an action.
+                        Keep it short and about the game: ask {bot.name} who they're targeting or voting for, how they feel about you or someone
+                        else, or make them an offer (a final two, an alliance, a target). Questions are free; offers use an action.
                     </div>
                 )}
                 {lines.map((l, i) =>
@@ -65,10 +65,11 @@ export function BotTalkPanel(props: { controller: PlayerModeController; botId: n
                     type="text"
                     value={text}
                     maxLength={TALK_MAX_LENGTH}
-                    placeholder={`Say something to ${bot.name}…`}
+                    placeholder={`Ask ${bot.name} about the game…`}
                     aria-label={`Message to ${bot.name}`}
                     onChange={(e) => setText(e.target.value)}
                 />
+                {text.length > TALK_MAX_LENGTH - 30 && <span className="bbb-talk-count">{TALK_MAX_LENGTH - text.length}</span>}
                 <button type="submit" className="button is-small is-warning" disabled={!text.trim()}>
                     Send
                 </button>

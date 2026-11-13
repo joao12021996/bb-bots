@@ -2195,6 +2195,13 @@ input[type="number"] {
     font-size: 16px; /* no zoom on phones */
 }
 
+.bbb-talk-count {
+    align-self: center;
+    font-size: 0.8rem;
+    color: var(--bbb-muted);
+    font-variant-numeric: tabular-nums;
+}
+
 /* talking to a bot on the social screen */
 .bbb-talk {
     display: flex;

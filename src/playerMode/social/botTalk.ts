@@ -6,7 +6,7 @@ import { PitchReason } from "./pitch";
 // rules as the social buttons), and the bot answers in its own voice. Free and offline, and it gives the
 // same answer on every device, so it works online too.
 
-export const TALK_MAX_LENGTH = 300;
+export const TALK_MAX_LENGTH = 140; // short and to the point, like a tweet
 export const TALKS_PER_BLOCK = 12; // the most messages a houseguest will take in one social block
 export const TALKS_MIN = 2; // ...and the fewest: everyone gives you a couple of minutes
 
