@@ -665,8 +665,8 @@ describe("season setup", () => {
         let prompt: Prompt | null = null;
         controller.prompt$.subscribe((p) => (prompt = p));
         controller.start();
-        // week 1 starts: relationships came from the remapped custom map
-        expect(getById(controller.gameState, 3).relationships[1]).toBe(relationships[7][2]);
+        // week 1 starts: in player mode nobody knows anybody yet, custom map or not
+        expect(getById(controller.gameState, 3).relationships[1]).toBe(0);
         let guard = 0;
         while (guard++ < 3000) {
             const p = prompt as Prompt | null;
@@ -741,8 +741,8 @@ describe("cartoon cast and custom players", () => {
         const me = getById(controller.gameState, setup.humanIds[0]);
         expect(me.name).toBe("Me");
         Object.values(me.relationships).forEach((r) => expect(Number.isFinite(r)).toBe(true));
-        // cast pairs keep the custom value
-        expect(getById(controller.gameState, 0).relationships[1]).toBe(0.25);
+        // everyone starts as strangers, cast pairs included
+        expect(getById(controller.gameState, 0).relationships[1]).toBe(0);
         let guard = 0;
         while (guard++ < 3000) {
             const p = prompt as Prompt | null;
@@ -3409,6 +3409,16 @@ describe("veto and alliance rules", () => {
         const other = createAlliance(gs, c.state.book, [noms[0], c.state.week.hohId!], "Not Both");
         expect(c.allianceStandsDown(other)).toBe(false);
     });
+
+    it("an alliance with everyone on the block in it doesn't pick a target, even with members off the block", () => {
+        const c = playUntil(8, (x) => x.state.step === Step.SocialCampaign);
+        const noms = c.state.week.nomineeIds!;
+        const off = c.gameState.houseguests.find((h) => !h.isEvicted && !noms.includes(h.id) && h.id !== c.state.week.hohId)!;
+        const gs = new MutableGameState(c.gameState);
+        const a = createAlliance(gs, c.state.book, [...noms, off.id], "Whole Block");
+        c.state.gameState = new GameState(gs);
+        expect(c.allianceStandsDown(a)).toBe(true);
+    });
 });
 
 describe("away players", () => {
@@ -3442,5 +3452,60 @@ describe("away players", () => {
         }
         // the bot playing for them did top some comps: it just didn't count
         expect(wouldHaveWon).toBeGreaterThan(0);
+    });
+});
+
+describe("starting relationships", () => {
+    it("nobody knows anybody when the season starts, custom cast relationships or not", () => {
+        const custom = { 0: { 1: 0.9, 2: -0.8 }, 1: { 0: 0.9 }, 2: { 0: -0.8 } };
+        const controller = new PlayerModeController(newPlayerSave(newGame(8), [0], { relationships: custom }));
+        controller.start();
+        const gs = controller.gameState;
+        expect(gs.phase).toBe(1);
+        gs.houseguests.forEach((hg) => gs.houseguests.filter((o) => o.id !== hg.id).forEach((o) => expect(hg.relationships[o.id]).toBe(0)));
+    });
+});
+
+describe("veto ceremony", () => {
+    it("shows the veto used before the HoH names a replacement, and a forced pick breaks no promise", () => {
+        let forcedSeen = 0;
+        let replacements = 0;
+        for (let seed = 1; seed <= 40 && forcedSeen === 0; seed++) {
+            const controller = new PlayerModeController(newPlayerSave(newGame(6), [0, 1, 2, 3, 4, 5]));
+            controller.state.seed = seed * 37;
+            let prompt: Prompt | null = null;
+            controller.prompt$.subscribe((p) => (prompt = p));
+            controller.start();
+            let lastScene = "";
+            for (let guard = 0; guard < 5000; guard++) {
+                const p = prompt as Prompt | null;
+                if (!p || p.kind === "gameOver") break;
+                if (p.kind === "scene") lastScene = p.scene.title;
+                if (p.kind === "choose" && p.title === "Replacement Nominee") {
+                    replacements++;
+                    // the veto holder's decision came first, on the screen everyone sees
+                    expect(lastScene).toBe("Veto Ceremony");
+                    expect(p.text).toContain("Since I have just vetoed one of your nominations");
+                    if (p.options.length === 1) {
+                        forcedSeen++;
+                        const hohId = controller.state.week.hohId!;
+                        const only = p.options[0].id;
+                        const promise = pledge(controller.ledger, "safety", hohId, only, controller.gameState.phase);
+                        if (controller.state.week.room) controller.state.week.room.promised.push(only);
+                        const news: string[] = [];
+                        controller.state.humanIds.forEach((id) => news.push(...controller.state.news[id] || []));
+                        p.resolve([only]);
+                        expect(promise.status).toBe("void");
+                        const after: string[] = [];
+                        controller.state.humanIds.forEach((id) => after.push(...controller.state.news[id] || []));
+                        expect(after.filter((n) => !news.includes(n)).join("\n")).not.toMatch(/then put you on the block|then nominated them/);
+                        continue;
+                    }
+                }
+                answer(controller, p, "random", "random");
+            }
+        }
+        expect(replacements).toBeGreaterThan(0);
+        expect(forcedSeen).toBeGreaterThan(0);
     });
 });

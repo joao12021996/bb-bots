@@ -63,7 +63,9 @@ export interface CastOptionsOverride {
     currentTribes?: { [id: number]: Tribe };
 }
 
-function firstImpressions(houseguests: Houseguest[], override?: CastOptionsOverride) {
+// `blankSlate`: nobody knows anybody yet, so every relationship starts at zero (player mode: they're all forged
+// in the game). The impressions are still rolled, so the rest of the season's randomness stays the same.
+function firstImpressions(houseguests: Houseguest[], override?: CastOptionsOverride, blankSlate: boolean = false) {
     const custom = override ? override.relationships : cast$.value.options?.relationships;
     const generated = firstImpressionsMap(houseguests.length, houseguests);
     for (let i = 0; i < houseguests.length; i++) {
@@ -71,7 +73,7 @@ function firstImpressions(houseguests: Houseguest[], override?: CastOptionsOverr
             // custom relationships win; any pair they don't cover (e.g. a player who joined under their own name)
             // gets a normal first impression
             const customValue = custom && custom[i] ? custom[i][j] : undefined;
-            const value = customValue !== undefined ? customValue : generated[i][j];
+            const value = blankSlate ? 0 : customValue !== undefined ? customValue : generated[i][j];
             houseguests[i].relationships[houseguests[j].id] = value;
             houseguests[j].relationships[houseguests[i].id] = value;
         }
@@ -82,11 +84,12 @@ function firstImpressions(houseguests: Houseguest[], override?: CastOptionsOverr
 export function prepareNextWeek(
     oldState: GameState,
     episodeType: EpisodeType,
-    override?: CastOptionsOverride
+    override?: CastOptionsOverride,
+    blankSlate: boolean = false
 ): GameState {
     let newState = new MutableGameState(oldState);
     if (oldState.phase === 0) {
-        firstImpressions(newState.houseguests, override);
+        firstImpressions(newState.houseguests, override, blankSlate);
         const currentTribes = override ? override.currentTribes : cast$.value.options?.currentTribes;
         if (currentTribes) {
             const tribes = currentTribes;

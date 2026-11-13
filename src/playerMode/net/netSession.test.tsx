@@ -675,6 +675,10 @@ describe("online play", () => {
         hub.flush();
         all = [host, clients[0], back];
         expect(back.localPlayerId).toBe(6);
+        // back halfway through a comp: the bot finishes it first
+        for (let i = 0; i < 500 && host.controller!.compOn(); i++) step(hub, all);
+        jest.advanceTimersByTime(2000);
+        hub.flush();
         expect(host.controller!.isAutopilot(6)).toBe(false);
         settle(hub, host);
         expectInSync(all);

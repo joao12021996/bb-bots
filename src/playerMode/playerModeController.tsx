@@ -2667,7 +2667,8 @@ export class PlayerModeController {
         const remaining = s.gameState.remainingPlayers;
         if (remaining <= 2) return this.goTo(Step.GameOver);
         const finale = remaining === 3;
-        s.gameState = prepareNextWeek(s.gameState, finale ? BigBrotherFinale : BigBrotherVanilla, s.castOptions);
+        // no relationships before the game: bots and players alike start as strangers, and forge them in the house
+        s.gameState = prepareNextWeek(s.gameState, finale ? BigBrotherFinale : BigBrotherVanilla, s.castOptions, true);
         s.weekStartState = s.gameState;
         s.week = { blockbuster: this.rules.lastChance && !finale && remaining >= BLOCKBUSTER_MIN_PLAYERS };
         s.deals = this.deals.filter((d) => d.week >= s.gameState.phase - 1);
@@ -2864,12 +2865,13 @@ export class PlayerModeController {
         return block.length > 0 ? block : undefined;
     }
 
-    // Every member left in the alliance is on the block: there's nobody for it to target, so it doesn't pick one.
-    // It's every member for themselves this week.
+    // Every member left in the alliance is on the block, or everyone on the block is in the alliance: any target
+    // would be one of their own, so it doesn't pick one. It's every member for themselves this week.
     public allianceStandsDown(a: Alliance): boolean {
         const block = this.targetBlock();
         const members = aliveMembers(this.gameState, a);
-        return !!block && members.length > 0 && members.every((m) => block.includes(m.id));
+        if (!block || members.length === 0) return false;
+        return members.every((m) => block.includes(m.id)) || block.every((id) => members.some((m) => m.id === id));
     }
 
     // ---------- reads: what players learn about how others feel ----------
@@ -4863,33 +4865,58 @@ export class PlayerModeController {
                 }
             );
 
+        // the veto holder's decision, saved once made, so the scenes in between don't ask for it again
+        const phase = gsAtStart.phase;
+        const choiceKey = `vetoChoice:${phase}`;
+        const decided = (choice: { decision: Houseguest | null; reason: string }) => {
+            this.lock(choiceKey, { id: choice.decision ? choice.decision.id : -1, reason: choice.reason });
+            afterChoice(choice);
+        };
+
         const afterChoice = (choice: { decision: Houseguest | null; reason: string }) => {
             if (!choice.decision) return generate(choice);
             // the replacement: never the veto holder (vetoUsable makes sure there's someone)
             const options = exclude(nonEvictedHouseguests(gsAtStart), [...noms, pov, hoh]);
             if (options.length === 0) return generate({ decision: null, reason: "" });
+            // everyone sees the veto used first; only then does the HoH name a replacement
+            const usedKey = `vetoUsedShown:${phase}`;
+            if (this.locked(usedKey) === undefined) {
+                this.lock(usedKey, true);
+                const scene = this.vetoUsedScene(pov, choice.decision, hoh, options);
+                this.weekScenes.push(scene);
+                return this.show({ kind: "scene", scene });
+            }
+            // the only one who can go up: naming them breaks no promise, and betrays nobody
+            const forced = options.length === 1;
+            const settle = (id: number) => {
+                if (forced) return this.forcedNomination(hoh.id, id);
+                if (!s.week.secretHoh) this.settleRoom(hoh.id, [id], false);
+            };
             if (!this.isHuman(hoh)) {
                 const { picks, betrayed } = botNominate(gsAtStart, s.book, hoh, options, 1, this.roomSway());
                 return renominate(choice, picks[0].id, options, (id) => {
                     this.explainNoms(hoh.id, [id]);
-                    if (id === picks[0].id) betrayed.forEach((victim) => this.backstab(hoh.id, victim, s.week.secretHoh ? 0.3 : 1));
-                    if (!s.week.secretHoh) this.settleRoom(hoh.id, [id], false);
+                    if (id === picks[0].id && !forced) betrayed.forEach((victim) => this.backstab(hoh.id, victim, s.week.secretHoh ? 0.3 : 1));
+                    settle(id);
                 });
             }
+            const saved = choice.decision;
             this.privately(hoh.id, `${hoh.name}, Head of House`, () =>
                 this.show({
                     kind: "choose",
                     actorId: hoh.id,
                     title: "Replacement Nominee",
-                    text: `${choice.decision!.name} has been saved by the veto. As Head of House, you must name a replacement nominee.`,
+                    text:
+                        `${pov.name} used the ${VETO} on ${saved.id === pov.id ? "themselves" : saved.name}: “Since I have just vetoed one of your nominations, you must name a replacement nominee.”` +
+                        (forced ? ` ${options[0].name} is the only one who can go up, so it breaks no promise.` : ""),
                     options,
                     count: 1,
                     confirmLabel: "Nominate",
-                    promisedIds: s.week.room ? s.week.room.promised : undefined,
+                    promisedIds: s.week.room && !forced ? s.week.room.promised : undefined,
                     resolve: (ids) =>
                         renominate(choice, ids[0], options, (id) => {
-                            if (this.allyIds(hoh.id).includes(id)) this.backstab(hoh.id, id, s.week.secretHoh ? 0.3 : 1);
-                            if (!s.week.secretHoh) this.settleRoom(hoh.id, [id], false);
+                            if (!forced && this.allyIds(hoh.id).includes(id)) this.backstab(hoh.id, id, s.week.secretHoh ? 0.3 : 1);
+                            settle(id);
                         }),
                 })
             );
@@ -4902,6 +4929,8 @@ export class PlayerModeController {
             this.feedPush(`🛡️ ${pov.name} can't use the ${VETO}: there's nobody left to name as a replacement.`);
             return generate({ decision: null, reason: "" });
         }
+        const savedChoice = this.locked<{ id: number; reason: string }>(choiceKey);
+        if (savedChoice) return afterChoice({ decision: savedChoice.id >= 0 ? getById(gsAtStart, savedChoice.id) : null, reason: savedChoice.reason });
         if (this.isHuman(pov)) {
             this.privately(pov.id, `${pov.name}, veto holder`, () =>
                 this.show({
@@ -4916,7 +4945,7 @@ export class PlayerModeController {
                     resolve: (ids) =>
                         this.vetoSpeechPrompt(pov, hoh, noms, ids.length > 0, () => {
                             refresh();
-                            afterChoice(
+                            decided(
                                 ids.length === 0
                                     ? { decision: null, reason: "" }
                                     : { decision: getById(gsAtStart, ids[0]), reason: "" }
@@ -4926,8 +4955,37 @@ export class PlayerModeController {
             );
         } else {
             const immunePlayers = hoh.id !== pov.id ? [hoh] : [];
-            afterChoice(botVeto(gsAtStart, s.book, pov, noms, hoh.id, immunePlayers));
+            decided(botVeto(gsAtStart, s.book, pov, noms, hoh.id, immunePlayers));
         }
+    }
+
+    // The veto ceremony, before the replacement: the holder uses the veto, and tells the HoH to name someone.
+    private vetoUsedScene(pov: Houseguest, saved: Houseguest, hoh: Houseguest, options: Houseguest[]): Scene {
+        const secret = !!this.state.week.secretHoh;
+        return this.textScene("Veto Ceremony", [
+            `🏅 ${pov.name} has decided to use the Power of ${VETO} on ${saved.id === pov.id ? "themselves" : saved.name}.`,
+            secret
+                ? "“Since I have just vetoed one of the nominations, the Head of House must name a replacement nominee.”"
+                : `“${hoh.name}, since I have just vetoed one of your nominations, you must name a replacement nominee.”`,
+            ...(options.length === 1 ? [`Only ${options[0].name} is left who can take their place.`] : []),
+        ]);
+    }
+
+    // A replacement nominee who was the only one who could go up: a promise of safety couldn't have been kept, so
+    // it isn't broken. It's just over.
+    private forcedNomination(hohId: number, id: number) {
+        const s = this.state;
+        const hoh = this.player(hohId);
+        const room = s.week.room;
+        if (room && room.promised.includes(id)) {
+            room.promised = room.promised.filter((p) => p !== id);
+            room.safe = room.safe.filter((p) => p !== id);
+            this.tell([id], `🤷 ${hoh.name} promised you safety, but you were the only one left who could go up. Nothing they could do.`);
+        }
+        openPledges(this.ledger)
+            .filter((p) => p.fromId === hohId && p.toId === id && p.kind === "safety" && p.week === s.gameState.phase)
+            .forEach((p) => (p.status = "void"));
+        this.save();
     }
 
     private blockbuster() {
