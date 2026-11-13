@@ -5,8 +5,7 @@ import { PlayerModeController } from "../playerModeController";
 import { CHAT_MAX_LENGTH, ChatMessage, NetSession } from "../net/netSession";
 import { BigButton, Face, Grid, Panel, Subtle, Title } from "./common";
 
-// Online: texting the other players, from the social screen (the same chat box as talking to a bot) and the
-// corner chat (see ChatDock). Both read the same messages and agree on what's been read.
+// Online: texting the other players, from the social screen (the same chat box as talking to a bot).
 
 export type Conversation = number | "jury"; // a player's id, or the jury house
 

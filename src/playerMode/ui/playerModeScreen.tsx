@@ -8,7 +8,6 @@ import { sessionFor } from "../net/netSession";
 import { BackAfterComp, PauseBar, TurnClock } from "./turnClock";
 import { watchForInspector } from "../net/inspectWatch";
 import { OnlineBar, WaitingFor, WaitingOnPlayers } from "./onlineLobby";
-import { ChatDock } from "./chatDock";
 import { SocialDoneScreen } from "./playerChat";
 import { ChoosePrompt } from "./choosePrompt";
 import { BigButton, Loading, Panel, Subtle, Title } from "./common";
@@ -694,7 +693,6 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                 {session && <TurnClock session={session} controller={controller} owner={owner} />}
                 {session && <BackAfterComp session={session} controller={controller} />}
                 {body}
-                {session && <ChatDock session={session} controller={controller} />}
             </div>
         );
     }

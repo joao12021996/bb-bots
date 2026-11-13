@@ -341,8 +341,6 @@ export interface PlayerSave {
     compAt?: string;
     // the diary room: what houseguests said about each week, revealed when the season ends
     diary?: DiaryEntry[];
-    // everything that happened in the jury house, for the jury's chat
-    juryLog?: { week: number; text: string }[];
     // players' conversations with bots, in their own words (see talkToBot): per player, per houseguest
     talks?: { [viewerId: number]: { [botId: number]: BotTalk } };
 }
@@ -3924,7 +3922,6 @@ export class PlayerModeController {
                 .forEach((c) => addGrudge(jury, e, c.fromId, -0.25, "lied to my face"));
             const lines = newcomerTalks(gs, jury, e, this.jurorIds());
             s.week.juryHouse = [...(s.week.juryHouse || []), ...lines];
-            s.juryLog = [...(s.juryLog || []), ...lines.map((text) => ({ week: gs.phase, text }))];
             // players who put them there can send a goodbye message
             if (hohId !== undefined && votes[hohId] === undefined && Object.keys(votes).length === 0) return;
             this.alivePlayers
@@ -4619,12 +4616,6 @@ export class PlayerModeController {
             winnerId: log ? log.winner : undefined,
             battleBack: this.battleBackSlot && this.battleBackSlot.used ? { id: this.battleBackSlot.holderId!, week: this.battleBackSlot.week } : undefined,
         });
-    }
-
-    // ---------- the jury house ----------
-
-    public juryHouseLog(): { week: number; text: string }[] {
-        return this.state.juryLog || [];
     }
 
     // ---------- alliances convene before nominations ----------
