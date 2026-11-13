@@ -1629,6 +1629,43 @@ export class PlayerModeController {
         return (this.state.autopilot || []).includes(id);
     }
 
+    // ---------- stand-ins: a player can't win a comp a bot played for them ----------
+
+    // The players a bot stood in for during this step (away, or out of time on a decision), saved so a reload or
+    // their coming back in the middle of it doesn't change anything.
+    private standInKey(): string {
+        return `standIns:${this.gameState.phase}:${this.state.step}`;
+    }
+
+    private noteStandIn(id: number) {
+        const list = this.locked<number[]>(this.standInKey()) || [];
+        if (!list.includes(id)) this.lock(this.standInKey(), [...list, id]);
+    }
+
+    // At the start of a comp: the players who are away right now.
+    private noteStandIns(participants: { id: number }[]) {
+        participants.forEach((p) => {
+            if (this.state.humanIds.includes(p.id) && this.isAutopilot(p.id)) this.noteStandIn(p.id);
+        });
+    }
+
+    // A player a bot played (some of) this step's comp for. They take part, but they can't win it.
+    private stoodIn(id: number): boolean {
+        if (this.state.humanIds.includes(id) && this.isAutopilot(id)) return true;
+        return (this.locked<number[]>(this.standInKey()) || []).includes(id);
+    }
+
+    // The winner of a comp where the last one standing wins (knockout, wine, memory duel). If a bot stood in for
+    // them, the win goes to whoever lasted longest without one. `out`: who went out, first out first.
+    private eliminationWinner(last: number, out: number[], lines: string[]): [number, number[]] {
+        if (!this.stoodIn(last)) return [last, out];
+        const order = [...out, last];
+        const real = [...order].reverse().find((id) => !this.stoodIn(id));
+        if (real === undefined) return [last, out];
+        lines.push(`💤 ${this.player(last).name} was away, with a bot standing in, so they can't win. The win goes to ${this.player(real).name}.`);
+        return [real, order.filter((id) => id !== real)];
+    }
+
     // The players among `hgs` who make their own decisions (evicted ones too: the battle back is for them).
     private playingHumans(hgs: { id: number }[]): Houseguest[] {
         return this.players.filter((p) => this.isHuman(p) && hgs.some((hg) => hg.id === p.id));
@@ -1645,6 +1682,7 @@ export class PlayerModeController {
         s.autopilot = on ? [...list, id] : list.filter((x) => x !== id);
         const name = this.player(id).name;
         this.feedPush(on ? `🤖 ${name} lost connection. A bot is playing for them until they're back.` : `🎮 ${name} is back in control.`);
+        if (on) this.noteStandIn(id);
         this.save();
         if (!on) return;
         const shared = this.prompt$.value;
@@ -1667,6 +1705,7 @@ export class PlayerModeController {
         if (!personal && !(shared && actorOf(shared) === id)) return;
         this.feedPush(`⏱️ ${this.player(id).name} ran out of time, so a bot made that call for them.`);
         s.autopilot = [...(s.autopilot || []), id];
+        this.noteStandIn(id);
         try {
             if (personal && this.gatherBot) {
                 this.gatherBot(id);
@@ -1753,6 +1792,7 @@ export class PlayerModeController {
         role: CompRole = "other"
     ) {
         const seed = hashcode(`${this.state.seed}:${this.gameState.phase}:${this.state.step}:${comp.id}`);
+        this.noteStandIns(participants);
         const bots = this.simulateBots(comp, participants, seed, role);
         // bots who dropped off the wall for a deal
         bots.forEach((b) => {
@@ -1761,8 +1801,16 @@ export class PlayerModeController {
         });
         const humans = this.playingHumans(participants);
         let worstFirst: number[] = [];
+        // a player a bot stood in for is marked: they rank under everyone else, and can't win
+        const mark = (results: CompResult[]) =>
+            results.map((r) => {
+                const { away, ...rest } = r;
+                return this.stoodIn(r.id) ? { ...rest, away: true } : rest;
+            });
         const rank = (results: CompResult[]) =>
-            (worstFirst = [...results].sort((a, b) => a.score - b.score || a.id - b.id).map((r) => r.id));
+            (worstFirst = [...results]
+                .sort((a, b) => (b.away ? 1 : 0) - (a.away ? 1 : 0) || a.score - b.score || a.id - b.id)
+                .map((r) => r.id));
         const done = (winnerId: number) => {
             this.noteComp(comp);
             onWinner(winnerId, worstFirst.filter((id) => id !== winnerId));
@@ -1770,15 +1818,16 @@ export class PlayerModeController {
         if (humans.length === 0) {
             // nobody's playing, but everyone can watch: the results come in from last place up.
             // A tie for first goes to the tiebreaker, like any other.
-            rank(bots);
-            const tiedIds = tiedForFirst(comp, bots);
+            const results = mark(bots);
+            rank(results);
+            const tiedIds = tiedForFirst(comp, results);
             const tie = tiedIds.length > 1;
             this.show({
                 kind: "compResults",
                 title,
                 comp,
                 participants,
-                results: bots,
+                results,
                 spectating: !this.sealed(),
                 sealed: this.sealed(),
                 tiedIds: tie ? tiedIds : undefined,
@@ -1790,7 +1839,7 @@ export class PlayerModeController {
         const byId = (id: number) => getById(this.gameState, id);
         const showResults = () => {
             // any tie for first goes to a tiebreaker question
-            const results = [...bots, ...humanResults];
+            const results = mark([...bots, ...humanResults]);
             rank(results);
             const tiedIds = tiedForFirst(comp, results);
             const tiebreak = tiedIds.length > 1;
@@ -1964,6 +2013,7 @@ export class PlayerModeController {
         const picks: { pickerId: number; ids: number[] }[] = [];
         let lines: string[] = [KNOCKOUT_RULES];
         let round = 0;
+        this.noteStandIns(participants);
 
         // shows what happened since the players last looked, then carries on. `stage`: a board shown after each
         // duel, so everyone watches the comp one duel at a time; once seen, a reload doesn't show it again.
@@ -1990,11 +2040,11 @@ export class PlayerModeController {
         };
 
         const finish = () => {
-            const winnerId = remaining[0];
+            const [winnerId, worstFirst] = this.eliminationWinner(remaining[0], out, lines);
             this.mutate((gs) => picks.forEach((p) => p.ids.forEach((id) => shiftRelationship(gs, p.pickerId, id, -0.05))));
             picks.forEach((p) => p.ids.forEach((id) => this.tell([id], `⚔️ ${name(p.pickerId)} picked you to duel in the knockout.`)));
             s.usedComps = [...s.usedComps, KNOCKOUT_ID];
-            board(() => onWinner(winnerId, [...out]), winnerId);
+            board(() => onWinner(winnerId, worstFirst), winnerId);
         };
 
         const duel = (pickerId: number | null, a: number, b: number) => {
@@ -2152,6 +2202,7 @@ export class PlayerModeController {
         const offered: { pourerId: number; targetId: number }[] = [];
         let lines: string[] = [TAINTED_WINE_RULES];
         let round = 0;
+        this.noteStandIns(participants);
         const skillOf = (id: number) => (this.isHuman({ id }) ? 0.5 : this.botSkill(this.player(id), `${seed}`));
 
         const captions = () => {
@@ -2186,11 +2237,11 @@ export class PlayerModeController {
         };
 
         const finish = () => {
-            const winnerId = remaining[0];
+            const [winnerId, worstFirst] = this.eliminationWinner(remaining[0], out, lines);
             // handing someone the glass is a shot at them
             this.mutate((gs) => offered.forEach((o) => shiftRelationship(gs, o.targetId, o.pourerId, -0.03)));
             s.usedComps = [...s.usedComps, TAINTED_WINE_ID];
-            board(() => onWinner(winnerId, [...out]), winnerId);
+            board(() => onWinner(winnerId, worstFirst), winnerId);
         };
 
         const drink = (pourerId: number, targetId: number, pour: Pour, swap: boolean) => {
@@ -2314,6 +2365,7 @@ export class PlayerModeController {
         ];
         let champ = queue[0];
         let next = 2;
+        this.noteStandIns(participants);
 
         // as in Tainted Wine: the board shows what happened since it was last shown
         const board = (then: () => void, winnerId?: number) => {
@@ -2338,7 +2390,8 @@ export class PlayerModeController {
 
         const finish = () => {
             s.usedComps = [...s.usedComps, MEMORY_DUEL_ID];
-            board(() => onWinner(champ, [...out]), champ);
+            const [winnerId, worstFirst] = this.eliminationWinner(champ, out, lines);
+            board(() => onWinner(winnerId, worstFirst), winnerId);
         };
 
         const duel = (no: number, a: number, b: number) => {
@@ -2443,7 +2496,14 @@ export class PlayerModeController {
             (player, moreToPlay, onHide) => ({ kind: "hideTiebreak", title, spots, tied, playerId: player.id, moreToPlay, onHide }),
             (answers) => {
                 humans.forEach((h) => hides.push({ id: h.id, spot: answers[h.id] }));
-                const { winnerId, tied: still } = hideOutcome(spots, hides);
+                const outcome = hideOutcome(spots, hides);
+                let { winnerId, tied: still } = outcome;
+                // a bot standing in for an away player can't win it for them: the others go again
+                const playing = tiedIds.filter((id) => !this.stoodIn(id));
+                if (winnerId !== undefined && this.stoodIn(winnerId) && playing.length > 0) {
+                    winnerId = playing.length === 1 ? playing[0] : undefined;
+                    still = playing;
+                }
                 this.show({
                     kind: "hideResults",
                     title,

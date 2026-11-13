@@ -190,7 +190,8 @@ const SECTIONS_EN: Section[] = [
                     For a big group, set the <b>⏰ Pace</b> to real time: a break of an hour to two days before each comp
                     and eviction (Head of House one day, Veto the next…), unless every player votes to move on sooner.
                     The host can wait for everyone, or start early with bots in the empty spots. With ⏱️ Time to act,
-                    anyone who takes too long over a decision gets a bot to make that one call. Need a break? ⏸️ Ask
+                    anyone who takes too long over a decision gets a bot to make that one call. A bot plays for anyone who
+                    drops out too, but a comp a bot played for you can't be won: you're last, whatever it scored. Need a break? ⏸️ Ask
                     for a pause: it starts once half the players still in the house agree.
                 </li>
                 <li>

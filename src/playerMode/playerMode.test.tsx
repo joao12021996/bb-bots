@@ -3410,3 +3410,37 @@ describe("veto and alliance rules", () => {
         expect(c.allianceStandsDown(other)).toBe(false);
     });
 });
+
+describe("away players", () => {
+    it("a player a bot is standing in for never wins a comp", () => {
+        let wouldHaveWon = 0;
+        for (let seed = 1; seed <= 6; seed++) {
+            const controller = new PlayerModeController(newPlayerSave(newGame(8), [0, 1]));
+            controller.state.seed = seed * 101;
+            let prompt: Prompt | null = null;
+            controller.prompt$.subscribe((p) => (prompt = p));
+            controller.start();
+            controller.autopilot(1, true);
+            for (let guard = 0; guard < 5000; guard++) {
+                const p = prompt as Prompt | null;
+                if (!p || p.kind === "gameOver") break;
+                if (p.kind === "compResults" && p.results.some((r) => r.id === 1)) {
+                    const best = [...p.results].sort((a, b) => b.score - a.score)[0];
+                    if (best.id === 1) wouldHaveWon++;
+                    expect(p.results.find((r) => r.id === 1)!.away).toBe(true);
+                    expect(rankResults(p.results)[0].id).not.toBe(1);
+                    if (p.tiedIds) expect(p.tiedIds).not.toContain(1);
+                }
+                if (p.kind === "knockout" && p.winnerId !== undefined) expect(p.winnerId).not.toBe(1);
+                answer(controller, p, "random", false);
+            }
+            expect(controller.state.step).toBe(Step.GameOver);
+            controller.state.history.forEach((w) => {
+                expect(w.hohId).not.toBe(1);
+                expect(w.povId).not.toBe(1);
+            });
+        }
+        // the bot playing for them did top some comps: it just didn't count
+        expect(wouldHaveWon).toBeGreaterThan(0);
+    });
+});

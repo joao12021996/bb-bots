@@ -13,6 +13,13 @@ export interface CompResult {
     answers?: boolean[]; // question comps: right/wrong per question
     picks?: (number | string)[]; // question comps: what they answered
     threw?: boolean; // a bot that lost on purpose
+    away?: boolean; // a player who's away, with a bot standing in: they play, but can't win
+}
+
+// Away players' results count for nothing: they rank under everyone actually playing.
+function contenders(results: CompResult[]): CompResult[] {
+    const playing = results.filter((r) => !r.away);
+    return playing.length > 0 ? playing : results;
 }
 
 // Everyone tied for first. A tie is what the houseguests see: scores that read the same (the same number right,
@@ -20,6 +27,7 @@ export interface CompResult {
 // standing: whoever outlasts the rest wins, however close it was, so only an exactly equal score ties there.
 export function tiedForFirst(comp: { format: (score: number) => string; kind?: string }, results: CompResult[]): number[] {
     if (results.length === 0) return [];
+    results = contenders(results);
     const top = Math.max(...results.map((r) => r.score));
     const shown = comp.format(top);
     const exact = comp.kind === "endurance";
@@ -30,7 +38,7 @@ export function tiedForFirst(comp: { format: (score: number) => string; kind?: s
 
 // Ranks results best first. Nobody wins a tie for free: a tie for first goes to a tiebreaker.
 export function rankResults(results: CompResult[], _humanIds: number[] = []): CompResult[] {
-    return [...results].sort((a, b) => b.score - a.score);
+    return [...results].sort((a, b) => (a.away ? 1 : 0) - (b.away ? 1 : 0) || b.score - a.score);
 }
 
 interface CompPlayProps {
@@ -448,7 +456,7 @@ function Standings(props: CompResultsProps) {
                             {byId(r.id).name}
                             {isHuman(r.id) ? " 🎮" : ""}
                         </span>
-                        <span className="bbb-lb-score">{props.comp.format(r.score)}</span>
+                        <span className="bbb-lb-score">{r.away ? `💤 away (${props.comp.format(r.score)})` : props.comp.format(r.score)}</span>
                     </li>
                 ))}
             </ol>
@@ -464,9 +472,9 @@ function Standings(props: CompResultsProps) {
 // players still going show their score so far.
 export function LiveStandings(props: { comp: CompDefinition; participants: Houseguest[]; bots: CompResult[]; live: LiveScore[]; youId?: number }) {
     const rows = [
-        ...props.bots.map((b) => ({ id: b.id, score: b.score as number | null, done: true, human: false })),
-        ...props.live.map((l) => ({ id: l.id, score: l.score, done: l.done, human: true })),
-    ].sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity));
+        ...props.bots.map((b) => ({ id: b.id, score: b.score as number | null, done: true, human: false, away: !!b.away })),
+        ...props.live.map((l) => ({ id: l.id, score: l.score, done: l.done, human: true, away: false })),
+    ].sort((a, b) => (a.away ? 1 : 0) - (b.away ? 1 : 0) || (b.score ?? -Infinity) - (a.score ?? -Infinity));
     const byId = (id: number) => props.participants.find((hg) => hg.id === id);
     return (
         <ol className="bbb-leaderboard bbb-live-standings">
@@ -481,7 +489,7 @@ export function LiveStandings(props: { comp: CompDefinition; participants: House
                             {r.id === props.youId ? "You" : hg.name}
                             {r.human ? " 🎮" : ""}
                         </span>
-                        <span className="bbb-lb-score">{r.done ? score : r.score === null ? "playing…" : `${score} so far`}</span>
+                        <span className="bbb-lb-score">{r.away ? `💤 away (${score})` : r.done ? score : r.score === null ? "playing…" : `${score} so far`}</span>
                     </li>
                 );
             })}
