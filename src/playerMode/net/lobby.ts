@@ -51,7 +51,7 @@ export function defaultSetup(castCount: number): LobbySetup {
         difficulty: "normal",
         powers: "off",
         battleBack: true,
-        hideSkills: false,
+        hideSkills: true,
         turnSeconds: 120,
         seats: [],
         botOrder: order,

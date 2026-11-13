@@ -58,7 +58,7 @@ export function PlayerSetup() {
     const [looks, setLooks] = React.useState<{ [i: number]: Look }>({});
     const [editing, setEditing] = React.useState<number | null>(null);
     // the last season's settings, remembered on this device
-    const [hideSkills, setHideSkills] = React.useState(() => loadPref("setup.hideSkills", false));
+    const [hideSkills, setHideSkills] = React.useState(() => loadPref("setup.hideSkills", true));
     const [difficulty, setDifficulty] = React.useState<Difficulty>(() => loadPref<Difficulty>("setup.difficulty", "normal"));
     // secret powers: none, a surprise (picked at random, never shown), or hand-picked
     const [powerMode, setPowerMode] = React.useState<"off" | "surprise" | "choose">(() => loadPref("setup.powerMode", "off"));
