@@ -3155,3 +3155,62 @@ table td {
 .box {
     box-shadow: var(--bbb-shadow) !important;
 }
+
+/* ---- Settings > Rename things ---- */
+.bbb-names-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 5vh 16px;
+    overflow-y: auto;
+}
+.bbb-names {
+    width: min(520px, 100%);
+    background: var(--bbb-card-2);
+    border: 1px solid var(--bbb-border);
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.bbb-names .title {
+    margin: 0;
+}
+.bbb-names-group {
+    border: 1px solid var(--bbb-border);
+    border-radius: 10px;
+    padding: 8px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.bbb-names-group legend {
+    padding: 0 6px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
+.bbb-names-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+}
+.bbb-names-custom {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+}
+.bbb-names-group > .button {
+    align-self: flex-start;
+}
+.bbb-names-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}

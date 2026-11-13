@@ -13,6 +13,8 @@ import { StatsPage } from "../../career/statsPage";
 import { muted$, play } from "../../sound/sound";
 import { reduceMotion$ } from "../../prefs/motion";
 import { Lang, language$, LANGUAGES, setLanguage, t } from "../../i18n/i18n";
+import { names$, renameCount } from "../../i18n/rename";
+import { NamesDialog } from "./namesDialog";
 
 export enum Screens {
     Deck = 1,
@@ -164,6 +166,8 @@ export function SettingsMenu(): JSX.Element {
     const muted = useSubject(muted$);
     const calm = useSubject(reduceMotion$);
     const lang = useSubject(language$);
+    const renamed = renameCount(useSubject(names$));
+    const [renaming, setRenaming] = React.useState(false);
     // changing language redraws the page, which would restart a comp in progress
     const inComp = useSubject(compsInPlay$) > 0;
     return (
@@ -193,11 +197,23 @@ export function SettingsMenu(): JSX.Element {
                     </label>
                     {inComp && <small className="bbb-subtle">{t("Finish the comp first.")}</small>}
                     {lang !== "en" && <small className="bbb-subtle">{t("Some screens are still in English.")}</small>}
+                    <button
+                        type="button"
+                        className="button is-small is-light"
+                        onClick={() => {
+                            setOpen(false);
+                            setRenaming(true);
+                        }}
+                    >
+                        ✏️ {t("Rename things")}
+                        {renamed > 0 && <span className="bbb-subtle">&nbsp;({renamed})</span>}
+                    </button>
                     <button type="button" className="button is-small is-light" onClick={() => setOpen(false)}>
                         {t("Close")}
                     </button>
                 </div>
             )}
+            {renaming && <NamesDialog onClose={() => setRenaming(false)} />}
         </span>
     );
 }

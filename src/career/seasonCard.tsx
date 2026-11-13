@@ -1,6 +1,7 @@
 import React from "react";
 import { Achievement, ACHIEVEMENTS, ordinal, SeasonSummary } from "./career";
 import { APP_NAME, SHOW_NAME } from "../playerMode/terms";
+import { rename } from "../i18n/rename";
 
 export function placementText(s: SeasonSummary): string {
     if (s.won) return `Winner of ${SHOW_NAME}`;
@@ -12,6 +13,12 @@ function statLine(s: SeasonSummary): string[] {
     const lines = [`👑 ${s.hohWins} HoH`, `🛡️ ${s.vetoWins} Veto`, `🎯 ${s.nominated}× on the block`];
     if (s.juryVotesTotal > 0) lines.push(`🔑 ${s.juryVotesFor} of ${s.juryVotesTotal} jury votes`);
     return lines;
+}
+
+// the card is a picture, out of the page renamer's reach, so its text is renamed here
+function fillText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth?: number) {
+    if (maxWidth === undefined) ctx.fillText(rename(text), x, y);
+    else ctx.fillText(rename(text), x, y, maxWidth);
 }
 
 function loadImage(src: string): Promise<HTMLImageElement | null> {
@@ -57,7 +64,7 @@ export async function drawSeasonCard(s: SeasonSummary, unlocked: Achievement[]):
     ctx.textAlign = "center";
     ctx.fillStyle = "#c4b5fd";
     ctx.font = "700 34px Inter, system-ui, sans-serif";
-    ctx.fillText(`👁️ ${APP_NAME.toUpperCase()}`, W / 2, 90);
+    fillText(ctx, `👁️ ${APP_NAME.toUpperCase()}`, W / 2, 90);
 
     // the avatar, in a ring
     const img = s.imageURL ? await loadImage(s.imageURL) : null;
@@ -79,36 +86,36 @@ export async function drawSeasonCard(s: SeasonSummary, unlocked: Achievement[]):
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "800 84px Outfit, Inter, system-ui, sans-serif";
-    ctx.fillText(s.name, W / 2, 660);
+    fillText(ctx, s.name, W / 2, 660);
     ctx.fillStyle = s.won ? "#fbbf24" : "#f9a8d4";
     ctx.font = "800 54px Outfit, Inter, system-ui, sans-serif";
-    ctx.fillText((s.won ? "🏆 " : "") + placementText(s), W / 2, 740);
+    fillText(ctx, (s.won ? "🏆 " : "") + placementText(s), W / 2, 740);
 
     ctx.fillStyle = "#e5e7eb";
     ctx.font = "600 38px Inter, system-ui, sans-serif";
     const stats = statLine(s);
-    ctx.fillText(stats.slice(0, 2).join("   "), W / 2, 840);
-    ctx.fillText(stats.slice(2).join("   "), W / 2, 895);
+    fillText(ctx, stats.slice(0, 2).join("   "), W / 2, 840);
+    fillText(ctx, stats.slice(2).join("   "), W / 2, 895);
 
     if (s.highlight) {
         ctx.fillStyle = "#a9a3c7";
         ctx.font = "italic 500 34px Inter, system-ui, sans-serif";
         wrap(ctx, `“${s.highlight}”`, W - 200)
             .slice(0, 2)
-            .forEach((line, i) => ctx.fillText(line, W / 2, 985 + i * 46));
+            .forEach((line, i) => fillText(ctx, line, W / 2, 985 + i * 46));
     }
 
     if (unlocked.length > 0) {
         ctx.fillStyle = "#fde68a";
         ctx.font = "700 34px Inter, system-ui, sans-serif";
-        ctx.fillText("Achievements unlocked", W / 2, 1120);
+        fillText(ctx, "Achievements unlocked", W / 2, 1120);
         ctx.font = "600 34px Inter, system-ui, sans-serif";
-        ctx.fillText(unlocked.slice(0, 5).map((a) => `${a.emoji} ${a.title}`).join("  ·  "), W / 2, 1172, W - 100);
+        fillText(ctx, unlocked.slice(0, 5).map((a) => `${a.emoji} ${a.title}`).join("  ·  "), W / 2, 1172, W - 100);
     }
 
     ctx.fillStyle = "#6b6490";
     ctx.font = "500 28px Inter, system-ui, sans-serif";
-    ctx.fillText(`${s.castSize} houseguests · ${s.difficulty} · ${new Date(s.when).toLocaleDateString()}`, W / 2, H - 60);
+    fillText(ctx, `${s.castSize} houseguests · ${s.difficulty} · ${new Date(s.when).toLocaleDateString()}`, W / 2, H - 60);
 
     return new Promise((resolve) => {
         try {

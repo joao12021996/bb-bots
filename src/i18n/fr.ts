@@ -254,4 +254,27 @@ export const FR: { [english: string]: string } = {
         "Le jury pose des questions aux finalistes, puis vote pour un gagnant. Assume tes grands coups, sois honnête sur tes trahisons et parle de ce qui compte pour chaque juré.",
     "Jurors you backstabbed are bitter. Jurors you were loyal to remember that too.":
         "Les jurés que tu as trahis sont amers. Ceux à qui tu as été loyal s'en souviennent aussi.",
+    // ---------- settings > rename things ----------
+    "Rename things": "Renommer",
+    "Call anything in the game whatever you like. Leave a box empty to keep the usual word. Plurals and lowercase follow along (Houseguest → Player also turns houseguests into players).":
+        "Appelle chaque chose du jeu comme tu veux. Laisse une case vide pour garder le mot habituel. Les pluriels et les minuscules suivent (Colocataire → Joueur change aussi colocataires en joueurs).",
+    Roles: "Rôles",
+    Week: "La semaine",
+    "The show": "L'émission",
+    "Anything else": "Autre chose",
+    "Word or phrase": "Mot ou expression",
+    "Your word": "Ton mot",
+    "Add a word": "Ajouter un mot",
+    "Back to the usual words": "Revenir aux mots habituels",
+    Houseguest: "Colocataire",
+    Nominee: "Nominé",
+    Juror: "Juré",
+    Competition: "Compétition",
+    Comp: "Épreuve",
+    Block: "Sellette",
+    Evict: "Expulser",
+    Evicted: "Expulsé",
+    Eviction: "Expulsion",
+    Remove: "Retirer",
+    Done: "Terminé",
 };
