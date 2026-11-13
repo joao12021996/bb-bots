@@ -287,4 +287,8 @@ export const FR: { [english: string]: string } = {
     "Private: everyone else, look away!": "Privé : les autres, regardez ailleurs !",
     "Show us": "Montre-nous",
     "I'm {name}, show me": "Je suis {name}, montre-moi",
+    // ---------- halls ----------
+    "Hall of Losers": "Panthéon des perdants",
+    "Hall of Winners": "Panthéon des gagnants",
+    "Needs {n} seasons played in Player Mode": "Il faut {n} saisons jouées en mode joueur",
 };

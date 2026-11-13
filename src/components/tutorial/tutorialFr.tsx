@@ -175,6 +175,11 @@ export const SECTIONS_FR: Section[] = [
                     d'entre vous joue. Le passage de main indique toujours si l'écran suivant est privé.
                 </li>
                 <li>
+                    <b>🥾 Panthéon des perdants et 🏆 Panthéon des gagnants</b> : chaque saison jouée garde son premier
+                    expulsé et son gagnant. Sur l'écran du casting, charge l'un des panthéons pour une saison avec eux,
+                    exactement les mêmes bots : mêmes visages, notes et personnalités.
+                </li>
+                <li>
                     <b>🌐 Jouer en ligne</b> : crée une partie et partage le code. La maison commence pleine de bots,
                     et chaque ami qui arrive en remplace un. En retard ? Touche 👀 Juste regarder pour suivre la saison
                     en direct.

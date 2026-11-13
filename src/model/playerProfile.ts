@@ -18,6 +18,9 @@ export class PlayerProfile {
     public social?: number = DEFAULT_STAT;
     // High comp: you win more competitions.
     public comp?: number = DEFAULT_STAT;
+    // Hall seasons: the same bot as in the season they came from (see career/halls.ts)
+    public personality?: string;
+    public throws?: number;
     constructor(init: InitPlayerProfile) {
         if (!init) {
             return;

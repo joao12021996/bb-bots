@@ -180,6 +180,11 @@ const SECTIONS_EN: Section[] = [
                     hand-off always says whether the next screen is private.
                 </li>
                 <li>
+                    <b>🥾 Hall of Losers and 🏆 Hall of Winners</b>: every season you play keeps its first houseguest out
+                    and its winner. On the casting screen, load either hall for a season of them, as the exact same
+                    bots: same faces, skills and personalities.
+                </li>
+                <li>
                     <b>🌐 Play online</b>: host a game and share the code. The house starts full of bots, and every
                     friend who joins takes the place of one. Late to the party? Tap 👀 Just watch to follow the season live.
                 </li>

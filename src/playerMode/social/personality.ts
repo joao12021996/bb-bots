@@ -206,6 +206,12 @@ export function assignPersonalities(bots: Houseguest[], seed: number): { [id: nu
     const used: { [p: string]: number } = {};
     const out: { [id: number]: PersonalityId } = {};
     bots.forEach((hg) => {
+        const pinned = hg.personality as PersonalityId | undefined;
+        if (pinned && PERSONALITY_IDS.includes(pinned)) {
+            out[hg.id] = pinned;
+            used[pinned] = (used[pinned] || 0) + 1;
+            return;
+        }
         const social = getSocial(hg);
         const comp = getComp(hg);
         const base: { [p in PersonalityId]: number } = {

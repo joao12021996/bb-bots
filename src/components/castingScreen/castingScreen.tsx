@@ -14,6 +14,7 @@ import { Subscription } from "rxjs";
 import { HelpLink } from "../episode/allianceList";
 import { SeasonEditorPage } from "../seasonEditor/seasonEditorPage";
 import { Screens } from "../topbar/topBar";
+import { HallButtons } from "./hallButtons";
 
 interface CastingScreenProps {
     cast?: PlayerProfile[];
@@ -208,6 +209,7 @@ export class CastingScreen extends React.Component<CastingScreenProps, CastingSc
                     </div>
                 </HasText>
                 <CastShare cast={this.state.players} relationships={this.currentRelationships()} onImport={this.importCast} />
+                <HallButtons onLoad={(cast) => this.importCast({ cast })} />
                 <Input type="file" multiple onChange={this.handleUpload} />
                 {this.state.players.length === 0 && (
                     <Centered>

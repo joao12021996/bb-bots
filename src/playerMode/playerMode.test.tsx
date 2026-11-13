@@ -1,3 +1,4 @@
+import { loadHalls, recordHall } from "../career/halls";
 import React from "react";
 import { GameState, getById, inJury, nonEvictedHouseguests, PlayerProfile, MutableGameState } from "../model";
 import { rng } from "../utils";
@@ -166,6 +167,31 @@ describe("player mode season", () => {
             }
             if (i > 0 && log[i - 1].kind === "handoff" && !(log[i - 1] as any).shared) privateUp = true;
             else if (privateUp && (p.kind === "scene" || p.kind === "compResults")) throw new Error(`${p.kind} shown right after a private screen, at ${i}: ${log.slice(i - 4, i + 1).map((x) => x.kind + (x.kind === "handoff" ? `(${x.reason},${!!x.shared})` : "")).join(" > ")}`);
+        });
+    });
+
+    it("the first boot and the winner go in the halls, and come back as the same bots", () => {
+        localStorage.clear();
+        const { controller } = playSeason(8, [1], "random", "random");
+        const halls = loadHalls();
+        expect(halls.losers.length).toBe(1);
+        expect(halls.winners.length).toBe(1);
+        const firstOut = controller.state.history.find((w) => w.evictedIds.length > 0)!.evictedIds[0];
+        const loser = halls.losers[0].profile;
+        expect(loser.name).toBe(controller.player(firstOut).name);
+        if (firstOut !== 1) {
+            expect(loser.personality).toBe(controller.personalities[firstOut]);
+            expect(loser.throws).toBe(controller.throwScore(firstOut));
+        }
+        // the same season again isn't recorded twice
+        recordHall("losers", halls.losers[0]);
+        expect(loadHalls().losers.length).toBe(1);
+        // a Hall season: pinned bots keep their personality and throwing
+        const pinned = cast(6).map((p, i) => ({ ...p, personality: i % 2 ? "villain" : "clown", throws: i }));
+        const hall = new PlayerModeController(newPlayerSave(new GameState({ players: pinned, jury: 3 }), [0]));
+        [1, 2, 3, 4, 5].forEach((id) => {
+            expect(hall.personalities[id]).toBe(id % 2 ? "villain" : "clown");
+            expect(hall.throwScore(id)).toBe(id);
         });
     });
 

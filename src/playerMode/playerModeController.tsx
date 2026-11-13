@@ -141,6 +141,7 @@ import {
 } from "./social/promises";
 import { Standing, WeekReview, WhyTheyDidIt } from "./ui/weekReview";
 import { recordSeason, SeasonSummary } from "../career/career";
+import { Hall, recordHall } from "../career/halls";
 import { SeasonCard } from "../career/seasonCard";
 import { play as playCue } from "../sound/sound";
 import { feelingReply, mentionsIn, opinionReply, readMessage, Reply, TALK_MAX_LENGTH, TALKS_MIN, talkLine, talkPatience, TalkLine } from "./social/botTalk";
@@ -157,7 +158,7 @@ import {
     tellVote,
 } from "./social/campaign";
 import { generateBlockbusterScene } from "./blockbusterScene";
-import { getComp, getSocial } from "../model";
+import { getComp, getSocial, PlayerProfile } from "../model";
 import { clearSave, writeSave } from "./save/serialize";
 import { seedRng } from "./seeding";
 import {
@@ -1035,6 +1036,8 @@ export class PlayerModeController {
 
     // A bot's hidden throwing score, 0 to 10, mostly around 5 (see throwing.ts): fixed for the season.
     public throwScore(id: number): number {
+        const pinned = this.gameState.houseguests[id] && this.gameState.houseguests[id].throws;
+        if (typeof pinned === "number") return pinned; // a Hall season: the same bot as before
         const roll = (k: number) => hash01(`${this.state.seed}:throw:${k}:${id}`);
         return Math.round((10 * (roll(1) + roll(2) + roll(3))) / 3);
     }
@@ -5338,6 +5341,26 @@ export class PlayerModeController {
         );
     }
 
+    // The season's first houseguest out and its winner go in the halls, exactly as they were.
+    private recordHalls() {
+        const s = this.state;
+        const gs = s.gameState;
+        const log = gs.log[gs.phase] && gs.log[gs.phase][0];
+        const firstOut = s.history.find((w) => w.evictedIds.length > 0);
+        const keep = (hall: Hall, id: number | undefined) => {
+            if (id === undefined || !gs.houseguests[id]) return;
+            const hg = gs.houseguests[id];
+            const profile: PlayerProfile = { name: hg.name, imageURL: hg.imageURL, social: hg.social, comp: hg.comp };
+            if (!this.isHuman(hg)) {
+                profile.personality = this.personalities[id];
+                profile.throws = this.throwScore(id);
+            }
+            recordHall(hall, { key: `${s.seed}:${id}`, when: Date.now(), castSize: gs.houseguests.length, profile });
+        };
+        keep("losers", firstOut ? firstOut.evictedIds[0] : undefined);
+        keep("winners", log ? log.winner : undefined);
+    }
+
     // The players on this device.
     public devicePlayers(): number[] {
         if (this.net) return this.net.localIds ? this.net.localIds() : [];
@@ -5413,6 +5436,7 @@ export class PlayerModeController {
         ) : (
             table
         );
+        this.recordHalls();
         // the players on this device: their season goes in their career, and may unlock achievements
         const cards = this.devicePlayers()
             .filter((id) => !this.isRuleBreaker(id))
