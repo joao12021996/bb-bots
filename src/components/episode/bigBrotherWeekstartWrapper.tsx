@@ -27,12 +27,6 @@ export class WeekStartWrapper extends React.Component<WeekStartWrapperProps, Wee
     }
 
     render() {
-        const helpText1 =
-            this.props.gameState.phase === 1 ? (
-                <div key="helptext1" style={{ marginTop: 20 }}>
-                    <b>Try clicking on players to view their relationships.</b> <br />
-                </div>
-            ) : null;
         const helptext2 =
             this.props.gameState.phase === 2 ? (
                 <div key="helptext1" style={{ marginTop: 20 }}>
@@ -57,7 +51,7 @@ export class WeekStartWrapper extends React.Component<WeekStartWrapperProps, Wee
                           };
                       });
 
-            return [<MemoryWall key="memorywall" splits={splits} />, helpText1, helptext2];
+            return [<MemoryWall key="memorywall" splits={splits} />, helptext2];
         }
         return <AllianceList gameState={this.props.gameState} />;
     }
