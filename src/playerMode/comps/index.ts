@@ -14,6 +14,7 @@ import { GuessTheNumberComp, MathRushComp, MazeRunnerComp, OddOneOutComp, Scramb
 import { RankEmComp } from "./rankEm";
 import { BullseyeComp, ColorClashComp, NumberGridComp, ReactionLightsComp, WhackComp } from "./reflexComps";
 import { SlidePuzzleComp } from "./slidePuzzle";
+import { PackingDayComp } from "./packingDay";
 import { StopTheClockComp } from "./stopTheClock";
 import { WINE_CELLAR_ID, WineCellarComp } from "./wineCellar";
 import { BalanceBeamComp, BuzzerBashComp, WhoSaidItComp } from "./newComps";
@@ -52,6 +53,7 @@ export const ALL_COMPS: CompDefinition[] = [
     CatchTheKeysComp,
     TowerStackComp,
     BalanceBeamComp,
+    PackingDayComp,
     // luck
     HigherOrLowerComp,
     BankOrBustComp,

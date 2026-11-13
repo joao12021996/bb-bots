@@ -608,3 +608,27 @@ describe("every player gets exactly the same comp", () => {
         expect(b).toEqual(a);
     });
 });
+
+describe("Packing Day", () => {
+    const { packingOrder, newTruck, settle, PACK_W, PACK_H } = require("./packingDay");
+
+    it("deals the same boxes for the same seed, every shape once per seven", () => {
+        const a = packingOrder(seededRand(5), 28);
+        expect(packingOrder(seededRand(5), 28)).toEqual(a);
+        for (let i = 0; i < 28; i += 7) expect([...a.slice(i, i + 7)].sort()).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    });
+
+    it("loads a full row away, and stops when the boxes reach the top", () => {
+        const order = [0, 0, 0, 0];
+        const truck = newTruck(order);
+        // a bottom row with just the last four spaces open, then a long box dropped into them
+        truck.grid[PACK_H - 1] = Array.from({ length: PACK_W }, (_, c) => (c < PACK_W - 4 ? 1 : null));
+        const loaded = settle({ ...truck, piece: { ...truck.piece, row: PACK_H - 1, col: PACK_W - 4 } }, order);
+        expect(loaded.rows).toBe(1);
+        expect(loaded.grid[PACK_H - 1].every((v: number | null) => v === null)).toBe(true);
+        expect(loaded.over).toBe(false);
+        const full = newTruck(order);
+        full.grid = full.grid.map((row: (number | null)[], r: number) => (r === 0 ? row : row.map((_, c) => (c === 0 ? null : 1))));
+        expect(settle({ ...full, piece: { ...full.piece, row: 0 } }, order).over).toBe(true);
+    });
+});
