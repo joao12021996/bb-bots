@@ -23,10 +23,19 @@ function step(hub: FakeHub, sessions: NetSession[]): boolean {
     hub.instant = true;
     try {
         let acted = false;
+        // the screens up now: ones that come up while answering them wait for the next round, as on a real
+        // device (so the end of everyone's social time doesn't answer the comp that follows in the same round)
+        const up = ownScreens(live).map((o) => o.prompt);
         for (let guard = 0; guard < 50; guard++) {
-            const next = ownScreens(live)[0];
+            const next = ownScreens(live).find((o) => up.includes(o.prompt));
             if (!next) break;
-            answer(next.session.controller!, next.prompt, "random", "random");
+            // like the screen does: what's done there is for the player whose screen it is
+            next.session.focus(next.owner);
+            try {
+                answer(next.session.controller!, next.prompt, "random", "random");
+            } finally {
+                next.session.focus(null);
+            }
             acted = true;
         }
         if (!acted) moveOn(live);
@@ -64,7 +73,8 @@ function ownScreens(sessions: NetSession[]): { session: NetSession; owner: numbe
         const own = session.controller!.personal$.value;
         Object.keys(own)
             .map(Number)
-            .filter((owner) => session.mayActFor(owner))
+            // (done with social time, waiting on the others: nothing to answer)
+            .filter((owner) => session.mayActFor(owner) && own[owner].kind !== "socialDone")
             .forEach((owner) => found.push({ session, owner, prompt: own[owner] }));
     });
     return found;
@@ -73,7 +83,12 @@ function ownScreens(sessions: NetSession[]): { session: NetSession; owner: numbe
 // Plays on until at least `count` players have their own screens up at the same time.
 function untilOwnScreens(hub: FakeHub, sessions: NetSession[], count: number): boolean {
     for (let guard = 0; guard < 5000; guard++) {
-        const owners = new Set(ownScreens(sessions.filter((s) => s.controller)).map((o) => o.owner));
+        // (social time is everyone at once too, but with a whole screen of moves: these are one-answer decisions)
+        const owners = new Set(
+            ownScreens(sessions.filter((s) => s.controller))
+                .filter((o) => !["social", "alliance"].includes(o.prompt.kind))
+                .map((o) => o.owner)
+        );
         if (owners.size >= count) return true;
         if (!step(hub, sessions)) return false;
     }
@@ -798,6 +813,60 @@ describe("online play", () => {
         expect(texts(of(first))).toContain("hi everyone");
     });
 
+    it("social time is everyone's at once, with their own actions, and a player who moved on can go back", () => {
+        const { hub, host, clients, all } = setup(8, [0, 3], 13);
+        const client = clients[0];
+        const own = (s: NetSession, id: number) => s.controller!.personal$.value[id];
+        let guard = 0;
+        while (guard++ < 500 && !(own(host, 0) && own(host, 0).kind === "social" && own(client, 3) && own(client, 3).kind === "social")) step(hub, all);
+        expect(own(host, 0).kind).toBe("social");
+        expect(own(client, 3).kind).toBe("social");
+        expect(prompt(host).kind).toBe("waiting");
+        // each has their own actions
+        const c = host.controller!;
+        const start0 = c.actionsOf(0);
+        const start3 = c.actionsOf(3);
+        const bot = c.gameState.houseguests.find((hg) => !hg.isEvicted && hg.id !== 0 && hg.id !== 3)!;
+        client.focus(3);
+        client.controller!.socialAct({ kind: "chat", botId: bot.id });
+        client.focus(null);
+        hub.flush();
+        expect(c.actionsOf(3)).toBe(start3 - 1);
+        expect(c.actionsOf(0)).toBe(start0);
+        // the client moves on (no alliances yet: straight to done) while the host is still at it
+        client.focus(3);
+        client.controller!.endSocial();
+        client.focus(null);
+        hub.flush();
+        expect(own(client, 3).kind).toBe("socialDone");
+        expect(own(host, 0).kind).toBe("social");
+        expect((prompt(host) as any).waitingOn).toEqual([0]);
+        // ...then goes back to answer a text
+        host.sendChat(3, "wait, come back!");
+        hub.flush();
+        client.focus(3);
+        client.controller!.backToSocial();
+        client.focus(null);
+        hub.flush();
+        expect(own(client, 3).kind).toBe("social");
+        expect(c.actionsOf(3)).toBe(start3 - 1); // the actions they had left
+        // once everyone's done, the block moves on
+        [
+            [client, 3],
+            [host, 0],
+        ].forEach(([s, id]) => {
+            const session = s as NetSession;
+            session.focus(id as number);
+            session.controller!.endSocial();
+            session.focus(null);
+            hub.flush();
+        });
+        all.forEach((s) => expect(s.controller!.personal$.value[0] === undefined || s.controller!.personal$.value[0].kind !== "social").toBe(true));
+        settle(hub, host);
+        expectInSync(all);
+        all.forEach((s) => expect(s.resyncs).toBe(0));
+    });
+
     it("a player's conversation with a bot reaches every device, and answers the same everywhere", () => {
         const { hub, host, clients, all } = setup(8, [0, 3], 31);
         const client = clients[0];
@@ -806,9 +875,11 @@ describe("online play", () => {
             const own = client.controller!.personal$.value[3] || prompt(client);
             if (own && own.kind === "social" && actorOf(own) === 3) {
                 const bot = client.controller!.gameState.houseguests.find((hg) => !hg.isEvicted && hg.id !== 0 && hg.id !== 3)!;
-                const before = client.controller!.state.actionsLeft;
+                const before = client.controller!.actionsOf(3);
+                client.focus(3); // the screen it's on: player 3's own
                 client.controller!.talkToBot(bot.id, "hey! who are you targeting?");
                 client.controller!.talkToBot(bot.id, "final two? you and me");
+                client.focus(null);
                 hub.flush();
                 expectInSync(all);
                 const lines = host.controller!.talkWith(3, bot.id);
@@ -816,7 +887,7 @@ describe("online play", () => {
                 expect(client.controller!.talkWith(3, bot.id)).toEqual(lines);
                 // the other player has nothing to show for it
                 expect(host.controller!.talkWith(0, bot.id).filter((l) => l.text.includes("final two? you and me"))).toEqual([]);
-                expect(host.controller!.state.actionsLeft).toBeLessThanOrEqual(before);
+                expect(host.controller!.actionsOf(3)).toBeLessThanOrEqual(before);
                 talked++;
             }
             if (!step(hub, all)) break;
@@ -843,8 +914,11 @@ describe("real time", () => {
             hub.instant = true;
             try {
                 const own = ownScreens(all).filter((o) => o.prompt.kind !== "breakVote");
-                if (own.length > 0) answer(own[0].session.controller!, own[0].prompt, "random", "random");
-                else moveOn(all);
+                if (own.length > 0) {
+                    own[0].session.focus(own[0].owner);
+                    answer(own[0].session.controller!, own[0].prompt, "random", "random");
+                    own[0].session.focus(null);
+                } else moveOn(all);
             } finally {
                 hub.instant = false;
             }

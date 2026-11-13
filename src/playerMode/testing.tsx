@@ -40,7 +40,7 @@ export function answer(controller: PlayerModeController, p: Prompt, strategy: St
     else if (p.kind === "social") {
         const me = controller.socialActor;
         // answer whoever came to talk
-        while (controller.approachesFor(me.id).length > 0) controller.respondApproach(0, random() < 0.6);
+        for (let i = 0; i < 30 && controller.approachesFor(me.id).length > 0; i++) controller.respondApproach(0, random() < 0.6);
         const week = controller.state.week;
         const noms = week.nomineeIds || [];
         if (controller.state.step === Step.SocialCampaign) controller.voters().forEach((v) => controller.askVote(v.id));

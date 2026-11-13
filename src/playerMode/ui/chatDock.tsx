@@ -2,47 +2,10 @@ import React from "react";
 import { getById } from "../../model";
 import { PlayerModeController } from "../playerModeController";
 import { CHAT_MAX_LENGTH, ChatMessage, NetSession } from "../net/netSession";
+import { Conversation, conversationOf, markSeen as markRead, seen$, unreadIn, useSubject } from "./playerChat";
 
 // Online chat, in a corner of the screen: private messages with the other players still in the house, and, once
 // you're evicted, the jury house (with what the jurors have been saying about the house).
-
-type Conversation = number | "jury"; // a player's id, or the jury house
-
-function seenKey(code: string): string {
-    return `bbb-chat-seen:${code}`;
-}
-
-function loadSeen(code: string): { [conv: string]: number } {
-    try {
-        const json = localStorage.getItem(seenKey(code));
-        const seen = json ? JSON.parse(json) : {};
-        return seen && typeof seen === "object" ? seen : {};
-    } catch (e) {
-        return {};
-    }
-}
-
-function storeSeen(code: string, seen: { [conv: string]: number }) {
-    try {
-        localStorage.setItem(seenKey(code), JSON.stringify(seen));
-    } catch (e) {
-        // no storage: unread counts start over after a reload
-    }
-}
-
-function conversationOf(m: ChatMessage, me: number): Conversation {
-    if (m.to === "jury") return "jury";
-    return m.from === me ? m.to : m.from;
-}
-
-function useSubject<T>(subject: { value: T; subscribe: (fn: (v: T) => void) => { unsubscribe: () => void } }): T {
-    const [value, setValue] = React.useState(subject.value);
-    React.useEffect(() => {
-        const sub = subject.subscribe(setValue);
-        return () => sub.unsubscribe();
-    }, [subject]);
-    return value;
-}
 
 export function ChatDock(props: { session: NetSession; controller: PlayerModeController }) {
     const { session, controller } = props;
@@ -50,7 +13,7 @@ export function ChatDock(props: { session: NetSession; controller: PlayerModeCon
     useSubject(session.status$); // re-render when players come and go
     const [open, setOpen] = React.useState(false);
     const [with_, setWith] = React.useState<Conversation | null>(null);
-    const [seen, setSeen] = React.useState(() => loadSeen(session.code));
+    const seen = useSubject(seen$(session.code));
     const me = session.localPlayerId;
     if (me === null || controller.isRuleBreaker(me)) return null;
     const gs = controller.gameState;
@@ -62,18 +25,10 @@ export function ChatDock(props: { session: NetSession; controller: PlayerModeCon
     if (conversations.length === 0) return null;
     const current: Conversation | null = evicted ? "jury" : with_ !== null && conversations.includes(with_) ? with_ : conversations.length === 1 ? conversations[0] : null;
 
-    const unread = (conv: Conversation) =>
-        messages.filter((m) => m.from !== me && conversationOf(m, me) === conv && m.at > (seen[String(conv)] || 0)).length;
+    const unread = (conv: Conversation) => unreadIn(messages, seen, me, conv);
     const totalUnread = conversations.reduce<number>((n, c) => n + unread(c), 0);
 
-    const markSeen = (conv: Conversation) => {
-        const last = messages.filter((m) => conversationOf(m, me) === conv).reduce((t, m) => Math.max(t, m.at), 0);
-        if (last > (seen[String(conv)] || 0)) {
-            const next = { ...seen, [String(conv)]: last };
-            setSeen(next);
-            storeSeen(session.code, next);
-        }
-    };
+    const markSeen = (conv: Conversation) => markRead(session, me, conv);
     if (open && current !== null && unread(current) > 0) Promise.resolve().then(() => markSeen(current));
 
     const name = (id: number) => (id === me ? "You" : session.playerName(id));

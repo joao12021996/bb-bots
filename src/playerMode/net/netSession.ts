@@ -46,6 +46,7 @@ export const NETWORKED_METHODS = [
     "hohVisit",
     "hohAnswer",
     "endHohRoom",
+    "backToSocial",
 ] as const;
 
 export interface Input {
@@ -118,7 +119,7 @@ export interface SessionOptions {
 }
 
 // screens that don't wait on anyone in particular, or that wait on purpose: no time limit
-const UNTIMED = ["break", "breakVote", "handoff", "waiting", "scene", "gameOver"];
+const UNTIMED = ["break", "breakVote", "handoff", "waiting", "scene", "gameOver", "socialDone"];
 
 // Chat between players, outside the season itself (it never changes the game, so it doesn't go through the
 // inputs): private messages between houseguests still in the house, and the jury house, for evicted players.
@@ -131,7 +132,7 @@ export interface ChatMessage {
     at: number;
 }
 
-export const CHAT_MAX_LENGTH = 300;
+export const CHAT_MAX_LENGTH = 2000; // players write to each other as much as they like (bots: see TALK_MAX_LENGTH)
 const CHAT_KEEP = 500;
 
 function chatKey(code: string): string {
@@ -1416,6 +1417,9 @@ export class NetSession {
         if (this.claims[sender] !== from || !this.mayChat(sender, to)) return;
         const message: ChatMessage = { id: String(m.id).slice(0, 80), from: sender, to, text: m.text.trim().slice(0, CHAT_MAX_LENGTH), at: Date.now() };
         if (!message.text || this.allChat.some((x) => x.id === message.id)) return;
+        // texting is playing: it keeps a player's clock from running out
+        this.lastMove[sender] = Date.now();
+        this.checkIdle();
         this.addChat([message]);
         Object.keys(this.claims)
             .map(Number)

@@ -327,6 +327,9 @@ export interface PlayerSave {
     socialTurn: number; // which alive player is taking their social turn
     socialStage: "social" | "alliance"; // each player's turn: social time, then alliance time
     actionsLeft: number;
+    // online: every player's social and alliance time runs at the same time, each on their own screen (see
+    // together): where each player is in this block, and how many actions they have left
+    socialBy?: { [playerId: number]: { stage: "social" | "alliance" | "done"; actions: number } };
     socialLog: string[];
     book: AllianceBook; // every alliance in the house, bots' and players'
     approaches: { [humanId: number]: Approach[] }; // houseguests who came to talk to each player
@@ -535,6 +538,8 @@ export type Prompt =
     | { kind: "gameOver"; content: JSX.Element }
     // online: players are deciding on their own screens at the same time (see gather)
     | { kind: "waiting"; title: string; waitingOn: number[]; comp?: LiveComp }
+    // online: a player who's done with their social time, while the others finish theirs (see together)
+    | { kind: "socialDone"; actorId: number; blockName: string }
     // real time: a break before what's next, until `until` or until every player votes to move on. The host's
     // device ends it when time's up (timeUp). `at`: when, from the device that sent it, so every device agrees.
     | { kind: "break"; next: string; until: number; voters: number[]; voted: number[]; timeUp: (at: number) => void }
@@ -616,6 +621,7 @@ export function actorOf(prompt: Prompt): number | null {
         case "choose":
         case "ownMoves":
         case "juryQuestion":
+        case "socialDone":
             return prompt.actorId;
         case "winePour":
             return prompt.pourerId;
@@ -713,7 +719,37 @@ export class PlayerModeController {
 
     // The player currently taking their social turn.
     get socialActor(): Houseguest {
+        if (this.socialTogether) {
+            // the player an input is for, or (drawing a screen) this device's own player
+            const local = this.net && this.net.localIds ? this.net.localIds() : [];
+            const id = this.actingFor !== null ? this.actingFor : local.length > 0 ? local[0] : null;
+            if (id !== null && this.state.socialBy && this.state.socialBy[id]) return this.player(id);
+        }
         return this.turnOrder[this.state.socialTurn];
+    }
+
+    // Online, players have their social (and alliance) time at the same time, each on their own screen. On one
+    // device, they take turns.
+    get socialTogether(): boolean {
+        return !!this.net;
+    }
+
+    // How many social actions a player has left this block.
+    public actionsOf(id: number): number {
+        const by = this.socialTogether && this.state.socialBy ? this.state.socialBy[id] : undefined;
+        return by ? by.actions : this.state.actionsLeft;
+    }
+
+    private spendActions(id: number, n: number) {
+        const by = this.socialTogether && this.state.socialBy ? this.state.socialBy[id] : undefined;
+        if (by) by.actions -= n;
+        else this.state.actionsLeft -= n;
+    }
+
+    // Where a player is in this block: social time, alliance time, or done.
+    public socialStageOf(id: number): "social" | "alliance" | "done" {
+        const by = this.socialTogether && this.state.socialBy ? this.state.socialBy[id] : undefined;
+        return by ? by.stage : this.state.socialStage;
     }
 
     // The order players take their turns in this block of social (or alliance) time: shuffled for each block,
@@ -859,7 +895,9 @@ export class PlayerModeController {
 
     private reseed(extra: string = "") {
         const s = this.state;
-        seedRng(`${s.seed}:${s.gameState.phase}:${s.step}:${s.socialTurn}:${s.socialStage}:${s.actionsLeft}:${extra}`);
+        const by = s.socialBy && this.actingFor !== null ? s.socialBy[this.actingFor] : undefined;
+        const who = by ? `:${this.actingFor}:${by.stage}:${by.actions}` : "";
+        seedRng(`${s.seed}:${s.gameState.phase}:${s.step}:${s.socialTurn}:${s.socialStage}:${s.actionsLeft}${who}:${extra}`);
     }
 
     private show(prompt: Prompt) {
@@ -2677,6 +2715,7 @@ export class PlayerModeController {
         s.socialTurn = 0;
         s.socialStage = "social";
         s.actionsLeft = this.rules.actions;
+        delete s.socialBy;
         pruneAlliances(s.gameState, s.book).forEach((a) => this.tellAlliance(a, `💔 ${a.name} is no more.`));
         const title = finale ? "Finale" : `Day ${weekStartDay(s.gameState, s.gameState.phase)}`;
         s.step = finale ? Step.SocialFinale1 : Step.SocialMorning;
@@ -2718,6 +2757,11 @@ export class PlayerModeController {
     private social() {
         const s = this.state;
         const alive = this.turnOrder;
+        if (this.socialTogether) {
+            const players = alive.filter((p) => this.isHuman(p));
+            if (this.together(SOCIAL_BLOCK_NAMES[s.step], "social", players)) return;
+            return this.finishSocialBlock();
+        }
         if (s.socialTurn >= alive.length) return this.finishSocialBlock();
         const actor = alive[s.socialTurn];
         const blockName = SOCIAL_BLOCK_NAMES[s.step];
@@ -2731,12 +2775,18 @@ export class PlayerModeController {
             );
             return;
         }
-        // other houseguests come to talk to the player (once per social block)
+        this.startSocialTime(actor);
+        this.privately(actor.id, `${actor.name}'s social time`, () => this.show({ kind: "social", blockName, actorId: actor.id }));
+    }
+
+    // The start of a player's social time: other houseguests come to talk to them (once per social block).
+    private startSocialTime(actor: Houseguest) {
+        const s = this.state;
         const key = `${s.gameState.phase}:${s.step}`;
         if (s.approachKey[actor.id] !== key) {
             s.approachKey[actor.id] = key;
             // the start of their turn: a Have-Not only has the energy for one action
-            if (this.isHaveNot(actor.id)) s.actionsLeft = Math.min(s.actionsLeft, 1);
+            if (this.isHaveNot(actor.id)) this.spendActions(actor.id, Math.max(0, this.actionsOf(actor.id) - 1));
             this.reseed(`approach:${actor.id}`);
             const fresh = this.mutate((gs) => botApproaches(gs, s.book, actor.id, s.humanIds)).map((a) =>
                 a.kind === "chat" && this.personalities[a.fromId]
@@ -2756,15 +2806,74 @@ export class PlayerModeController {
             [...fresh, ...deals].forEach((a) => this.noteRead(actor.id, a.fromId));
             this.save();
         }
-        this.privately(actor.id, `${actor.name}'s social time`, () => this.show({ kind: "social", blockName, actorId: actor.id }));
+    }
+
+    // Online: every player's social (or alliance) time at once, each on their own screen, while the shared screen
+    // says who's still at it. A player who's done waits on a screen of their own, and can go back (backToSocial)
+    // until everyone's done. Returns whether anyone's still at it; false: the block is over.
+    private together(blockName: string, start: "social" | "alliance", players: Houseguest[]): boolean {
+        const s = this.state;
+        const by = (s.socialBy = s.socialBy || {});
+        players.forEach((p) => {
+            if (!by[p.id]) by[p.id] = { stage: start, actions: this.rules.actions };
+        });
+        // nothing to meet about (no alliances, or every one of them stands down): straight past alliance time
+        players.forEach((p) => {
+            if (by[p.id].stage === "alliance" && (this.alliancesOf(p.id).every((a) => this.allianceStandsDown(a)) || !this.allianceTimeOpen()))
+                by[p.id].stage = "done";
+        });
+        const ids = players.map((p) => p.id);
+        // players who left (a bot took over, or expelled) lose their screens
+        Object.keys(this.personal$.value)
+            .map(Number)
+            .filter((id) => !ids.includes(id))
+            .forEach((id) => this.clearPersonal(id));
+        const busy = players.filter((p) => by[p.id].stage !== "done");
+        if (busy.length === 0) {
+            this.gatherBot = null;
+            players.forEach((p) => this.clearPersonal(p.id));
+            return false;
+        }
+        players.filter((p) => by[p.id].stage === "social").forEach((p) => this.startSocialTime(p));
+        // a bot finishing for a player who ran out of time, or whose device went away
+        this.gatherBot = (id) => {
+            const mine = by[id];
+            if (!mine || mine.stage === "done") return;
+            mine.stage = "done";
+            this.save();
+            this.run();
+        };
+        this.save();
+        this.show({ kind: "waiting", title: blockName, waitingOn: busy.map((p) => p.id) });
+        // only screens that changed: a player in the middle of something keeps their screen as it is
+        players.forEach((p) => {
+            const stage = by[p.id].stage;
+            const kind = stage === "social" ? "social" : stage === "alliance" ? "alliance" : "socialDone";
+            const up = this.personal$.value[p.id];
+            if (up && up.kind === kind) return;
+            this.showPersonal(p.id, kind === "socialDone" ? { kind, actorId: p.id, blockName } : { kind, blockName, actorId: p.id });
+        });
+        return true;
+    }
+
+    // Online: a player who's moved on from social time (to alliance time, or done) goes back to it, say to answer
+    // someone who texted them. Only while the block's still going.
+    public backToSocial() {
+        const s = this.state;
+        const id = this.actingFor;
+        const by = s.socialBy && id !== null ? s.socialBy[id] : undefined;
+        if (!this.socialTogether || !by || by.stage === "social" || !SOCIAL_BLOCK_NAMES[s.step]) return;
+        by.stage = "social";
+        this.save();
+        this.run();
     }
 
     // Called by the social screen.
     public socialAct(action: SocialAction): SocialOutcome | null {
         const s = this.state;
         const actor = this.socialActor;
-        if (s.actionsLeft <= 0 || !actor) return null;
-        if (action.kind === "meeting" && (s.actionsLeft < 2 || (s.week.meetingBy || []).includes(actor.id))) return null;
+        if (!actor || this.actionsOf(actor.id) <= 0) return null;
+        if (action.kind === "meeting" && (this.actionsOf(actor.id) < 2 || (s.week.meetingBy || []).includes(actor.id))) return null;
         this.reseed("act");
         let outcome: SocialOutcome;
         if (action.kind === "alliance" && this.isHuman({ id: action.botId })) {
@@ -2776,7 +2885,10 @@ export class PlayerModeController {
                 ...(s.approaches[other.id] || []),
                 { kind: "invite", fromId: actor.id, allianceId: a ? a.id : undefined, name },
             ];
-            outcome = { text: `You asked ${other.name} to join ${name}. They'll answer on their social turn.`, good: true };
+            outcome = {
+                text: `You asked ${other.name} to join ${name}. They'll answer on their ${this.socialTogether ? "social screen" : "social turn"}.`,
+                good: true,
+            };
         } else if (action.kind === "alliance") {
             const { botId, allianceId, name } = action;
             outcome = this.mutate((gs) => proposeAlliance(gs, s.book, actor.id, botId, { allianceId, name }));
@@ -2785,7 +2897,7 @@ export class PlayerModeController {
         } else {
             outcome = this.mutate((gs) => performSocialAction(gs, actor.id, action, this.socialMemory(actor.id)));
         }
-        s.actionsLeft -= action.kind === "meeting" ? 2 : 1;
+        this.spendActions(actor.id, action.kind === "meeting" ? 2 : 1);
         const withId = (action as { botId?: number }).botId;
         if (withId !== undefined) this.noteRead(actor.id, withId, action.kind !== "chat");
         s.socialLog.push(`${outcome.good ? "👍" : "👎"} ${outcome.text}`);
@@ -3252,7 +3364,7 @@ export class PlayerModeController {
             .replace(/\s+/g, " ")
             .trim()
             .slice(0, TALK_MAX_LENGTH);
-        if (!actor || !clean || s.socialStage !== "social" || !this.isHuman(actor) || !SOCIAL_BLOCK_NAMES[s.step]) return null;
+        if (!actor || !clean || this.socialStageOf(actor.id) !== "social" || !this.isHuman(actor) || !SOCIAL_BLOCK_NAMES[s.step]) return null;
         if (s.approachKey[actor.id] !== `${s.gameState.phase}:${s.step}`) return null; // their social screen isn't up yet
         const bot = s.gameState.houseguests.find((hg) => hg.id === botId);
         if (!bot || bot.isEvicted || bot.id === actor.id || this.isHuman(bot)) return null;
@@ -3310,7 +3422,7 @@ export class PlayerModeController {
 
         // an action, as if the player had pressed its button (no actions left: the bot puts it off)
         const act = (action: SocialAction, yes: Reply, no: Reply, about: string = "") => {
-            if (s.actionsLeft <= 0) {
+            if (this.actionsOf(actor.id) <= 0) {
                 botSays(line("busy"));
                 return finish();
             }
@@ -3864,7 +3976,11 @@ export class PlayerModeController {
             s.news[actor.id] = [];
             s.approaches[actor.id] = this.approachesFor(actor.id).filter((a) => a.kind === "invite");
         }
-        s.socialStage = "alliance";
+        const by = actor && this.socialTogether && s.socialBy ? s.socialBy[actor.id] : undefined;
+        if (by) {
+            if (by.stage !== "social") return;
+            by.stage = "alliance";
+        } else s.socialStage = "alliance";
         this.save();
         this.run();
     };
@@ -3879,7 +3995,13 @@ export class PlayerModeController {
         a.suggestions[actor.id] = targetId;
         a.backupSuggestions = { ...(a.backupSuggestions || {}), [actor.id]: this.planBWeek && backupId !== targetId ? backupId : null };
         a.memberIds.forEach((m) => this.noteRead(actor.id, m)); // alliance time: you get a read on your allies
-        const later = this.turnOrder.slice(s.socialTurn + 1).filter((p) => a.memberIds.includes(p.id));
+        const by = this.socialTogether ? s.socialBy : undefined;
+        const later = by
+            ? // online: players in it who are still at it and haven't had their say
+              a.memberIds
+                  .filter((id) => id !== actor.id && by[id] && by[id].stage !== "done" && a.suggestions[id] === undefined)
+                  .map((id) => this.player(id))
+            : this.turnOrder.slice(s.socialTurn + 1).filter((p) => a.memberIds.includes(p.id));
         if (later.length > 0) {
             this.save();
             return [`Your pick is in. ${later.map((p) => p.name).join(" and ")} will weigh in before ${a.name} decides.`];
@@ -3949,6 +4071,13 @@ export class PlayerModeController {
         const s = this.state;
         const actor = this.socialActor;
         if (actor) s.approaches[actor.id] = [];
+        const by = actor && this.socialTogether && s.socialBy ? s.socialBy[actor.id] : undefined;
+        if (by) {
+            if (by.stage !== "alliance") return;
+            by.stage = "done";
+            this.save();
+            return this.run();
+        }
         s.socialTurn++;
         s.socialStage = "social";
         s.actionsLeft = this.rules.actions;
@@ -4054,6 +4183,7 @@ export class PlayerModeController {
         s.socialTurn = 0;
         s.socialStage = "social";
         s.actionsLeft = this.rules.actions;
+        delete s.socialBy;
         this.goTo(AFTER_SOCIAL[s.step]);
     }
 
@@ -4242,10 +4372,14 @@ export class PlayerModeController {
     private allianceHoh(): void {
         const s = this.state;
         const alive = this.turnOrder;
+        if (this.allianceTimeOpen() && this.socialTogether) {
+            const players = alive.filter((p) => this.isHuman(p) && this.alliancesOf(p.id).length > 0);
+            if (this.together(`Before nominations: ${this.hohLine()}`, "alliance", players)) return;
+        }
         if (this.allianceTimeOpen()) {
             while (s.socialTurn < alive.length && (this.alliancesOf(alive[s.socialTurn].id).length === 0 || !this.isHuman(alive[s.socialTurn])))
                 s.socialTurn++;
-            if (s.socialTurn < alive.length) {
+            if (!this.socialTogether && s.socialTurn < alive.length) {
                 const actor = alive[s.socialTurn];
                 s.socialStage = "alliance";
                 this.save();
@@ -4272,6 +4406,7 @@ export class PlayerModeController {
         s.socialTurn = 0;
         s.socialStage = "social";
         s.actionsLeft = this.rules.actions;
+        delete s.socialBy;
         this.goTo(Step.HohRoom);
     }
 

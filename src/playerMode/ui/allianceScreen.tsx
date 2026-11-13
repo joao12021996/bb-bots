@@ -1,6 +1,8 @@
 import React from "react";
 import { nonEvictedHouseguests } from "../../model";
-import { PlayerModeController } from "../playerModeController";
+import { isSocialStep, PlayerModeController } from "../playerModeController";
+import { sessionFor } from "../net/netSession";
+import { TextsBanner } from "./playerChat";
 import { Alliance, aliveMembers, botBackup, botSuggestion, chemistryLabel, meetingSplit, positionsOf } from "../social/alliances";
 import { BigButton, Face, Grid, Panel, Subtle, Title, whenDone } from "./common";
 
@@ -328,11 +330,15 @@ export function AllianceScreen(props: AllianceScreenProps) {
     // keep showing alliances the player leaves or gets kicked out of during this screen
     const [alliances] = React.useState(() => controller.alliancesOf(me.id));
     const [, rerender] = React.useState(0);
+    // online: social time is still on for the others, so you can go back to it (say, to answer a text)
+    const session = controller.socialTogether ? sessionFor(controller) : null;
+    const backable = !!session && isSocialStep(controller.state.step);
     return (
         <Panel>
             <Title>🤝 Alliance time</Title>
             <Subtle>{props.blockName}</Subtle>
-            {controller.multiplayer && <Subtle>{me.name}'s turn</Subtle>}
+            {controller.multiplayer && !session && <Subtle>{me.name}'s turn</Subtle>}
+            {session && backable && <TextsBanner session={session} me={me.id} onOpen={() => controller.backToSocial()} action="Go back and answer" />}
             <Subtle>
                 Your alliances meet to agree on a target. Allies protect each other, so a strong alliance keeps you safe. When
                 an alliance can't agree, its chemistry drops.
@@ -343,6 +349,11 @@ export function AllianceScreen(props: AllianceScreenProps) {
             <BigButton kind="primary" onClick={controller.endAlliance}>
                 Done
             </BigButton>
+            {backable && (
+                <BigButton kind="light" onClick={() => controller.backToSocial()}>
+                    ↩️ Back to social time
+                </BigButton>
+            )}
         </Panel>
     );
 }

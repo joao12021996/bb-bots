@@ -9,6 +9,7 @@ import { BackAfterComp, PauseBar, TurnClock } from "./turnClock";
 import { watchForInspector } from "../net/inspectWatch";
 import { OnlineBar, WaitingFor, WaitingOnPlayers } from "./onlineLobby";
 import { ChatDock } from "./chatDock";
+import { SocialDoneScreen } from "./playerChat";
 import { ChoosePrompt } from "./choosePrompt";
 import { BigButton, Loading, Panel, Subtle, Title } from "./common";
 import { SocialScreen } from "./socialScreen";
@@ -391,6 +392,15 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                 break;
             case "alliance":
                 body = <AllianceScreen key={key} controller={controller} blockName={prompt.blockName} />;
+                break;
+            case "socialDone":
+                body = session ? (
+                    <SocialDoneScreen key={key} session={session} controller={controller} actorId={prompt.actorId} blockName={prompt.blockName} />
+                ) : (
+                    <Panel>
+                        <Subtle>Waiting…</Subtle>
+                    </Panel>
+                );
                 break;
             case "hohRoom":
                 body = <HohRoomScreen key={key} controller={controller} actorId={prompt.actorId} />;

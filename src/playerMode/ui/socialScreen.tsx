@@ -10,6 +10,11 @@ import { PITCH_REASONS, reasonLine } from "../social/pitch";
 import { BigButton, Face, Grid, Panel, Subtle, Title, whenDone } from "./common";
 import { HOH } from "../terms";
 import { BotTalkPanel } from "./botTalkPanel";
+import { sessionFor } from "../net/netSession";
+import { blockStart, PlayerChatPanel, TextsBanner, unanswered, useSubject, useUnreadFrom } from "./playerChat";
+
+const NO_CHAT = { value: [] as never[], subscribe: () => ({ unsubscribe: () => undefined }) };
+const NO_SESSION: any = { chat$: NO_CHAT, code: "" };
 
 interface SocialScreenProps {
     controller: PlayerModeController;
@@ -20,6 +25,7 @@ type Mode =
     | { kind: "pickBot" }
     | { kind: "pickAction"; botId: number }
     | { kind: "talk"; botId: number }
+    | { kind: "player"; id: number } // online: texting another player
     | { kind: "pickTarget"; botId: number; only?: number[]; prompt?: string }
     | { kind: "tell"; botId: number; what: "tellVote" | "tellTarget" }
     | { kind: "rumourAbout"; botId: number }
@@ -198,6 +204,19 @@ export function SocialScreen(props: SocialScreenProps) {
     const [allianceName, setAllianceName] = React.useState("");
     const [news] = React.useState(() => controller.newsFor(controller.socialActor.id));
     const [, rerender] = React.useState(0);
+    const [confirming, setConfirming] = React.useState<number[] | null>(null);
+    // online: everyone's social time is at once, and players text each other from here
+    const session = controller.socialTogether ? sessionFor(controller) : null;
+    const me = controller.socialActor.id;
+    const chat = useSubject(session ? session.chat$ : NO_CHAT);
+    const unreadFrom = useUnreadFrom(session || NO_SESSION, me);
+    const since = React.useMemo(() => (session ? blockStart(session, controller) : 0), [session, controller]);
+    // online: other players' moves land while you're here (an invitation, an alliance forming...)
+    React.useEffect(() => {
+        if (!session) return;
+        const sub = controller.changed$.subscribe(() => rerender((n) => n + 1));
+        return () => sub.unsubscribe();
+    }, [session, controller]);
 
     const gs = controller.gameState;
     const human = controller.socialActor;
@@ -205,7 +224,7 @@ export function SocialScreen(props: SocialScreenProps) {
     const myAlliances = controller.alliancesOf(human.id);
     const approaches = controller.approachesFor(human.id);
     const everyoneElse = nonEvictedHouseguests(gs).filter((hg) => hg.id !== human.id);
-    const actionsLeft = controller.state.actionsLeft;
+    const actionsLeft = controller.actionsOf(human.id);
     const hohId = controller.publicHohId(human.id); // a secret HoH stays secret
     const nomineeIds = controller.state.week.nomineeIds || [];
 
@@ -227,7 +246,7 @@ export function SocialScreen(props: SocialScreenProps) {
             hg.id === hohId ? "👑" : "",
             nomineeIds.includes(hg.id) ? "🎯" : "",
         ].join("");
-        if (controller.isHuman(hg)) return <span>🎮 Player {tags}</span>;
+        if (controller.isHuman(hg)) return <span>{unreadFrom.includes(hg.id) ? "📩 Texted you" : "🎮 Player"} {tags}</span>;
         // your last read on them (how they acted, which isn't necessarily how they feel), if you have one
         const read = controller.readOf(human.id, hg.id);
         return (
@@ -256,7 +275,9 @@ export function SocialScreen(props: SocialScreenProps) {
                             hg={hg}
                             caption={caption(hg)}
                             onClick={
-                                actionsLeft > 0
+                                session && controller.isHuman(hg)
+                                    ? () => setMode({ kind: "player", id: hg.id }) // online: text them (and invite them from there)
+                                    : actionsLeft > 0
                                     ? () => {
                                           if (controller.isHuman(hg)) {
                                               setAllianceName(suggestAllianceName(controller.book));
@@ -407,6 +428,30 @@ export function SocialScreen(props: SocialScreenProps) {
                 </BigButton>
             </div>
         );
+    } else if (mode.kind === "player") {
+        const other = getById(gs, mode.id);
+        body = !session ? (
+            <div />
+        ) : (
+            <div>
+                <Face hg={other} caption={caption(other)} small={true} />
+                <PlayerChatPanel session={session} controller={controller} me={me} otherId={other.id} />
+                {actionsLeft > 0 && (
+                    <BigButton
+                        kind="success"
+                        onClick={() => {
+                            setAllianceName(suggestAllianceName(controller.book));
+                            setMode({ kind: "alliance", botId: other.id });
+                        }}
+                    >
+                        🤝 Invite to an alliance
+                    </BigButton>
+                )}
+                <BigButton kind="light" onClick={() => setMode({ kind: "pickBot" })}>
+                    Back
+                </BigButton>
+            </div>
+        );
     } else if (mode.kind === "alliance") {
         const other = getById(gs, mode.botId);
         const joinable = myAlliances.filter((a) => !a.memberIds.includes(other.id));
@@ -416,7 +461,7 @@ export function SocialScreen(props: SocialScreenProps) {
                 <Face hg={other} caption={caption(other)} />
                 <Subtle>
                     {isPlayer
-                        ? `${other.name} is a player. They'll answer your invitation on their own social turn.`
+                        ? `${other.name} is a player. They'll answer your invitation ${session ? "on their screen" : "on their own social turn"}.`
                         : `Ask ${other.name} to start a new alliance with you${joinable.length > 0 ? ", or to join one of yours" : ""}.`}
                 </Subtle>
                 <form
@@ -446,7 +491,7 @@ export function SocialScreen(props: SocialScreenProps) {
                 <div>
                     <BigButton
                         kind="light"
-                        onClick={() => setMode(isPlayer ? { kind: "pickBot" } : { kind: "pickAction", botId: other.id })}
+                        onClick={() => setMode(isPlayer ? (session ? { kind: "player", id: other.id } : { kind: "pickBot" }) : { kind: "pickAction", botId: other.id })}
                     >
                         Back
                     </BigButton>
@@ -571,7 +616,8 @@ export function SocialScreen(props: SocialScreenProps) {
     return (
         <Panel>
             <Title>🗣️ {props.blockName}</Title>
-            {controller.multiplayer && <Subtle>{human.name}'s turn</Subtle>}
+            {controller.multiplayer && !session && <Subtle>{human.name}'s turn</Subtle>}
+            {session && mode.kind !== "player" && <TextsBanner session={session} me={me} onOpen={(id) => setMode({ kind: "player", id })} />}
             <Subtle>
                 Social time, then alliance time. Bots who like you are less likely to nominate you or vote you out, and more
                 likely to vote for you to win.
@@ -600,7 +646,29 @@ export function SocialScreen(props: SocialScreenProps) {
             )}
             {body}
             <OutcomeList outcomes={outcomes} />
-            <BigButton kind={actionsLeft > 0 ? "light" : "primary"} onClick={controller.endSocial}>
+            {confirming && (
+                <div className="bbb-confirm" role="alertdialog" aria-label="Move on without a reply?">
+                    <p>
+                        📩 You texted {confirming.map((id) => controller.player(id).name).join(" and ")} and{" "}
+                        {confirming.length === 1 ? "they haven't" : "they haven't"} replied yet. Move on anyway?
+                    </p>
+                    <BigButton kind="primary" onClick={controller.endSocial}>
+                        Move on
+                    </BigButton>
+                    <BigButton kind="light" onClick={() => setConfirming(null)}>
+                        Wait for a reply
+                    </BigButton>
+                </div>
+            )}
+            <BigButton
+                kind={actionsLeft > 0 ? "light" : "primary"}
+                onClick={() => {
+                    // online: texts you sent this block that nobody's answered yet: check first
+                    const waiting = session ? unanswered(chat, me, since).filter((id) => controller.isHuman({ id }) && !controller.player(id).isEvicted) : [];
+                    if (waiting.length > 0 && !confirming) setConfirming(waiting);
+                    else controller.endSocial();
+                }}
+            >
                 {myAlliances.length === 0 || !controller.allianceTimeOpen()
                     ? actionsLeft > 0
                         ? "Skip the rest"
