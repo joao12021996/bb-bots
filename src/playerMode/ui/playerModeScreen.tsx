@@ -83,17 +83,42 @@ interface State {
     personal: { [playerId: number]: Prompt }; // online: players' own screens
 }
 
-function Handoff(props: { name: string; imageURL: string; reason: string; onReady: () => void }) {
+// Pass-and-play: who gets the device next, and whether the others may watch.
+function Handoff(props: { name: string; imageURL: string; reason: string; shared?: boolean; everyone?: boolean; onReady: () => void }) {
+    if (props.everyone) {
+        return (
+            <Panel>
+                <div className="bbb-handoff bbb-handoff-shared">
+                    <div className="bbb-handoff-icon">👀</div>
+                    <Title>{t("Everyone, gather round")}</Title>
+                    <Subtle>{t("The next screen isn't private. Put the device where you can all see it.")}</Subtle>
+                    <BigButton kind="success" onClick={props.onReady}>
+                        {t("We're all here")}
+                    </BigButton>
+                </div>
+            </Panel>
+        );
+    }
     return (
         <Panel>
-            <div className="bbb-handoff">
+            <div className={props.shared ? "bbb-handoff bbb-handoff-shared" : "bbb-handoff"}>
                 <div className="bbb-handoff-icon">📱</div>
-                <Subtle>Pass the device to</Subtle>
+                <Subtle>{t("Pass the device to")}</Subtle>
                 <img src={props.imageURL} alt="" />
                 <Title>{props.name}</Title>
-                <Subtle>{props.reason}. Everyone else, look away!</Subtle>
+                {props.shared ? (
+                    <>
+                        <Subtle>{props.reason}.</Subtle>
+                        <p className="bbb-handoff-note">👀 {t("The next screen isn't private: everyone can watch.")}</p>
+                    </>
+                ) : (
+                    <>
+                        <Subtle>{props.reason}.</Subtle>
+                        <p className="bbb-handoff-note">🔒 {t("Private: everyone else, look away!")}</p>
+                    </>
+                )}
                 <BigButton kind="success" onClick={props.onReady}>
-                    I'm {props.name}, show me
+                    {props.shared ? t("Show us") : t("I'm {name}, show me", { name: props.name })}
                 </BigButton>
             </div>
         </Panel>
@@ -266,7 +291,17 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                 break;
             case "handoff": {
                 const p = controller.player(prompt.playerId);
-                body = <Handoff key={key} name={p.name} imageURL={p.imageURL} reason={prompt.reason} onReady={prompt.next} />;
+                body = (
+                    <Handoff
+                        key={key}
+                        name={p.name}
+                        imageURL={p.imageURL}
+                        reason={prompt.reason}
+                        shared={prompt.shared}
+                        everyone={prompt.everyone}
+                        onReady={prompt.next}
+                    />
+                );
                 break;
             }
             case "social":

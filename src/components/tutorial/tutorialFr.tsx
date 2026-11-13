@@ -170,7 +170,9 @@ export const SECTIONS_FR: Section[] = [
                 </li>
                 <li>
                     <b>🎮 Jouer un colocataire</b> : en solo, ou à plusieurs en se passant l'appareil. Les écrans privés
-                    sont cachés derrière un passage de main, pour que personne ne voie les choix des autres.
+                    (votes, pouvoirs secrets, décisions) passent d'un joueur à l'autre derrière un 🔒 passage de main.
+                    Tout le reste se regarde ensemble : résultats, cérémonies, discours, et une épreuve où un seul
+                    d'entre vous joue. Le passage de main indique toujours si l'écran suivant est privé.
                 </li>
                 <li>
                     <b>🌐 Jouer en ligne</b> : crée une partie et partage le code. La maison commence pleine de bots,

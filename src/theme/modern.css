@@ -514,6 +514,23 @@ input[type="number"] {
     margin: 8px auto 0;
     display: block;
 }
+.bbb-handoff-note {
+    margin: 10px auto 14px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    display: inline-block;
+    font-weight: 600;
+    background: rgba(251, 113, 133, 0.14);
+    color: #fda4af;
+}
+.bbb-handoff-shared .bbb-handoff-note {
+    background: rgba(52, 211, 153, 0.14);
+    color: #6ee7b7;
+}
+.bbb-handoff-shared img {
+    border-color: #34d399;
+    box-shadow: 0 0 30px rgba(52, 211, 153, 0.45);
+}
 .bbb-setup-mode {
     margin: 10px auto;
     font-weight: 700;

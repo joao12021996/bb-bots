@@ -277,4 +277,14 @@ export const FR: { [english: string]: string } = {
     Eviction: "Expulsion",
     Remove: "Retirer",
     Done: "Terminé",
+    // ---------- pass-and-play ----------
+    "Everyone, gather round": "Tout le monde, approchez",
+    "The next screen isn't private. Put the device where you can all see it.":
+        "L'écran suivant n'est pas privé. Posez l'appareil là où tout le monde peut le voir.",
+    "We're all here": "On est tous là",
+    "Pass the device to": "Passe l'appareil à",
+    "The next screen isn't private: everyone can watch.": "L'écran suivant n'est pas privé : tout le monde peut regarder.",
+    "Private: everyone else, look away!": "Privé : les autres, regardez ailleurs !",
+    "Show us": "Montre-nous",
+    "I'm {name}, show me": "Je suis {name}, montre-moi",
 };

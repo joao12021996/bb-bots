@@ -133,6 +133,42 @@ describe("player mode season", () => {
         expect(playSeason(8, [1, 4], "random", "random").seen.has("handoff")).toBe(true);
     });
 
+    it("pass-and-play: private screens are taken one at a time, the rest are watched together", () => {
+        const humanIds = [1, 4];
+        const controller = new PlayerModeController(newPlayerSave(newGame(8), humanIds));
+        controller.state.seed = 4242;
+        const log: Prompt[] = [];
+        controller.prompt$.subscribe((p) => p && log.push(p));
+        controller.start();
+        let guard = 0;
+        while (guard++ < 6000 && log[log.length - 1].kind !== "gameOver") answer(controller, log[log.length - 1], "random", "random");
+        expect(log[log.length - 1].kind).toBe("gameOver");
+        const handoffs = log.filter((p) => p.kind === "handoff") as Extract<Prompt, { kind: "handoff" }>[];
+        const secret = handoffs.filter((h) => !h.shared).map((h) => h.reason);
+        const open = handoffs.filter((h) => h.shared && !h.everyone).map((h) => h.reason);
+        // votes stay secret; speeches and answers to the jury are for everyone
+        expect(secret.some((r) => /time to vote/.test(r))).toBe(true);
+        expect(open.filter((r) => /time to vote/.test(r))).toEqual([]);
+        expect(secret.filter((r) => /speech|question from the jury|pick the next duel/.test(r))).toEqual([]);
+        expect(handoffs.some((h) => h.everyone)).toBe(true);
+        // a comp only one of them plays can be watched; one they both play can't (they'd see the answers)
+        log.forEach((p, i) => {
+            if (p.kind !== "compPlay" || i === 0 || log[i - 1].kind !== "handoff") return;
+            const humansIn = p.participants.filter((hg) => humanIds.includes(hg.id)).length;
+            expect(!!(log[i - 1] as any).shared).toBe(humansIn === 1);
+        });
+        // after a private screen, everyone is called back before a screen for everyone
+        let privateUp = false;
+        log.forEach((p, i) => {
+            if (p.kind === "handoff") {
+                if (p.shared) privateUp = false; // everyone's called over
+                return;
+            }
+            if (i > 0 && log[i - 1].kind === "handoff" && !(log[i - 1] as any).shared) privateUp = true;
+            else if (privateUp && (p.kind === "scene" || p.kind === "compResults")) throw new Error(`${p.kind} shown right after a private screen, at ${i}: ${log.slice(i - 4, i + 1).map((x) => x.kind + (x.kind === "handoff" ? `(${x.reason},${!!x.shared})` : "")).join(" > ")}`);
+        });
+    });
+
     it("players take their social turns in a random order, a new one each block", () => {
         const controller = new PlayerModeController(newPlayerSave(newGame(10), [1, 4, 7]));
         controller.state.seed = 99;

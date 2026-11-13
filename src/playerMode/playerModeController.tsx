@@ -365,7 +365,9 @@ export interface BotTalk {
 
 export type Prompt =
     | { kind: "scene"; scene: Scene }
-    | { kind: "handoff"; playerId: number; reason: string; next: () => void }
+    // pass-and-play: hand the device to someone before the next screen. `shared`: the next screen isn't private, so
+    // everyone can watch. `everyone`: no one in particular, everyone gathers round (playerId is just a placeholder).
+    | { kind: "handoff"; playerId: number; reason: string; next: () => void; shared?: boolean; everyone?: boolean }
     | { kind: "social"; blockName: string; actorId: number }
     | { kind: "alliance"; blockName: string; actorId: number }
     | { kind: "hohRoom"; actorId: number } // the HoH hears out whoever came up
@@ -575,6 +577,7 @@ export function migrateSave(save: any): PlayerSave | null {
 export function actorOf(prompt: Prompt): number | null {
     switch (prompt.kind) {
         case "handoff":
+            return prompt.everyone ? null : prompt.playerId;
         case "compPlay":
         case "tiebreak":
         case "hideTiebreak":
@@ -834,14 +837,45 @@ export class PlayerModeController {
     }
 
     private show(prompt: Prompt) {
+        if (this.multiplayer && !this.net) {
+            if (prompt.kind === "handoff") this.afterPrivate = false;
+            else if (this.inPrivate) this.afterPrivate = true;
+            else if (this.afterPrivate && actorOf(prompt) === null) {
+                // a screen for everyone, after a private one: call everyone back first
+                this.afterPrivate = false;
+                const next = () => this.prompt$.next(prompt);
+                return this.prompt$.next({ kind: "handoff", playerId: this.state.humanIds[0], reason: "", next, shared: true, everyone: true });
+            }
+        }
         this.prompt$.next(this.net ? this.net.wrapPrompt(prompt) : prompt);
     }
 
-    // In pass-and-play, private screens are preceded by a "pass the device to X" screen.
-    // Online, each player has their own device, so there's nothing to pass.
-    private privately(playerId: number, reason: string, prompt: () => void) {
+    // pass-and-play: a private screen is being opened / the last screen up was private
+    private inPrivate = false;
+    private afterPrivate = false;
+
+    // In pass-and-play, the device is passed before each screen meant for one player. Online, each player has
+    // their own device, so there's nothing to pass. `secret`: no one else may see it (votes, powers, decisions);
+    // otherwise the others are welcome to watch (a speech, a comp only one of them plays).
+    private handOff(secret: boolean, playerId: number, reason: string, prompt: () => void) {
         if (!this.multiplayer || this.net) return prompt();
-        this.show({ kind: "handoff", playerId, reason, next: prompt });
+        const next = () => {
+            this.inPrivate = secret;
+            try {
+                prompt();
+            } finally {
+                this.inPrivate = false;
+            }
+        };
+        this.show({ kind: "handoff", playerId, reason, next, shared: !secret });
+    }
+
+    private privately(playerId: number, reason: string, prompt: () => void) {
+        this.handOff(true, playerId, reason, prompt);
+    }
+
+    private openly(playerId: number, reason: string, prompt: () => void) {
+        this.handOff(false, playerId, reason, prompt);
     }
 
     // Online: a screen of a player's own, up at the same time as the shared one and other players' own screens.
@@ -1762,7 +1796,8 @@ export class PlayerModeController {
                 answers: r.answers,
                 picks: r.picks,
             }));
-            this.privately(player.id, `${player.name}'s turn in the ${comp.name}`, () =>
+            // the others can watch if they aren't playing it too (they'd see the answers)
+            this.handOff(humans.length > 1, player.id, `${player.name}'s turn in the ${comp.name}`, () =>
                 this.show({
                     kind: "compPlay",
                     title,
@@ -1942,7 +1977,7 @@ export class PlayerModeController {
                 return go(keyed.slice(0, 2).map((k) => k.id));
             }
             board(() =>
-                this.privately(pickerId, `${picker.name}, pick the next duel`, () =>
+                this.openly(pickerId, `${picker.name}, pick the next duel`, () =>
                     this.show({
                         kind: "choose",
                         actorId: pickerId,
@@ -4359,7 +4394,7 @@ export class PlayerModeController {
                 pick: { text: "Who is your target?", options, max: 1 },
             },
         ];
-        this.privately(hoh.id, `${hoh.name}'s nomination speech`, () =>
+        this.openly(hoh.id, `${hoh.name}'s nomination speech`, () =>
             this.show({
                 kind: "speech",
                 actorId: hoh.id,
@@ -4465,7 +4500,7 @@ export class PlayerModeController {
                 blurb: "Go after the nominee sitting next to you. Voters who dislike them move toward you. Their friends won't like it.",
                 pick: { text: "Who do you call out?", options: rivals, max: 1 },
             });
-        this.privately(speaker.id, `${speaker.name}'s eviction speech`, () =>
+        this.openly(speaker.id, `${speaker.name}'s eviction speech`, () =>
             this.show({
                 kind: "speech",
                 actorId: speaker.id,
@@ -5168,7 +5203,7 @@ export class PlayerModeController {
                 this.reseed(`speech:${speaker.id}`);
                 return deliver(botOwns(this.personalities[speaker.id], moves));
             }
-            return this.privately(speaker.id, `${speaker.name}'s final two speech`, () =>
+            return this.openly(speaker.id, `${speaker.name}'s final two speech`, () =>
                 this.show({ kind: "ownMoves", actorId: speaker.id, moves, onDone: deliver })
             );
         }
@@ -5186,7 +5221,7 @@ export class PlayerModeController {
                 this.reseed(`botanswer:${ft.qIndex}`);
                 return respond(botAnswer(this.personalities[finalist.id]));
             }
-            return this.privately(finalist.id, `${finalist.name}, a question from the jury`, () =>
+            return this.openly(finalist.id, `${finalist.name}, a question from the jury`, () =>
                 this.show({ kind: "juryQuestion", actorId: finalist.id, jurorId: q.jurorId, question: q, onAnswer: respond })
             );
         }

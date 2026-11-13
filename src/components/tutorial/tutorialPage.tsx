@@ -175,7 +175,9 @@ const SECTIONS_EN: Section[] = [
                 </li>
                 <li>
                     <b>🎮 Play as a houseguest</b>: solo, or pass-and-play with friends on one device. Private screens
-                    are hidden behind a hand-off, so nobody sees someone else's choices.
+                    (votes, secret powers, decisions) come one player at a time behind a 🔒 hand-off. Everything
+                    else is watched together: results, ceremonies, speeches, and a comp only one of you is in. The
+                    hand-off always says whether the next screen is private.
                 </li>
                 <li>
                     <b>🌐 Play online</b>: host a game and share the code. The house starts full of bots, and every
