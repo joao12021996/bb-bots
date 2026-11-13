@@ -6,7 +6,6 @@ import { RUMOURS } from "../social/drama";
 import { PITCH_REASONS, PitchReason, reasonLine } from "../social/pitch";
 import { hasFinal2 } from "../social/promises";
 import { SocialAction, SocialOutcome } from "../social/socialActions";
-import { suggestAllianceName } from "../social/alliances";
 import { HOH } from "../terms";
 import { nomsSetStep } from "../week";
 import { Face, Grid, Subtle, whenDone } from "./common";
@@ -17,8 +16,7 @@ type Picker =
     | { kind: "reason"; targetId: number; bus?: boolean }
     | { kind: "rumour" }
     | { kind: "rumourKind"; targetId: number }
-    | { kind: "tell"; what: "tellVote" | "tellTarget" }
-    | { kind: "alliance" };
+    | { kind: "tell"; what: "tellVote" | "tellTarget" };
 
 const chip = (kind: string) => `button is-small is-${kind}`;
 
@@ -35,7 +33,6 @@ export function BotTalkPanel(props: {
     const bot = controller.player(botId);
     const [text, setText] = React.useState("");
     const [picker, setPicker] = React.useState<Picker | null>(null);
-    const [allianceName, setAllianceName] = React.useState("");
     const [, rerender] = React.useState(0);
     const end = React.useRef<HTMLDivElement>(null);
     const lines = controller.talkWith(me.id, botId);
@@ -208,79 +205,11 @@ export function BotTalkPanel(props: {
                 )}
             </>
         );
-    } else if (picker && picker.kind === "alliance") {
-        menu = (
-            <>
-                <Subtle>
-                    Ask {bot.name} to start a new alliance with you
-                    {joinable.length > 0 ? ", or to join one of yours" : ""}.
-                </Subtle>
-                <form
-                    className="bbb-inline-form"
-                    onSubmit={(e) => {
-                        e.preventDefault();
-                        const named = allianceName.trim() || suggestAllianceName(controller.book);
-                        doAction(`You and me: an alliance. Let's call it ${named}.`, {
-                            kind: "alliance",
-                            botId,
-                            name: named,
-                        });
-                    }}
-                >
-                    <input
-                        className="input"
-                        type="text"
-                        maxLength={30}
-                        placeholder="Alliance name"
-                        value={allianceName}
-                        onChange={(e) => setAllianceName(e.target.value)}
-                    />
-                    <button type="submit" className="button is-success">
-                        🤝 Start it
-                    </button>
-                </form>
-                <div className="bbb-talk-chips">
-                    {joinable.map((a) => (
-                        <button
-                            key={a.id}
-                            type="button"
-                            className={chip("info")}
-                            onClick={() =>
-                                doAction(`Want to join ${a.name}?`, {
-                                    kind: "alliance",
-                                    botId,
-                                    allianceId: a.id,
-                                })
-                            }
-                        >
-                            ➕ Invite to {a.name}
-                        </button>
-                    ))}
-                </div>
-            </>
-        );
     } else if (canTalk) {
         const meeting =
             actionsLeft >= (started ? 1 : 2) && !(controller.state.week.meetingBy || []).includes(me.id);
         menu = (
             <div className="bbb-talk-chips" aria-label="Actions">
-                <button
-                    type="button"
-                    className={chip("info")}
-                    onClick={() => doAction("Got a minute? Let's hang out.", { kind: "chat", botId })}
-                >
-                    💬 Chat
-                </button>
-                <button
-                    type="button"
-                    className={chip("success")}
-                    onClick={() => {
-                        setAllianceName(suggestAllianceName(controller.book));
-                        setPicker({ kind: "alliance" });
-                    }}
-                >
-                    🤝 Alliance
-                </button>
                 <button
                     type="button"
                     className={chip("warning")}
@@ -432,8 +361,8 @@ export function BotTalkPanel(props: {
                 {!started && canTalk && (
                     <div className="bbb-chat-system">
                         Talking to {bot.name} uses 1 action. Then say all you want, for as long as they'll
-                        listen: questions, deals, pitches, rumours. Pick something below, or say it yourself
-                        (short, and about the game).
+                        listen: questions, deals, alliances, pitches, rumours. Pick something below, or say it
+                        yourself (short, and about the game).
                     </div>
                 )}
                 {lines.map((l, i) =>
@@ -532,7 +461,7 @@ export function BotTalkPanel(props: {
             </div>
             {canTalk && (
                 <div className="bbb-talk-chips" aria-label="Questions">
-                    {TALK_SUGGESTIONS.map((t) => (
+                    {[...TALK_SUGGESTIONS, ...joinable.map((a) => `Want to join ${a.name}?`)].map((t) => (
                         <button key={t} type="button" className={chip("light")} onClick={() => send(t)}>
                             {t}
                         </button>

@@ -174,12 +174,14 @@ describe("player mode screens", () => {
         // talk to HG4: everything is done from the conversation
         const faces = Array.from(c.querySelectorAll("button")).filter((b) => (b.textContent || "").startsWith("HG4"));
         act(() => faces[0].click());
-        click(c, "Chat");
+        // no Chat or Alliance buttons: just talk (the questions include inviting them into your alliances)
+        const labels = () => Array.from(c.querySelectorAll("button")).map((b) => b.textContent || "");
+        expect(labels()).not.toContain("💬 Chat");
+        expect(labels()).not.toContain("🤝 Alliance");
+        expect(labels()).toContain("Want to join The Vault?");
+        click(c, "Hey, how are you?");
         expect(controller.state.actionsLeft).toBe(2);
-        expect(c.textContent).toContain("Got a minute?");
-        click(c, "Alliance");
-        expect(c.textContent).toContain("Invite to The Vault");
-        click(c, "Start it");
+        click(c, "Want to join The Vault?");
         expect(controller.state.actionsLeft).toBe(2); // talking to HG4 took one action: the rest of the conversation is part of it
         // pitch HG5 to HG4, with a reason
         click(c, "Pitch a target");
@@ -193,6 +195,19 @@ describe("player mode screens", () => {
         expect(c.textContent).not.toContain("alliance time");
         click(c, "Skip the rest");
         expect(controller.state.step).not.toBe("SocialMorning");
+    });
+
+    it("asking a bot to join one of your alliances, in your own words, invites them to that alliance", () => {
+        const controller = controllerAtSocial();
+        controller.state.actionsLeft = 10;
+        const vault = () => controller.alliancesOf(0).find((a) => a.name === "The Vault")!;
+        const before = controller.alliancesOf(0).length;
+        for (const botId of [3, 4, 5, 6]) {
+            const res = controller.talkToBot(botId, "Want to join the vault?")!;
+            expect(res.outcome).toBeDefined();
+            expect(vault().memberIds.includes(botId)).toBe(res.outcome!.good);
+        }
+        expect(controller.alliancesOf(0).length).toBe(before); // nobody started a new one
     });
 
     it("nominations are revealed one at a time", () => {

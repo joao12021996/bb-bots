@@ -3613,7 +3613,10 @@ export class PlayerModeController {
         const rand = () => Math.abs(rng().randomFloat());
         const others = nonEvictedHouseguests(gs).filter((hg) => hg.id !== actor.id && hg.id !== botId);
         const iAmHoh = s.week.hohId === actor.id;
-        const intent = readMessage(clean, mentionsIn(clean, others), { iAmHoh });
+        // "want to join The Vault?": an invite to one of your alliances they're not in yet, named in the message
+        const invite = this.alliancesOf(actor.id).find((a) => !a.memberIds.includes(botId) && clean.toLowerCase().includes(a.name.toLowerCase()));
+        const read = readMessage(clean, mentionsIn(clean, others), { iAmHoh });
+        const intent: typeof read = invite && /join|invit|welcome|be (part|in)|come (in|aboard)|alliance/i.test(clean) ? { kind: "alliance" } : read;
         const noms = (s.week.nomineeIds || []).filter((id) => !this.player(id).isEvicted);
         const nomsSet = noms.length >= 2 && nomsSetStep(s.step);
         const hohId = s.week.hohId;
@@ -3752,6 +3755,13 @@ export class PlayerModeController {
                 }
                 return act({ kind: "final2", botId }, "accept", "decline");
             case "alliance": {
+                if (invite) {
+                    if (!this.allianceTimeOpen()) {
+                        botSays(line("notNow"));
+                        return finish();
+                    }
+                    return act({ kind: "alliance", botId, allianceId: invite.id }, "accept", "decline");
+                }
                 const together = this.alliancesOf(actor.id).find((a) => a.memberIds.includes(botId));
                 if (together && !intent.name) {
                     botSays(line("alreadyAllied", together.name));

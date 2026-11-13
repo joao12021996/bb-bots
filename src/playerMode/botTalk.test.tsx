@@ -1,7 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { newPlayerSave, PlayerModeController, Prompt, Step } from "./playerModeController";
-import { mentionsIn, readMessage, TALKS_MIN, TALKS_PER_BLOCK, talkLine, talkPatience } from "./social/botTalk";
+import { mentionsIn, readMessage, TALK_SUGGESTIONS, TALKS_MIN, TALKS_PER_BLOCK, talkLine, talkPatience } from "./social/botTalk";
 import { answer, newGame } from "./testing";
 import { nonEvictedHouseguests } from "../model";
 import { BotTalkPanel } from "./ui/botTalkPanel";
@@ -19,6 +19,12 @@ describe("reading what players say to bots", () => {
         expect(mentionsIn("I think jordan and ALEX are close", people)).toEqual([2, 1]);
         expect(mentionsIn("Samantha is nice", people)).toEqual([]);
         expect(mentionsIn("Jordan Lee?", people)).toEqual([2]);
+    });
+
+    it("understands every suggested question", () => {
+        const kinds = TALK_SUGGESTIONS.map((t) => read(t).kind);
+        expect(kinds).not.toContain("unknown");
+        expect(kinds).toEqual(expect.arrayContaining(["howAreYou", "askFeeling", "askAllies", "askTarget", "askVote", "alliance", "final2", "small"]));
     });
 
     it("understands questions, offers and small talk", () => {

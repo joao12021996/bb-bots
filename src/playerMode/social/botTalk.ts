@@ -440,4 +440,17 @@ export function feelingReply(v: number): Reply {
 }
 
 // Questions players can tap instead of typing.
-export const TALK_SUGGESTIONS = ["Hey, how are you?", "Are we good?", "Who are you targeting?", "Who are you voting for?", "Final two?"];
+// Questions to pick from in the talk box (each one reads as what it says: see readMessage).
+export const TALK_SUGGESTIONS = [
+    "Hey, how are you?",
+    "Are we good?",
+    "Can I trust you?",
+    "Who are you close to in here?",
+    "Who are you targeting?",
+    "Who are you voting for?",
+    "Want to start an alliance?",
+    "Final two?",
+    "How's the game going for you?",
+    "Think you can win the next comp?",
+    "Do you miss home?",
+];
