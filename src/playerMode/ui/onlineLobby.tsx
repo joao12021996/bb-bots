@@ -311,6 +311,7 @@ function LobbyRoom(props: { session: NetSession; status: NetStatus }) {
             ) : (
                 <Subtle>
                     <b>{house.length}</b> houseguests · {difficultyLabel(setup.difficulty)} difficulty · jury of {lobbyJury(setup, house.length)}
+                    {(setup.paceHours || 0) > 0 && <> · ⏰ {PACES.find((p) => p.hours === setup.paceHours)?.label || `${setup.paceHours} hours`} between comps</>}
                     {setup.powers === "surprise" && " · secret powers"}
                     {setup.battleBack && " · battle back"}
                     {setup.hideSkills && " · skill randomizer"}
@@ -387,6 +388,21 @@ function HostSettings(props: { session: NetSession; status: NetStatus }) {
                     ))}
                 </div>
             </div>
+            <div className="bbb-setting">
+                <b>⏰ Pace</b>
+                <div className="bbb-segmented">
+                    {PACES.map((p) => (
+                        <button key={p.hours} type="button" className={(setup.paceHours || 0) === p.hours ? "is-active" : ""} onClick={() => session.updateSetup({ paceHours: p.hours })}>
+                            {p.label}
+                        </button>
+                    ))}
+                </div>
+                <small className="bbb-subtle">
+                    {(setup.paceHours || 0) > 0
+                        ? "Real time: a break before each comp and each eviction (Head of House one day, Veto the next…). If every player votes to move on, the next part starts right away. The host's device runs the clock, so keep this tab open, or come back to it."
+                        : "Live: play straight through in one sitting."}
+                </small>
+            </div>
             <label className="bbb-toggle">
                 <input type="checkbox" checked={!!setup.battleBack} onChange={(e) => session.updateSetup({ battleBack: e.target.checked })} />
                 <span>
@@ -408,6 +424,16 @@ function HostSettings(props: { session: NetSession; status: NetStatus }) {
         </div>
     );
 }
+
+// Real time: how long the breaks between comps last.
+const PACES = [
+    { hours: 0, label: "Live" },
+    { hours: 1, label: "1 hour" },
+    { hours: 3, label: "3 hours" },
+    { hours: 12, label: "12 hours" },
+    { hours: 24, label: "1 day" },
+    { hours: 48, label: "2 days" },
+];
 
 // After the season started: a returning (or late) device picks which player it is.
 function SeatPicker(props: { session: NetSession; status: NetStatus }) {

@@ -98,10 +98,11 @@ function expectInSync(sessions: NetSession[]) {
     });
 }
 
-function setup(n: number, humanIds: number[], seed: number) {
+function setup(n: number, humanIds: number[], seed: number, pace?: { gapMs: number; startedAt: number }) {
     const hub = new FakeHub();
     const save = newPlayerSave(newGame(n), humanIds);
     save.seed = seed;
+    if (pace) save.pace = pace;
     const host = NetSession.host(hub.join("h"), "TEST", save, opts);
     const clients = humanIds.slice(1).map((_, i) => NetSession.join(hub.join(`c${i}`), "TEST", opts));
     hub.flush();
@@ -786,4 +787,80 @@ describe("online play", () => {
         settle(hub, host);
         all.forEach((s) => expect(s.resyncs).toBe(0));
     });
+
+describe("real time", () => {
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => {
+        jest.clearAllTimers();
+        jest.useRealTimers();
+    });
+    const HOUR = 3600000;
+
+    // plays on, without voting to move on, until the season takes a break
+    function untilBreak(hub: FakeHub, all: NetSession[]): boolean {
+        for (let guard = 0; guard < 5000; guard++) {
+            const p = prompt(all[0]);
+            if (p.kind === "break") return true;
+            if (p.kind === "gameOver") return false;
+            hub.instant = true;
+            try {
+                const own = ownScreens(all).filter((o) => o.prompt.kind !== "breakVote");
+                if (own.length > 0) answer(own[0].session.controller!, own[0].prompt, "random", "random");
+                else moveOn(all);
+            } finally {
+                hub.instant = false;
+            }
+            hub.flush();
+        }
+        return false;
+    }
+
+    it("takes a break before the next comp, until time's up or every player votes to move on", () => {
+        const startedAt = Date.now();
+        const { hub, host, clients, all } = setup(8, [0, 3, 5], 23, { gapMs: 24 * HOUR, startedAt });
+        // the first comp doesn't wait; the next one does, a day after the season started
+        expect(untilBreak(hub, all)).toBe(true);
+        const first = prompt(host) as Extract<Prompt, { kind: "break" }>;
+        expect(first.until).toBe(startedAt + 24 * HOUR);
+        expect(first.voters).toEqual([0, 3, 5]);
+        all.forEach((s) => expect(prompt(s).kind).toBe("break"));
+        expect(clients[0].controller!.personal$.value[3].kind).toBe("breakVote");
+        // only the host's device ends it when time's up
+        (prompt(clients[0]) as any).timeUp(Date.now());
+        hub.flush();
+        expect(prompt(host).kind).toBe("break");
+        // two of three votes: still waiting
+        (clients[0].controller!.personal$.value[3] as any).onVote(Date.now());
+        (clients[1].controller!.personal$.value[5] as any).onVote(Date.now());
+        hub.flush();
+        expect((prompt(host) as any).voted).toEqual([3, 5]);
+        expect(prompt(clients[1]).kind).toBe("break");
+        // the last vote: on with the show, for everyone
+        const at = Date.now();
+        (host.controller!.personal$.value[0] as any).onVote(at);
+        hub.flush();
+        expect(prompt(host).kind).not.toBe("break");
+        expect(host.controller!.state.pace!.nextAt).toBe(at + 24 * HOUR);
+        settle(hub, host);
+        expectInSync(all);
+        // the next break ends when the host says time's up
+        expect(untilBreak(hub, all)).toBe(true);
+        const later = Date.now() + 5;
+        (prompt(host) as any).timeUp(later);
+        hub.flush();
+        expect(prompt(host).kind).not.toBe("break");
+        expect(host.controller!.state.pace!.nextAt).toBe(later + 24 * HOUR);
+        settle(hub, host);
+        expectInSync(all);
+    });
+
+    it("a real-time season plays to the end, with every break voted through", () => {
+        const { hub, host, all } = setup(8, [0, 3], 31, { gapMs: HOUR, startedAt: Date.now() });
+        let guard = 0;
+        while (guard++ < 6000 && step(hub, all)) {}
+        expect(prompt(host).kind).toBe("gameOver");
+        settle(hub, host);
+        expectInSync(all);
+    });
+});
 });

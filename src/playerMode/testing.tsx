@@ -130,6 +130,10 @@ export function answer(controller: PlayerModeController, p: Prompt, strategy: St
                     : free[Math.floor(random() * free.length)];
             p.onFlip!(best);
         }
+    } else if (p.kind === "breakVote") {
+        p.onVote(Date.now());
+    } else if (p.kind === "break") {
+        p.timeUp(Date.now()); // only the host's device may: on any other, it's turned down
     } else if (p.kind === "hideTiebreak") {
         // offset by the player: online, every device's controller has the same seed, and players who always hid in
         // the same spot would tie forever

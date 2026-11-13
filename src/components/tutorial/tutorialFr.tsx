@@ -182,7 +182,9 @@ export const SECTIONS_FR: Section[] = [
                 <li>
                     <b>🌐 Jouer en ligne</b> : crée une partie et partage le code. La maison commence pleine de bots,
                     et chaque ami qui arrive en remplace un. En retard ? Touche 👀 Juste regarder pour suivre la saison
-                    en direct.
+                    en direct. Pour un grand groupe, règle le <b>⏰ Rythme</b> sur le temps réel : une pause d'une heure
+                    à deux jours avant chaque épreuve et chaque expulsion (Chef de la maison un jour, Veto le
+                    lendemain…), sauf si tous les joueurs votent pour avancer plus tôt.
                 </li>
                 <li>
                     <b>🎓 Saison guidée</b> : nouveau ? Active la saison guidée à la préparation (elle est activée tant

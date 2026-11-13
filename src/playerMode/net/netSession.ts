@@ -923,7 +923,8 @@ export class NetSession {
     // Moving on from a screen everyone watches (a scene's Continue, a results screen's button...).
     private isContinue(p: Proposal): boolean {
         if (p.owner !== null) return false;
-        if (p.kind === "prompt") return p.slot === null || p.slot === undefined;
+        // (a real-time break ends when the host's clock says so, not when everyone presses on)
+        if (p.kind === "prompt") return (p.slot === null || p.slot === undefined) && p.promptKind !== "break";
         return p.name === "continue" && !!this.rawPrompt && actorOf(this.rawPrompt) === null;
     }
 

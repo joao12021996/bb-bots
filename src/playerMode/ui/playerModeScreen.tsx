@@ -83,6 +83,84 @@ interface State {
     personal: { [playerId: number]: Prompt }; // online: players' own screens
 }
 
+// "2h 05m", "3m 20s": how long until a break ends
+export function timeLeft(ms: number): string {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
+    return `${m}m ${String(s % 60).padStart(2, "0")}s`;
+}
+
+// Real time: the house takes a break before the next comp or eviction. Everyone sees the clock and who's voted
+// to move on; a player who hasn't voted gets the button. The host's device ends the break when time's up.
+function BreakScreen(props: {
+    controller: PlayerModeController;
+    prompt: Extract<Prompt, { kind: "break" }> | Extract<Prompt, { kind: "breakVote" }>;
+    host: boolean;
+}) {
+    const { controller, prompt } = props;
+    const [now, setNow] = React.useState(Date.now());
+    const [sent, setSent] = React.useState(false);
+    React.useEffect(() => {
+        const timer = window.setInterval(() => setNow(Date.now()), 1000);
+        return () => window.clearInterval(timer);
+    }, []);
+    const due = now >= prompt.until;
+    React.useEffect(() => {
+        if (props.host && due && prompt.kind === "break") prompt.timeUp(Date.now());
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [due]);
+    const voters = prompt.kind === "break" ? prompt.voters : controller.breakVoters();
+    const voted = prompt.kind === "break" ? prompt.voted : [];
+    const when = new Date(prompt.until);
+    return (
+        <Panel>
+            <div className="bbb-break">
+                <div className="bbb-handoff-icon">⏰</div>
+                <Title>Next up: {prompt.next}</Title>
+                <p className="bbb-break-clock">{due ? "Any moment now…" : timeLeft(prompt.until - now)}</p>
+                <Subtle>
+                    {when.toLocaleDateString(undefined, { weekday: "long" })} at {when.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}. Talk
+                    it over in the chat until then. If every player votes to move on, it starts right away.
+                </Subtle>
+                {prompt.kind === "breakVote" && (
+                    <BigButton
+                        kind="success"
+                        disabled={sent}
+                        onClick={() => {
+                            setSent(true);
+                            prompt.onVote(Date.now());
+                        }}
+                    >
+                        {sent ? "Voted ✓" : "⏩ Vote to move on now"}
+                    </BigButton>
+                )}
+                {prompt.kind === "break" && voters.length > 0 && (
+                    <div className="bbb-break-votes">
+                        <small className="bbb-subtle">
+                            Ready to move on: {voted.length} of {voters.length}
+                        </small>
+                        <div>
+                            {voters.map((id) => {
+                                const hg = controller.player(id);
+                                return (
+                                    <span key={id} className={voted.includes(id) ? "bbb-break-voter is-ready" : "bbb-break-voter"} title={hg.name}>
+                                        <img src={hg.imageURL} alt="" />
+                                        {hg.name} {voted.includes(id) ? "⏩" : "💬"}
+                                    </span>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </Panel>
+    );
+}
+
 // Pass-and-play: who gets the device next, and whether the others may watch.
 function Handoff(props: { name: string; imageURL: string; reason: string; shared?: boolean; everyone?: boolean; onReady: () => void }) {
     if (props.everyone) {
@@ -532,6 +610,12 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                 );
                 break;
             }
+            case "break":
+                body = <BreakScreen key={key} controller={controller} prompt={prompt} host={!!session && session.amHost} />;
+                break;
+            case "breakVote":
+                body = <BreakScreen key={key} controller={controller} prompt={prompt} host={false} />;
+                break;
             case "gameOver":
                 body = (
                     <Panel style={{ maxWidth: "none" }}>
@@ -579,7 +663,7 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                         👀 You're watching live. You see what the whole house sees, never anyone's private screens, and the show moves on when the players do.
                     </div>
                 )}
-                {session && !session.spectating && owner === null && actor === null && !session.amHost && !session.everyoneContinues && prompt.kind !== "gameOver" && prompt.kind !== "waiting" && (
+                {session && !session.spectating && owner === null && actor === null && !session.amHost && !session.everyoneContinues && prompt.kind !== "gameOver" && prompt.kind !== "waiting" && prompt.kind !== "break" && (
                     <div className="bbb-online-note">⏩ The host moves the show along from here.</div>
                 )}
                 {this.state.tip && owner === null && (

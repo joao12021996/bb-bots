@@ -231,6 +231,17 @@ export enum Step {
     GameOver = "GameOver",
 }
 
+// Real time: the steps the season takes a break before, and what players are waiting for.
+const BREAK_BEFORE: { [step: string]: string } = {
+    [Step.Hoh]: "the Head of House comp",
+    [Step.Veto]: "the Veto comp",
+    [Step.Eviction]: "eviction night",
+    [Step.FinaleHoh1]: "Part 1 of the final Head of House comp",
+    [Step.FinaleHoh2]: "Part 2 of the final Head of House comp",
+    [Step.FinaleHoh3]: "Part 3 of the final Head of House comp",
+    [Step.FinalTwo]: "finale night",
+};
+
 const SOCIAL_BLOCK_NAMES: { [step: string]: string } = {
     [Step.SocialMorning]: "Morning in the house",
     [Step.SocialAfternoon]: "Afternoon in the house",
@@ -337,6 +348,10 @@ export interface PlayerSave {
     rules?: SeasonRules; // house rules (see rules.ts); left out: the defaults
     guided?: boolean; // a guided season: the coach explains each part of the week the first time (see coach.ts)
     tipsSeen?: string[]; // the coach's tips already shown
+    // online, real time: a break before each comp and eviction, `gapMs` long, unless every player votes to move
+    // on. `startedAt`: when the host started the season. `nextAt`: when the next break ends (left out: the first
+    // comp hasn't started yet; it doesn't wait).
+    pace?: { gapMs: number; startedAt: number; nextAt?: number };
     powers?: PowersState; // the season's secret powers: which, when, and who holds them
     announce?: { title: string; lines: string[] }[]; // the host's announcements, shown before the next step
     moves?: MoveRecord[]; // big moves and backstabs, for the season awards
@@ -514,7 +529,11 @@ export type Prompt =
     | { kind: "juryReveal"; votes: { jurorId: number; finalistId: number }[]; onDone: () => void }
     | { kind: "gameOver"; content: JSX.Element }
     // online: players are deciding on their own screens at the same time (see gather)
-    | { kind: "waiting"; title: string; waitingOn: number[]; comp?: LiveComp };
+    | { kind: "waiting"; title: string; waitingOn: number[]; comp?: LiveComp }
+    // real time: a break before what's next, until `until` or until every player votes to move on. The host's
+    // device ends it when time's up (timeUp). `at`: when, from the device that sent it, so every device agrees.
+    | { kind: "break"; next: string; until: number; voters: number[]; voted: number[]; timeUp: (at: number) => void }
+    | { kind: "breakVote"; playerId: number; next: string; until: number; onVote: (at: number) => void };
 
 // A comp being played online, for the standings while players wait: the bots' results are known up front, the
 // players' come in live (see liveScores).
@@ -579,6 +598,7 @@ export function actorOf(prompt: Prompt): number | null {
     switch (prompt.kind) {
         case "handoff":
             return prompt.everyone ? null : prompt.playerId;
+        case "breakVote":
         case "compPlay":
         case "tiebreak":
         case "hideTiebreak":
@@ -1393,6 +1413,60 @@ export class PlayerModeController {
         s.moves = [...(s.moves || []), { week: s.gameState.phase, kind, actorId, targetId, text, weight }];
     }
 
+    // ---------- real time (online) ----------
+
+    private breakKey(): string {
+        return `break:${this.gameState.phase}:${this.state.step}`;
+    }
+
+    // Whether the season takes a break before this step (real time only).
+    private breakPending(): boolean {
+        const pace = this.state.pace;
+        if (!pace || !this.net || !(this.state.step in BREAK_BEFORE)) return false;
+        if (this.locked(this.breakKey()) !== undefined) return false;
+        if (pace.nextAt === undefined) {
+            // the first one: straight into it, and the next is a gap after the season started
+            pace.nextAt = pace.startedAt + pace.gapMs;
+            this.lock(this.breakKey(), "start");
+            return false;
+        }
+        return true;
+    }
+
+    public breakVoters(): number[] {
+        return this.state.humanIds.filter((id) => !this.isRuleBreaker(id) && !this.isAutopilot(id));
+    }
+
+    private realtimeBreak() {
+        const pace = this.state.pace!;
+        const key = this.breakKey();
+        const votesKey = `${key}:votes`;
+        const next = BREAK_BEFORE[this.state.step];
+        const voted = () => this.locked<number[]>(votesKey) || [];
+        const until = pace.nextAt!;
+        const finish = (at: number) => {
+            if (this.locked(key) !== undefined) return;
+            this.state.humanIds.forEach((id) => this.clearPersonal(id));
+            pace.nextAt = at + pace.gapMs;
+            this.feedPush(`⏰ Break's over: on to ${next}.`);
+            this.lock(key, at);
+            this.run();
+        };
+        const showShared = () => this.show({ kind: "break", next, until, voters: this.breakVoters(), voted: voted(), timeUp: finish });
+        const vote = (id: number) => (at: number) => {
+            if (this.locked(key) !== undefined || voted().includes(id)) return;
+            this.lock(votesKey, [...voted(), id]);
+            this.clearPersonal(id);
+            const left = this.breakVoters().filter((v) => !voted().includes(v));
+            if (left.length === 0) return finish(at);
+            showShared();
+        };
+        showShared();
+        this.breakVoters()
+            .filter((id) => !voted().includes(id))
+            .forEach((id) => this.showPersonal(id, { kind: "breakVote", playerId: id, next, until, onVote: vote(id) }));
+    }
+
     private goTo(step: Step) {
         this.state.step = step;
         this.save();
@@ -1403,6 +1477,7 @@ export class PlayerModeController {
         this.reseed();
         // the host has something to say first
         if (this.state.announce && this.state.announce.length > 0) return this.showAnnouncement();
+        if (this.breakPending()) return this.realtimeBreak();
         switch (this.state.step) {
             case Step.BattleBack:
                 return this.battleBack();
