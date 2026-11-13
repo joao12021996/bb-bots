@@ -34,6 +34,8 @@ export interface HohRoom {
     safe: number[]; // bot HoH: the promises it actually means to keep
     targets: { fromId: number; targetId: number }[]; // nominees the HoH agreed to
     pawns?: { id: number; yes: boolean }[]; // allies the HoH asked to go up as a pawn, and what they said
+    pawnPending?: number[]; // players asked to go up as a pawn, who answer before the nomination ceremony
+    pawnAsked?: boolean; // a bot HoH has decided whether to ask a player to be its pawn
     done?: boolean;
 }
 

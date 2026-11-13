@@ -1,6 +1,6 @@
 import { GameState, getById } from "../../model";
 import { WeekRecord } from "../history";
-import { Ledger } from "./promises";
+import { Ledger, PledgeKind } from "./promises";
 
 // Season stats and awards, for the end of the season.
 
@@ -72,10 +72,12 @@ function ledgerBackstabs(gs: GameState, ledger: Ledger | undefined): MoveRecord[
     if (!ledger) return [];
     const name = (id: number) => getById(gs, id).name;
     const out: MoveRecord[] = [];
-    const what: { [k: string]: [string, number] } = {
+    const what: { [k in PledgeKind]: [string, number] } = {
         final2: ["broke a final-two deal with", 4],
         safety: ["promised safety to, then nominated,", 3],
         vote: ["promised their vote to, then voted out,", 2],
+        veto: ["promised the veto to, then left on the block,", 2],
+        noVeto: ["promised to leave the nominations alone, then crossed,", 2],
     };
     ledger.pledges
         .filter((p) => p.status === "broken" && p.known)

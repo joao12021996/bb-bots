@@ -32,7 +32,7 @@ import { newEpisode, playerModeScreen$, pushToMainContentStream, secretRelations
 import { Screens } from "../components/topbar/topBar";
 import { WeekRecord } from "./history";
 import { Difficulty, SeasonRules, withDefaults } from "./rules";
-import { setSuspicion } from "./social/promises";
+import { PledgeKind, setSuspicion, settleVetoPledges } from "./social/promises";
 import { capitalize, explainNomination, explainVote, ReasonContext } from "./social/reasons";
 import { CompDefinition, EnduranceDeals, Opponent } from "./comps/compTypes";
 import { CompRole, THROW_EFFORT, throwChance } from "./comps/throwing";
@@ -202,8 +202,20 @@ import { DiaryEntry, diaryEntries, recapText } from "./social/diary";
 import { battleBackCandidates, battleBackDue, haveNotCount } from "./social/twists";
 import { DiaryRoom } from "./ui/diaryRoom";
 import { nextTip, Tip, tipIdsFor } from "./coach";
+import {
+    afterSocial,
+    BLOCKBUSTER_MIN_PLAYERS,
+    blockName as socialBlockName,
+    breakBefore,
+    dayPartOf,
+    FINAL_THREE,
+    nomsSetStep,
+    REGULAR_WEEK,
+    Step,
+} from "./week";
 
 export type { Difficulty } from "./rules";
+export { Step, isSocialStep, BLOCKBUSTER_MIN_PLAYERS } from "./week";
 
 // Flirting with someone again within this many weeks is creepy (see flirt), and someone a player creeped out
 // twice holds their relationship at this, for good.
@@ -220,77 +232,6 @@ const APPROACH_ANSWERS: { [kind: string]: [string, string] } = {
     vetoKeep: ["They'll stay the same.", "I'm keeping my options open."],
 };
 
-export enum Step {
-    BattleBack = "BattleBack", // evicted houseguests compete to come back, before the week starts
-    WeekStart = "WeekStart",
-    SocialMorning = "SocialMorning",
-    Hoh = "Hoh",
-    AllianceHoh = "AllianceHoh", // alliances meet once the new HoH is known, before nominations
-    HohRoom = "HohRoom",
-    Noms = "Noms",
-    PawnTalk = "PawnTalk",
-    SocialAfternoon = "SocialAfternoon",
-    Veto = "Veto",
-    SocialVeto = "SocialVeto", // after the veto comp: the nominees and the HoH work on the veto holder
-    VetoCeremony = "VetoCeremony",
-    SocialBlockbuster = "SocialBlockbuster",
-    Blockbuster = "Blockbuster",
-    SocialCampaign = "SocialCampaign",
-    Speeches = "Speeches",
-    Eviction = "Eviction",
-    Fallout = "Fallout",
-    SocialFinale1 = "SocialFinale1",
-    FinaleHoh1 = "FinaleHoh1",
-    SocialFinale2 = "SocialFinale2",
-    FinaleHoh2 = "FinaleHoh2",
-    SocialFinale3 = "SocialFinale3",
-    FinaleHoh3 = "FinaleHoh3",
-    FinalEviction = "FinalEviction",
-    FinalTwo = "FinalTwo",
-    Jury = "Jury",
-    GameOver = "GameOver",
-}
-
-// Real time: the steps the season takes a break before, and what players are waiting for.
-const BREAK_BEFORE: { [step: string]: string } = {
-    [Step.Hoh]: "the Head of House comp",
-    [Step.Veto]: "the Veto comp",
-    [Step.Eviction]: "eviction night",
-    [Step.FinaleHoh1]: "Part 1 of the final Head of House comp",
-    [Step.FinaleHoh2]: "Part 2 of the final Head of House comp",
-    [Step.FinaleHoh3]: "Part 3 of the final Head of House comp",
-    [Step.FinalTwo]: "finale night",
-};
-
-const SOCIAL_BLOCK_NAMES: { [step: string]: string } = {
-    [Step.SocialMorning]: "Morning in the house",
-    [Step.SocialAfternoon]: "Afternoon in the house",
-    [Step.SocialVeto]: "Before the Veto Ceremony",
-    [Step.SocialBlockbuster]: "Before the Last Chance comp",
-    [Step.SocialCampaign]: "Campaign time",
-    [Step.SocialFinale1]: "Final 3: before Part 1",
-    [Step.SocialFinale2]: "Final 3: before Part 2",
-    [Step.SocialFinale3]: "Final 3: before Part 3",
-};
-
-export function isSocialStep(step: Step): boolean {
-    return SOCIAL_BLOCK_NAMES[step] !== undefined;
-}
-
-// Weeks with 7 or more houseguests are Blockbuster weeks: three nominees, the veto, then the Blockbuster.
-export const BLOCKBUSTER_MIN_PLAYERS = 7;
-
-const AFTER_SOCIAL: { [step: string]: Step } = {
-    [Step.SocialMorning]: Step.Hoh,
-    [Step.SocialAfternoon]: Step.Veto,
-    [Step.SocialVeto]: Step.VetoCeremony,
-    [Step.SocialBlockbuster]: Step.Blockbuster,
-    [Step.SocialCampaign]: Step.Speeches,
-    [Step.SocialFinale1]: Step.FinaleHoh1,
-    [Step.SocialFinale2]: Step.FinaleHoh2,
-    [Step.SocialFinale3]: Step.FinaleHoh3,
-};
-
 interface WeekProgress {
     hohId?: number;
     nomineeIds?: number[];
@@ -305,7 +246,7 @@ interface WeekProgress {
     pawns?: PawnTalk[]; // nominees who were told "you're not the target" this week
     pawnAsk?: { ids: number[]; next: Step }; // a player HoH gives a speech about these new nominees, then on to `next`
     vetoCases?: { [playerId: number]: boolean }; // players who made their case to a bot veto holder: did it work
-    vetoPromises?: { fromId: number; use: boolean }[]; // what a player veto holder promised the nominees and the HoH
+    backdoor?: number; // a player HoH's backdoor plan: nominate pawns, and put this houseguest up once the veto's used
     spoke?: number[]; // nominees who have given their eviction-night speech
     wallDeals?: { hohId: number; toId: number }[]; // endurance deals: if `hohId` wins HoH, they owe `toId` safety
     intel?: { [askerId: number]: { [voterId: number]: number } }; // vote counting: what each voter said they'd do
@@ -368,6 +309,7 @@ export interface PlayerSave {
     creeps?: { playerId: number; botId: number }[]; // ...twice: they can't stand the player, for good
     pawnFavors?: { hohId: number; pawnId: number; week: number; agreed: boolean }[]; // houseguests a HoH asked to be a pawn, then nominated
     allianceFirst?: string; // the social block ("week:step") whose alliance time, before social time, is over
+    allianceMet?: string; // what the house looked like the last time alliances met (see allianceSituation)
     jury?: JuryBook; // what every juror holds against (or for) everyone, and why they voted
     overheard?: { [playerId: number]: number[] }; // alliances each player has overheard
     // What each player has picked up from talking to people: how they seemed (v) and how much they seemed
@@ -1512,7 +1454,7 @@ export class PlayerModeController {
     // Whether the season takes a break before this step (real time only).
     private breakPending(): boolean {
         const pace = this.state.pace;
-        if (!pace || !this.net || !(this.state.step in BREAK_BEFORE)) return false;
+        if (!pace || !this.net || breakBefore(this.state.step) === undefined) return false;
         if (this.locked(this.breakKey()) !== undefined) return false;
         if (pace.nextAt === undefined) {
             // the first one: straight into it, and the next is a gap after the season started
@@ -1531,7 +1473,7 @@ export class PlayerModeController {
         const pace = this.state.pace!;
         const key = this.breakKey();
         const votesKey = `${key}:votes`;
-        const next = BREAK_BEFORE[this.state.step];
+        const next = breakBefore(this.state.step)!;
         const voted = () => this.locked<number[]>(votesKey) || [];
         const until = pace.nextAt!;
         const finish = (at: number) => {
@@ -1640,24 +1582,8 @@ export class PlayerModeController {
         const hg = this.player(id);
         const name = hg.name;
         const lines = [`🚨 ${name} opened the inspect tools in the middle of the game. That's against the rules.`];
-        const week: Step[] = [
-            Step.SocialMorning,
-            Step.Hoh,
-            Step.AllianceHoh,
-            Step.HohRoom,
-            Step.Noms,
-            Step.PawnTalk,
-            Step.SocialAfternoon,
-            Step.Veto,
-            Step.SocialVeto,
-            Step.VetoCeremony,
-            Step.SocialBlockbuster,
-            Step.Blockbuster,
-            Step.SocialCampaign,
-            Step.Speeches,
-            Step.Eviction,
-        ];
-        const finalThree: Step[] = [Step.SocialFinale1, Step.FinaleHoh1, Step.SocialFinale2, Step.FinaleHoh2, Step.SocialFinale3, Step.FinaleHoh3, Step.FinalEviction];
+        const week = REGULAR_WEEK;
+        const finalThree = FINAL_THREE;
         if (hg.isEvicted) {
             if (hg.isJury) {
                 this.mutate((gs) => (getById(gs, id).isJury = false));
@@ -2646,29 +2572,7 @@ export class PlayerModeController {
         const s = this.state;
         const week = s.gameState.phase;
         if (week < 1) return null;
-        const parts: { [step: string]: number } = {
-            [Step.WeekStart]: DAY_PART.eviction, // the eviction scene is still on screen
-            [Step.SocialMorning]: DAY_PART.hoh,
-            [Step.Hoh]: DAY_PART.hoh,
-            [Step.AllianceHoh]: DAY_PART.nominations,
-            [Step.HohRoom]: DAY_PART.nominations,
-            [Step.Noms]: DAY_PART.nominations,
-            [Step.PawnTalk]: DAY_PART.nominations,
-            [Step.SocialAfternoon]: DAY_PART.veto,
-            [Step.Veto]: DAY_PART.veto,
-            [Step.SocialVeto]: DAY_PART.vetoCeremony,
-            [Step.VetoCeremony]: DAY_PART.vetoCeremony,
-            [Step.SocialBlockbuster]: DAY_PART.blockbuster,
-            [Step.Blockbuster]: DAY_PART.blockbuster,
-            [Step.SocialFinale1]: 0,
-            [Step.FinaleHoh1]: 0,
-            [Step.SocialFinale2]: 0.35,
-            [Step.FinaleHoh2]: 0.35,
-            [Step.SocialFinale3]: 0.7,
-            [Step.FinaleHoh3]: 0.7,
-        };
-        const part = parts[s.step];
-        return dayLabel(s.gameState, week, part === undefined ? DAY_PART.eviction : part);
+        return dayLabel(s.gameState, week, dayPartOf(s.step));
     }
 
     // Asks one or more players to vote privately: all at once online, one after another on one device.
@@ -2808,15 +2712,15 @@ export class PlayerModeController {
         const s = this.state;
         const alive = this.turnOrder;
         // alliance time first: alliances plan before everyone goes off to work the house (and meet again after)
-        if (s.allianceFirst !== this.blockKey && !this.allianceFirstRound(SOCIAL_BLOCK_NAMES[s.step], alive)) return;
+        if (s.allianceFirst !== this.blockKey && !this.allianceFirstRound(socialBlockName(s.step)!, alive)) return;
         if (this.socialTogether) {
             const players = alive.filter((p) => this.isHuman(p));
-            if (this.together(SOCIAL_BLOCK_NAMES[s.step], "social", players)) return;
+            if (this.together(socialBlockName(s.step)!, "social", players)) return;
             return this.finishSocialBlock();
         }
         if (s.socialTurn >= alive.length) return this.finishSocialBlock();
         const actor = alive[s.socialTurn];
-        const blockName = SOCIAL_BLOCK_NAMES[s.step];
+        const blockName = socialBlockName(s.step)!;
         if (!this.isHuman(actor)) return this.skipTurn();
         if (s.socialStage === "alliance") {
             // at the final three there's nobody left to target: no alliance time
@@ -2835,9 +2739,16 @@ export class PlayerModeController {
         return `${this.state.gameState.phase}:${this.state.step}`;
     }
 
+    // What alliances plan around: who's HoH, who's on the block, who holds the veto. When none of that has changed
+    // since they last met, there's nothing new to meet about before social time.
+    private get allianceSituation(): string {
+        const w = this.state.week;
+        return `${this.gameState.phase}:${w.hohId}:${(w.nomineeIds || []).join(",")}:${w.povId}`;
+    }
+
     // Where alliance time is in this block: before social time, after it, or not now.
     public allianceRound(): "before" | "after" | null {
-        if (!SOCIAL_BLOCK_NAMES[this.state.step]) return null;
+        if (!socialBlockName(this.state.step)) return null;
         return this.state.allianceFirst === this.blockKey ? "after" : "before";
     }
 
@@ -2851,6 +2762,13 @@ export class PlayerModeController {
     // (false: waiting on a player).
     private allianceFirstRound(blockName: string, alive: Houseguest[]): boolean {
         const s = this.state;
+        // nothing's changed since the alliances last met (same HoH, same nominees, same veto holder): no need to
+        // meet first, just after
+        if (s.allianceMet === this.allianceSituation) {
+            s.allianceFirst = this.blockKey;
+            this.save();
+            return true;
+        }
         const meets = (p: Houseguest) => this.isHuman(p) && this.meetingAlliancesOf(p.id).some((a) => !this.allianceStandsDown(a));
         const title = `${blockName}: alliances first`;
         if (this.socialTogether) {
@@ -2878,6 +2796,7 @@ export class PlayerModeController {
             a.backupSuggestions = {};
         });
         s.allianceFirst = this.blockKey;
+        s.allianceMet = this.allianceSituation;
         s.socialTurn = 0;
         s.socialStage = "social";
         s.actionsLeft = this.rules.actions;
@@ -3077,7 +2996,7 @@ export class PlayerModeController {
                     shiftRelationship(gs, actor.id, from.id, -0.03);
                     return { text: `You didn't promise ${from.name} anything about the ${VETO}.`, good: false };
                 }
-                s.week.vetoPromises = [...(s.week.vetoPromises || []).filter((p) => p.fromId !== from.id), { fromId: from.id, use }];
+                pledge(this.ledger, use ? "veto" : "noVeto", actor.id, from.id, gs.phase);
                 shiftRelationship(gs, actor.id, from.id, 0.06);
                 return {
                     text: use
@@ -3283,7 +3202,9 @@ export class PlayerModeController {
             pledges: pledges.map((p) => ({
                 text:
                     (p.fromId === viewerId ? `You promised ${other.name} ` : `${other.name} promised you `) +
-                    (p.kind === "safety" ? "safety" : p.kind === "final2" ? "a final two" : "a vote"),
+                    ({ safety: "safety", final2: "a final two", vote: "a vote", veto: "the veto", noVeto: "to leave the nominations alone" } as { [k in PledgeKind]: string })[
+                        p.kind
+                    ],
                 status: p.status,
             })),
             voteSaid: said !== undefined ? this.player(said).name : undefined,
@@ -3326,6 +3247,7 @@ export class PlayerModeController {
         const p = Math.max(0.05, Math.min(0.9, ((asHoh ? 0.4 : 0.25) + 0.6 * rel) * socialFactor(me)));
         const yes = Math.abs(rng().randomFloat()) < p;
         cases[actorId] = yes;
+        if (yes) pledge(this.ledger, asHoh ? "noVeto" : "veto", botId, actorId, gs.phase);
         shiftRelationship(gs, actorId, botId, yes ? 0.03 : -0.02);
         if (asHoh)
             return yes
@@ -3633,7 +3555,7 @@ export class PlayerModeController {
             .trim()
             .slice(0, action ? 400 : TALK_MAX_LENGTH);
         if (action && (!("botId" in action) || action.botId !== botId)) return null;
-        if (!actor || !clean || this.socialStageOf(actor.id) !== "social" || !this.isHuman(actor) || !SOCIAL_BLOCK_NAMES[s.step]) return null;
+        if (!actor || !clean || this.socialStageOf(actor.id) !== "social" || !this.isHuman(actor) || !socialBlockName(s.step)) return null;
         if (s.approachKey[actor.id] !== `${s.gameState.phase}:${s.step}`) return null; // their social screen isn't up yet
         const bot = s.gameState.houseguests.find((hg) => hg.id === botId);
         if (!bot || bot.isEvicted || bot.id === actor.id || this.isHuman(bot)) return null;
@@ -3693,7 +3615,7 @@ export class PlayerModeController {
         const iAmHoh = s.week.hohId === actor.id;
         const intent = readMessage(clean, mentionsIn(clean, others), { iAmHoh });
         const noms = (s.week.nomineeIds || []).filter((id) => !this.player(id).isEvicted);
-        const nomsSet = noms.length >= 2 && [Step.SocialAfternoon, Step.SocialVeto, Step.SocialBlockbuster, Step.SocialCampaign].includes(s.step);
+        const nomsSet = noms.length >= 2 && nomsSetStep(s.step);
         const hohId = s.week.hohId;
         const botVotes = botId !== hohId && !noms.includes(botId);
         const real = bot.relationships[actor.id] ?? 0;
@@ -4395,9 +4317,35 @@ export class PlayerModeController {
         this.run();
     };
 
+    // Before the Veto Ceremony, bot nominees beg a bot veto holder, and a bot HoH leans on them: the house sees it.
+    // Whether there's anyone left to name as a replacement if the veto is used (not the nominees, the veto holder or
+    // the HoH).
+    private vetoUsable(nomineeIds: number[], povId: number, hohId: number): boolean {
+        const out = [...nomineeIds, povId, hohId];
+        return nonEvictedHouseguests(this.gameState).some((hg) => !out.includes(hg.id));
+    }
+
+    private vetoLobbying() {
+        const s = this.state;
+        const povId = s.week.povId;
+        const noms = s.week.nomineeIds || [];
+        if (povId === undefined || this.isHuman({ id: povId }) || noms.includes(povId)) return;
+        const pov = this.player(povId);
+        const bot = (id: number) => !this.isHuman({ id }) && !this.player(id).isEvicted;
+        this.reseed("lobbying");
+        noms.filter(bot).forEach((id) => {
+            if (Math.abs(rng().randomFloat()) > 0.7) return;
+            this.mutate((gs) => shiftRelationship(gs, id, povId, 0.02 * socialFactor(getById(gs, id))));
+            this.feedPush(`🏅 ${this.player(id).name} spent the afternoon begging ${pov.name} to use the ${VETO}.`);
+        });
+        const hohId = s.week.hohId;
+        if (hohId !== undefined && hohId !== povId && !s.week.secretHoh && bot(hohId) && Math.abs(rng().randomFloat()) < 0.6)
+            this.feedPush(`👑 ${this.player(hohId).name} leaned on ${pov.name} to keep the nominations the same.`);
+    }
+
     private finishSocialBlock() {
         const s = this.state;
-        const blockName = SOCIAL_BLOCK_NAMES[s.step];
+        const blockName = socialBlockName(s.step)!;
         this.reseed("bots");
         this.feedPush(
             ...houseFeed(
@@ -4413,6 +4361,7 @@ export class PlayerModeController {
                 () => Math.abs(rng().randomFloat())
             )
         );
+        if (s.step === Step.SocialVeto) this.vetoLobbying();
         this.mutate((gs) => {
             // alliances that haven't met yet meet now (players who skipped alliance time don't get a say)
             s.book.alliances
@@ -4470,6 +4419,7 @@ export class PlayerModeController {
                 a.backupSuggestions = {};
             });
         });
+        if (this.allianceTimeOpen() && s.step !== Step.SocialMorning) s.allianceMet = this.allianceSituation;
         // in pass-and-play, social moves are secret, so they don't go in the episode recap
         if (!this.multiplayer && s.socialLog.length > 0) {
             const log = [...s.socialLog];
@@ -4494,7 +4444,7 @@ export class PlayerModeController {
         s.socialStage = "social";
         s.actionsLeft = this.rules.actions;
         delete s.socialBy;
-        this.goTo(AFTER_SOCIAL[s.step]);
+        this.goTo(afterSocial(s.step));
     }
 
     private hohComp() {
@@ -4505,6 +4455,7 @@ export class PlayerModeController {
             const [gs, scene, hohs] = generateHohCompScene(s.gameState, { forcedWinners: [getById(s.gameState, winnerId)] });
             s.gameState = gs;
             s.week.hohId = hohs[0].id;
+            this.pawnMemories(hohs[0].id);
             this.pickHaveNots(worstFirst);
             if (!s.week.secretHoh) {
                 this.feedPush(`👑 ${hohs[0].name} is the new ${HOH}.`);
@@ -4755,7 +4706,8 @@ export class PlayerModeController {
     private hohRoom() {
         const s = this.state;
         const hohId = s.week.hohId!;
-        // nobody can visit a Head of House nobody knows
+        // nobody can visit a Head of House nobody knows (and a secret HoH can't ask anyone to be a pawn, or plan a
+        // backdoor with their alliance, without giving it away)
         if (s.week.secretHoh) return this.goTo(Step.Noms);
         if (!s.week.room) {
             this.reseed("room");
@@ -4775,6 +4727,14 @@ export class PlayerModeController {
         }
         const room = s.week.room;
         const hoh = this.player(hohId);
+        if (!room.pawnAsked && !this.isHuman(hoh)) {
+            // a bot HoH may ask a player in its alliance to go up as a pawn
+            room.pawnAsked = true;
+            this.reseed("room:pawn");
+            const allies = this.allyIds(hohId).filter((id) => this.isHuman({ id }) && !this.player(id).isEvicted && (hoh.relationships[id] ?? 0) > 0.2);
+            if (allies.length > 0 && Math.abs(rng().randomFloat()) < 0.5) room.pawnPending = [allies[rng().randomInt(0, allies.length - 1)]];
+            this.save();
+        }
         const waiting = this.alivePlayers.find((p) => p.id !== hohId && !room.asked.includes(p.id) && this.isHuman(p));
         if (waiting) {
             return this.privately(waiting.id, `${waiting.name}, the HoH room is open`, () =>
@@ -4787,6 +4747,7 @@ export class PlayerModeController {
                 this.show({ kind: "hohRoom", actorId: hoh.id })
             );
         }
+        if ((room.pawnPending || []).length > 0) return this.answerPawnAsks(room);
         this.goTo(Step.Noms);
     }
 
@@ -4856,8 +4817,14 @@ export class PlayerModeController {
     public askPawn(botId: number): RoomOutcome | null {
         const s = this.state;
         const room = s.week.room;
-        if (!room || room.done || this.isHuman({ id: botId }) || !this.allyIds(room.hohId).includes(botId)) return null;
-        if ((room.pawns || []).some((p) => p.id === botId)) return null;
+        if (!room || room.done || !this.allyIds(room.hohId).includes(botId) || this.player(botId).isEvicted) return null;
+        if ((room.pawns || []).some((p) => p.id === botId) || (room.pawnPending || []).includes(botId)) return null;
+        if (this.isHuman({ id: botId })) {
+            // another player: they answer before the nomination ceremony
+            room.pawnPending = [...(room.pawnPending || []), botId];
+            this.save();
+            return { text: `You asked ${this.player(botId).name}. They'll answer before the nomination ceremony.`, good: true };
+        }
         this.reseed(`askPawn:${botId}`);
         const outcome = this.mutate((gs) => askPawn(gs, room, botId));
         s.socialLog.push(`🙋 ${outcome.text}`);
@@ -4884,7 +4851,90 @@ export class PlayerModeController {
                         ? `🙋 ${name} went up as your pawn, like you agreed. If they ever win ${HOH}, they'll remember the favour.`
                         : `😠 ${name} told you they didn't want to go up, and you nominated them anyway. If they ever win ${HOH}, they'll remember.`
                 );
+                const hohName = this.player(hohId).name;
+                this.tell(
+                    [p.id],
+                    p.yes
+                        ? `🙋 You went up as ${hohName}'s pawn, like you agreed. ${hohName} owes you one.`
+                        : `😠 You told ${hohName} you didn't want to go up, and they nominated you anyway.`
+                );
             });
+    }
+
+    // A player who wins HoH remembers who they went up as a pawn for (see settlePawnAsks).
+    private pawnMemories(hohId: number) {
+        if (!this.isHuman({ id: hohId })) return;
+        (this.state.pawnFavors || [])
+            .filter((f) => f.pawnId === hohId && !this.player(f.hohId).isEvicted)
+            .forEach((f) =>
+                this.tell(
+                    [hohId],
+                    f.agreed
+                        ? `🙋 Remember week ${f.week}: you went up as ${this.player(f.hohId).name}'s pawn. They owe you one.`
+                        : `😠 Remember week ${f.week}: ${this.player(f.hohId).name} nominated you after you said no.`
+                )
+            );
+    }
+
+    // Called by the HoH room screen: the HoH's backdoor plan (null: none). Their alliances hear about it.
+    public planBackdoor(targetId: number | null) {
+        const s = this.state;
+        const room = s.week.room;
+        if (!room || room.done || targetId === room.hohId) return;
+        if (targetId === null) {
+            if (s.week.backdoor === undefined) return;
+            delete s.week.backdoor;
+            this.save();
+            return;
+        }
+        s.week.backdoor = targetId;
+        const hoh = this.player(room.hohId);
+        this.alliancesOf(room.hohId)
+            .filter((a) => !a.memberIds.includes(targetId))
+            .forEach((a) =>
+                this.tellAlliance(
+                    a,
+                    `🚪 ${hoh.name}'s plan: nominate pawns, and put ${this.player(targetId).name} up once the ${VETO} is used. Win the ${VETO}, and use it.`,
+                    room.hohId
+                )
+            );
+        this.save();
+    }
+
+    // Players asked to go up as a pawn (by a player HoH, or a bot HoH) answer before the nomination ceremony, each on
+    // their own screen.
+    private answerPawnAsks(room: HohRoom) {
+        const hoh = this.player(room.hohId);
+        const players = (room.pawnPending || []).map((id) => this.player(id)).filter((p) => !p.isEvicted && this.isHuman(p));
+        const settle = (answers: { [id: number]: boolean }) => {
+            room.pawns = [...(room.pawns || []), ...players.map((p) => ({ id: p.id, yes: !!answers[p.id] }))];
+            room.pawnPending = [];
+            if (this.isHuman(hoh))
+                players.forEach((p) =>
+                    this.tell([hoh.id], answers[p.id] ? `🙋 ${p.name} will go up as your pawn.` : `🙅 ${p.name} doesn't want to go up.`)
+                );
+            this.goTo(Step.Noms);
+        };
+        if (players.length === 0) return settle({});
+        this.gather<boolean>(
+            `pawnAsk:${this.gameState.phase}`,
+            players,
+            `${hoh.name} is asking around`,
+            (p) => `${p.name}: ${hoh.name} wants a word`,
+            (p, _more, answer) => ({
+                kind: "choose",
+                actorId: p.id,
+                title: `👑 ${hoh.name} has a favour to ask`,
+                text: `“I need someone to go up as a pawn this week. You're not the target: I'll make sure you're still here on eviction night. Are you okay going up?” Whatever you say, you'll remember it if you win ${HOH}.`,
+                options: [hoh],
+                count: 1,
+                confirmLabel: "🙋 I'll go up",
+                noneLabel: "🙅 Please don't nominate me",
+                resolve: (ids) => answer(ids.length > 0),
+            }),
+            settle,
+            () => false
+        );
     }
 
     // Called by the HoH room screen once everyone has been heard.
@@ -4939,7 +4989,9 @@ export class PlayerModeController {
                 ...favors.filter((f) => f.agreed).map((f) => f.hohId),
             ],
             targets: [
-                ...asked,
+                ...asked.slice(0, 1),
+                ...(room && room.hohId === hohId ? (room.pawns || []).filter((p) => p.yes).map((p) => p.id) : []),
+                ...asked.slice(1),
                 ...favors.filter((f) => !f.agreed).map((f) => f.hohId),
                 ...this.showmanceTarget(hohId),
                 ...(room ? room.targets.map((t) => t.targetId) : []),
@@ -5002,7 +5054,12 @@ export class PlayerModeController {
         const lastChance = s.week.blockbuster ? " After the veto, the nominees play the Last Chance comp, and the winner comes off the block." : "";
         const howMany = hohCount === 1 ? "one houseguest" : hohCount === 2 ? "two houseguests" : "three houseguests";
         const pawns = ((s.week.room && s.week.room.pawns) || []).filter((p) => p.yes).map((p) => this.player(p.id).name);
-        const pawnLine = pawns.length > 0 ? ` 🙋 Okay going up as a pawn: ${listNames(pawns)}.` : "";
+        const backdoor = s.week.backdoor;
+        const pawnLine =
+            (pawns.length > 0 ? ` 🙋 Okay going up as a pawn: ${listNames(pawns)}.` : "") +
+            (backdoor !== undefined && !this.player(backdoor).isEvicted
+                ? ` 🚪 Your backdoor plan: leave ${this.player(backdoor).name} off the block for now.`
+                : "");
         this.privately(hoh.id, `${hoh.name}, ${HOH}`, () =>
             this.show({
                 kind: "choose",
@@ -5278,7 +5335,9 @@ export class PlayerModeController {
             s.week.povId = pov.id;
             this.feedPush(`🏅 ${pov.name} won the Veto.`);
             void scene; // the classic scene is replaced by the Veto winner's own moment
-            this.showScene(this.vetoWinnerScene(players, pov, noms, hoh), Step.SocialVeto);
+            // at the final four there may be nobody left to name as a replacement: then there's nothing to lobby for
+            const next = this.vetoUsable(s.week.nomineeIds!, pov.id, hoh.id) ? Step.SocialVeto : Step.VetoCeremony;
+            this.showScene(this.vetoWinnerScene(players, pov, noms, hoh), next);
         };
         if (choice === TAINTED_WINE_ID) return this.runTaintedWine("Veto Competition", players, onWinner);
         if (choice === MEMORY_DUEL_ID) return this.runMemoryDuel("Veto Competition", players, onWinner);
@@ -5476,7 +5535,10 @@ export class PlayerModeController {
                     title: "Replacement Nominee",
                     text:
                         `${pov.name} used the ${VETO} on ${saved.id === pov.id ? "themselves" : saved.name}: “Since I have just vetoed one of your nominations, you must name a replacement nominee.”` +
-                        (forced ? ` ${options[0].name} is the only one who can go up, so it breaks no promise.` : adviceLine),
+                        (forced ? ` ${options[0].name} is the only one who can go up, so it breaks no promise.` : adviceLine) +
+                        (s.week.backdoor !== undefined && options.some((o) => o.id === s.week.backdoor)
+                            ? ` 🚪 Your backdoor plan: ${this.player(s.week.backdoor).name}.`
+                            : ""),
                     options,
                     count: 1,
                     confirmLabel: "Nominate",
@@ -5484,6 +5546,10 @@ export class PlayerModeController {
                     resolve: (ids) =>
                         renominate(choice, ids[0], options, (id) => {
                             if (!forced && this.allyIds(hoh.id).includes(id)) this.backstab(hoh.id, id, s.week.secretHoh ? 0.3 : 1);
+                            if (id === s.week.backdoor)
+                                this.alliancesOf(hoh.id).forEach((a) =>
+                                    this.tellAlliance(a, `🚪 The backdoor worked: ${this.player(id).name} is on the block.`, hoh.id)
+                                );
                             settle(id);
                         }),
                 })
@@ -5532,6 +5598,19 @@ export class PlayerModeController {
     private swayVeto(choice: { decision: Houseguest | null; reason: string }, pov: Houseguest, noms: Houseguest[], hoh: Houseguest) {
         const cases = this.state.week.vetoCases || {};
         if (noms.some((n) => n.id === pov.id)) return choice;
+        // the HoH's backdoor plan: an ally holding the veto pulls a pawn off, so the real target can go up
+        const backdoor = this.state.week.backdoor;
+        if (
+            backdoor !== undefined &&
+            !choice.decision &&
+            hoh.id !== pov.id &&
+            backdoor !== pov.id &&
+            !noms.some((n) => n.id === backdoor) &&
+            this.allyIds(hoh.id).includes(pov.id)
+        ) {
+            const pawn = [...noms].sort((a, b) => (pov.relationships[b.id] ?? 0) - (pov.relationships[a.id] ?? 0))[0];
+            if (pawn) return { decision: pawn, reason: "It's all part of the plan." };
+        }
         const won = noms.filter((n) => cases[n.id]).sort((a, b) => (pov.relationships[b.id] ?? 0) - (pov.relationships[a.id] ?? 0));
         const hohWon = hoh.id !== pov.id && cases[hoh.id] === true;
         const hohRel = pov.relationships[hoh.id] ?? 0;
@@ -5544,24 +5623,7 @@ export class PlayerModeController {
 
     // Promises a player veto holder made (see vetoPleas) are checked against what they did.
     private settleVetoPromises(povId: number, savedId: number | null) {
-        const s = this.state;
-        const promises = s.week.vetoPromises || [];
-        if (promises.length === 0) return;
-        s.week.vetoPromises = [];
-        promises
-            .filter((p) => !this.player(p.fromId).isEvicted)
-            .forEach((p) => {
-                const from = this.player(p.fromId);
-                const kept = p.use ? savedId === p.fromId : savedId === null;
-                this.mutate((gs) => shiftRelationship(gs, povId, p.fromId, kept ? 0.05 : -0.25));
-                if (!kept)
-                    this.tell(
-                        [povId],
-                        p.use
-                            ? `😠 You told ${from.name} you'd use the ${VETO} on them, and didn't. They won't forget it.`
-                            : `😠 You told ${from.name} the nominations would stay the same, then used the ${VETO}. They won't forget it.`
-                    );
-            });
+        this.tellAll(this.mutate((gs) => settleVetoPledges(gs, this.ledger, povId, savedId, gs.phase)));
     }
 
     // The veto ceremony, before the replacement: the holder uses the veto, and tells the HoH to name someone.

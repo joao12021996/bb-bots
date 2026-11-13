@@ -18,7 +18,10 @@ interface ChoosePromptProps {
 
 // Generic "pick N houseguests" screen used for nominations, veto, votes, and the jury vote.
 export function ChoosePrompt(props: ChoosePromptProps) {
-    const [selected, setSelected] = React.useState<number[]>([]);
+    // one houseguest to pick, or not: it's a yes or no, so they're already picked
+    const [selected, setSelected] = React.useState<number[]>(() =>
+        props.options.length === 1 && props.count === 1 && props.noneLabel ? [props.options[0].id] : []
+    );
     const [submitted, setSubmitted] = React.useState(false);
 
     const toggle = (id: number) => {

@@ -8,6 +8,7 @@ import { hasFinal2 } from "../social/promises";
 import { SocialAction, SocialOutcome } from "../social/socialActions";
 import { suggestAllianceName } from "../social/alliances";
 import { HOH } from "../terms";
+import { nomsSetStep } from "../week";
 import { Face, Grid, Subtle, whenDone } from "./common";
 
 // What you're in the middle of picking for an action (who to pitch, which rumour...).
@@ -57,8 +58,7 @@ export function BotTalkPanel(props: {
     const step = controller.state.step;
     const campaign = step === Step.SocialCampaign;
     const nomsSet =
-        nomineeIds.length > 0 &&
-        [Step.SocialAfternoon, Step.SocialVeto, Step.SocialBlockbuster, Step.SocialCampaign].includes(step);
+        nomineeIds.length > 0 && nomsSetStep(step);
     // before the Veto Ceremony, the nominees and the HoH make their case to the veto holder
     const vetoCase =
         step === Step.SocialVeto &&

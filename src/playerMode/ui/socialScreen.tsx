@@ -204,6 +204,9 @@ function readLine(
     return feel + belief;
 }
 
+// How long the social screen waits before moving on for a player with nothing left to do.
+export const AUTO_SKIP_MS = 4000;
+
 // Social time: answer whoever came to talk to you, then spend a few actions talking to houseguests,
 // forming alliances, and pitching targets.
 export function SocialScreen(props: SocialScreenProps) {
@@ -239,6 +242,14 @@ export function SocialScreen(props: SocialScreenProps) {
     const actionsLeft = controller.actionsOf(human.id);
     const hohId = controller.publicHohId(human.id); // a secret HoH stays secret
     const nomineeIds = controller.state.week.nomineeIds || [];
+    // out of actions, and nobody's waiting on an answer: move on in a moment, unless the player wants to stay
+    const [stay, setStay] = React.useState(false);
+    const idle = mode.kind === "pickBot" && actionsLeft === 0 && approaches.length === 0 && !stay;
+    React.useEffect(() => {
+        if (!idle) return;
+        const timer = setTimeout(() => controller.endSocial(), AUTO_SKIP_MS);
+        return () => clearTimeout(timer);
+    }, [idle, controller]);
 
     const record = (outcome: SocialOutcome | null) => {
         if (outcome) setOutcomes((prev) => [outcome, ...prev]);
@@ -275,6 +286,14 @@ export function SocialScreen(props: SocialScreenProps) {
             <div>
                 {controller.isHaveNot(human.id) && (
                     <Subtle>🥫 You're a Have-Not this week (bottom of the {HOH} comp): slop, cold showers, and only one social action per block.</Subtle>
+                )}
+                {idle && (
+                    <div className="bbb-card-box">
+                        <p>You're out of actions, and nobody's waiting on you. Moving on in a moment…</p>
+                        <button type="button" className="button is-small is-light" onClick={() => setStay(true)}>
+                            Wait, I'm not done
+                        </button>
+                    </div>
                 )}
                 <Subtle>
                     {actionsLeft > 0

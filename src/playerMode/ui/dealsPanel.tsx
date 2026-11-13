@@ -16,9 +16,15 @@ export function PromiseList(props: { controller: PlayerModeController; actorId: 
         .slice(-10)
         .reverse();
     const rep = reputationLabel(reputation(ledger, actorId));
+    // pawns: who went up for whom (see askPawn), while both are still in the house
+    const favors = (controller.state.pawnFavors || []).filter(
+        (f) => (f.hohId === actorId || f.pawnId === actorId) && !controller.player(f.hohId).isEvicted && !controller.player(f.pawnId).isEvicted
+    );
     const what = (p: Pledge) => {
         if (p.kind === "final2") return "final two together";
         if (p.kind === "vote") return "no vote to evict";
+        if (p.kind === "veto") return "the veto";
+        if (p.kind === "noVeto") return "nominations stay the same";
         if (p.week === week) return "safety this week";
         if (p.week === week + 1) return "safety next week";
         return "safety";
@@ -34,9 +40,21 @@ export function PromiseList(props: { controller: PlayerModeController; actorId: 
             <div className="bbb-card-title">
                 📒 Your word · {rep.emoji} {rep.label}
             </div>
-            {mine.length === 0 ? (
+            {favors.map((f, i) => (
+                <p key={`pawn-${i}`}>
+                    {f.agreed ? "🙋" : "😠"}{" "}
+                    {f.hohId === actorId
+                        ? f.agreed
+                            ? `${name(f.pawnId)} went up as your pawn (week ${f.week}): they're owed one`
+                            : `You nominated ${name(f.pawnId)} after they said no (week ${f.week})`
+                        : f.agreed
+                        ? `You went up as ${name(f.hohId)}'s pawn (week ${f.week}): they owe you one`
+                        : `${name(f.hohId)} nominated you after you said no (week ${f.week})`}
+                </p>
+            ))}
+            {mine.length === 0 && favors.length === 0 ? (
                 <p>No promises yet, either way.</p>
-            ) : (
+            ) : mine.length === 0 ? null : (
                 mine.map((p) => (
                     <p key={p.id}>
                         {status(p)} {p.fromId === actorId ? `You → ${name(p.toId)}` : `${name(p.fromId)} → you`}: {what(p)}

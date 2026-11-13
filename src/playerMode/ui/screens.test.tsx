@@ -7,7 +7,8 @@ import { generateNomCeremonyScene } from "../../components/episode/scenes/nomCer
 import { withDefaults } from "../rules";
 import { rulesSummary } from "./rulesEditor";
 import { createAlliance } from "../social/alliances";
-import { SocialScreen } from "./socialScreen";
+import { AUTO_SKIP_MS, SocialScreen } from "./socialScreen";
+import { openPledges } from "../social/promises";
 import { AllianceScreen } from "./allianceScreen";
 import { FaceEditor } from "./faceEditor";
 import { TutorialPage } from "../../components/tutorial/tutorialPage";
@@ -299,6 +300,150 @@ describe("player mode screens", () => {
         expect(withDefaults({ together: false }).together).toBe(false);
         expect(rulesSummary(withDefaults({ together: false }))).toContain("social time one player at a time");
         expect(controllerAtSocial().socialTogether).toBe(false); // one device: always turns
+    });
+
+    it("veto promises go in the ledger: kept if the veto holder does what they said, broken if not", () => {
+        const controller = controllerAtSocial();
+        const s = controller.state;
+        s.step = Step.SocialVeto;
+        s.week.hohId = 1;
+        s.week.nomineeIds = [2, 3];
+        s.week.povId = 0;
+        s.approachKey = {};
+        s.approaches[0] = [];
+        (controller as any).startSocialTime(controller.player(0));
+        const list = controller.approachesFor(0);
+        controller.respondApproach(list.findIndex((a) => a.kind === "vetoPlea" && a.fromId === 2), true);
+        controller.respondApproach(controller.approachesFor(0).findIndex((a) => a.kind === "vetoPlea" && a.fromId === 3), true);
+        const ledger = controller.ledger;
+        expect(openPledges(ledger, "veto").map((p) => [p.fromId, p.toId]).sort()).toEqual([
+            [0, 2],
+            [0, 3],
+        ]);
+        (controller as any).settleVetoPromises(0, 2); // saved HG2: kept their word to HG2, broke it to HG3
+        const status = (to: number) => ledger.pledges.find((p) => p.kind === "veto" && p.toId === to)!.status;
+        expect(status(2)).toBe("kept");
+        expect(status(3)).toBe("broken");
+    });
+
+    it("social time before the veto ceremony only happens when there's someone to name as a replacement", () => {
+        const controller = controllerAtSocial();
+        const usable = (noms: number[], pov: number, hoh: number) => (controller as any).vetoUsable(noms, pov, hoh);
+        expect(usable([1, 2], 3, 0)).toBe(true);
+        const gs = new MutableGameState(controller.gameState);
+        [4, 5, 6].forEach((id) => {
+            getById(gs, id).isEvicted = true;
+            gs.nonEvictedHouseguests.delete(id);
+        });
+        controller.state.gameState = new GameState(gs);
+        expect(usable([1, 2], 3, 0)).toBe(false); // final four: everyone is the HoH, the veto holder or a nominee
+        expect(usable([1, 2], 1, 0)).toBe(true); // a nominee holds it: HG3 can go up
+    });
+
+    it("bot nominees beg the veto holder in the house feed; a player veto holder hears it in person", () => {
+        const controller = controllerAtSocial();
+        const s = controller.state;
+        s.step = Step.SocialVeto;
+        s.week = { hohId: 3, nomineeIds: [4, 5], povId: 6 };
+        const before = (s.feed || []).length;
+        (controller as any).vetoLobbying();
+        const lines = (s.feed || []).slice(before).map((l) => l.text);
+        lines.forEach((l) => expect(l).toContain("HG6"));
+        s.week = { hohId: 3, nomineeIds: [4, 5], povId: 0 };
+        const after = (s.feed || []).length;
+        (controller as any).vetoLobbying();
+        expect((s.feed || []).length).toBe(after);
+    });
+
+    it("a HoH's backdoor plan: an ally who wins the veto pulls a pawn off", () => {
+        const controller = controllerAtSocial();
+        const s = controller.state;
+        s.step = Step.HohRoom;
+        s.week.hohId = 1;
+        s.week.room = openHohRoom(new MutableGameState(controller.gameState), s.book, 1, s.humanIds, []);
+        controller.planBackdoor(5);
+        expect(s.week.backdoor).toBe(5);
+        s.week.nomineeIds = [3, 4];
+        // HG2 is in The Vault with the HoH
+        const sway = (controller as any).swayVeto({ decision: null, reason: "" }, controller.player(2), [controller.player(3), controller.player(4)], controller.player(1));
+        expect([3, 4]).toContain(sway.decision.id);
+        expect(sway.reason).toContain("part of the plan");
+        // HG6 isn't
+        const other = (controller as any).swayVeto({ decision: null, reason: "" }, controller.player(6), [controller.player(3), controller.player(4)], controller.player(1));
+        expect(other.reason).not.toContain("part of the plan");
+        controller.planBackdoor(null);
+        expect(s.week.backdoor).toBeUndefined();
+    });
+
+    it("players asked to be a pawn answer on their own screen before the nominations", () => {
+        const controller = controllerAtSocial();
+        let prompt: Prompt | null = null;
+        controller.prompt$.subscribe((p) => (prompt = p));
+        const s = controller.state;
+        s.humanIds = [0, 1];
+        s.step = Step.HohRoom;
+        s.week.hohId = 2;
+        const room = openHohRoom(new MutableGameState(controller.gameState), s.book, 2, s.humanIds, []);
+        s.week.room = room;
+        // a player HoH can ask another player (an ally): they answer later
+        s.week.hohId = 0;
+        room.hohId = 0;
+        const asked = controller.askPawn(1)!;
+        expect(asked.text).toContain("before the nomination ceremony");
+        expect(room.pawnPending).toEqual([1]);
+        expect(controller.askPawn(1)).toBeNull();
+        (controller as any).answerPawnAsks(room);
+        let p = prompt as unknown as Prompt;
+        if (p.kind === "handoff") {
+            p.next();
+            p = prompt as unknown as Prompt;
+        }
+        expect(p.kind).toBe("choose");
+        if (p.kind !== "choose") return;
+        expect(p.actorId).toBe(1);
+        p.resolve([0]);
+        expect(room.pawns).toEqual([{ id: 1, yes: true }]);
+        expect(room.pawnPending).toEqual([]);
+    });
+
+    it("alliances only meet before social time when something changed since they last met", () => {
+        const controller = controllerAtSocial();
+        let prompt: Prompt | null = null;
+        controller.prompt$.subscribe((p) => (prompt = p));
+        const s = controller.state;
+        s.step = Step.SocialAfternoon;
+        s.week.hohId = 3;
+        s.week.nomineeIds = [4, 5];
+        s.allianceMet = (controller as any).allianceSituation; // they met after the nominations, nothing new since
+        controller.continue();
+        expect((prompt as unknown as Prompt).kind).toBe("social");
+        expect(controller.allianceRound()).toBe("after");
+    });
+
+    it("out of actions with nobody waiting: social time moves on by itself, unless the player wants to stay", () => {
+        jest.useFakeTimers();
+        try {
+            const controller = controllerAtSocial();
+            const s = controller.state;
+            s.approaches[0] = [];
+            s.actionsLeft = 0;
+            const end = jest.spyOn(controller, "endSocial").mockImplementation(() => undefined);
+            const c = mount(<SocialScreen controller={controller} blockName="Morning in the house" />);
+            expect(c.textContent).toContain("Moving on in a moment");
+            act(() => {
+                jest.advanceTimersByTime(AUTO_SKIP_MS + 10);
+            });
+            expect(end).toHaveBeenCalledTimes(1);
+            const c2 = mount(<SocialScreen controller={controller} blockName="Morning in the house" />);
+            click(c2, "Wait, I'm not done");
+            act(() => {
+                jest.advanceTimersByTime(AUTO_SKIP_MS + 10);
+            });
+            expect(end).toHaveBeenCalledTimes(1);
+            expect(c2.textContent).not.toContain("Moving on in a moment");
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it("flirting again too soon is creepy, and creeping someone out twice is for good", () => {

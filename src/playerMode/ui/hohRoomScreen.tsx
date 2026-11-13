@@ -79,11 +79,38 @@ export function HohRoomScreen(props: HohRoomProps) {
         });
     };
 
-    // allies (bots) the HoH can ask about going up as a pawn
-    const askable = allies.filter(
-        (id) => !controller.isHuman(controller.player(id)) && !controller.player(id).isEvicted,
-    );
+    // allies the HoH can ask about going up as a pawn (players answer before the nomination ceremony)
+    const askable = allies.filter((id) => !controller.player(id).isEvicted);
     const asked = room.pawns || [];
+    const pending = room.pawnPending || [];
+    // the backdoor plan: anyone outside the HoH's alliances
+    const backdoorable = nonEvictedHouseguests(controller.gameState).filter((hg) => hg.id !== hoh.id && !allies.includes(hg.id));
+    const backdoor = controller.state.week.backdoor;
+    const backdoorBox = (
+        <div className="bbb-card-box">
+            <div className="bbb-card-title">🚪 Backdoor plan</div>
+            <Subtle>
+                Nominate pawns, then put your real target up once the veto is used. Your alliances hear the plan, and an
+                ally who wins the veto will use it to make room.
+            </Subtle>
+            <select
+                className="input"
+                aria-label="Backdoor target"
+                value={backdoor === undefined ? "" : String(backdoor)}
+                onChange={(e) => {
+                    controller.planBackdoor(e.target.value === "" ? null : Number(e.target.value));
+                    rerender((n) => n + 1);
+                }}
+            >
+                <option value="">No backdoor plan</option>
+                {backdoorable.map((hg) => (
+                    <option key={hg.id} value={hg.id}>
+                        {hg.name}
+                    </option>
+                ))}
+            </select>
+        </div>
+    );
     const ask = (id: number) => {
         whenDone(controller.askPawn(id), (outcome) => {
             if (outcome) setOutcomes((prev) => [outcome, ...prev]);
@@ -101,9 +128,9 @@ export function HohRoomScreen(props: HohRoomProps) {
                 {askable.map((id) => {
                     const answer = asked.find((p) => p.id === id);
                     const name = controller.player(id).name;
-                    return answer ? (
+                    return answer || pending.includes(id) ? (
                         <span key={id} className="bbb-chip">
-                            {answer.yes ? "🙋" : "🙅"} {name}
+                            {answer ? (answer.yes ? "🙋" : "🙅") : "⏳"} {name}
                         </span>
                     ) : (
                         <button
@@ -189,6 +216,7 @@ export function HohRoomScreen(props: HohRoomProps) {
             </Subtle>
             {body}
             {pawnBox}
+            {backdoorable.length > 0 && backdoorBox}
             <Outcomes outcomes={outcomes} />
             {(room.promised.length > 0 || room.targets.length > 0 || (!visitor && stayedAway.length > 0)) && (
                 <div className="bbb-card-box">

@@ -9,7 +9,9 @@ import { shiftRelationship } from "./relationships";
 // safety: "you're safe if I'm HoH" (for a given week)
 // final2: "I'll take you to the final 2"
 // vote:   "I won't vote to evict you" (at a given eviction)
-export type PledgeKind = "safety" | "final2" | "vote";
+// veto:   the veto holder, to a nominee: "I'll use the veto on you" (that week)
+// noVeto: the veto holder, to the HoH: "the nominations stay the same" (that week)
+export type PledgeKind = "safety" | "final2" | "vote" | "veto" | "noVeto";
 export type PledgeStatus = "open" | "kept" | "broken" | "void";
 
 export interface Pledge {
@@ -68,6 +70,8 @@ const KIND_TEXT: { [k in PledgeKind]: string } = {
     safety: "safety",
     final2: "a final-two deal",
     vote: "their vote",
+    veto: "the veto",
+    noVeto: "to leave the nominations alone",
 };
 
 // ---------- reputation ----------
@@ -262,6 +266,20 @@ export function settleEvictionPledges(
         }
         if (p.status === "open" && (evictedIds.includes(p.fromId) || evictedIds.includes(p.toId))) p.status = "void";
     });
+    return news;
+}
+
+// The veto ceremony: the veto holder's promises about the veto (to nominees, and to the HoH) are kept or broken,
+// in front of everyone. `savedId`: who the veto was used on (null: not used).
+export function settleVetoPledges(gs: MutableGameState, ledger: Ledger, povId: number, savedId: number | null, week: number): LedgerNews[] {
+    const news: LedgerNews[] = [];
+    openPledges(ledger)
+        .filter((p) => p.fromId === povId && p.week === week && (p.kind === "veto" || p.kind === "noVeto"))
+        .forEach((p) => {
+            if (getById(gs, p.toId).isEvicted) return void (p.status = "void");
+            const kept = p.kind === "veto" ? savedId === p.toId : savedId === null;
+            news.push(...(kept ? keep(gs, ledger, p) : breakPledge(gs, ledger, p, true)));
+        });
     return news;
 }
 
