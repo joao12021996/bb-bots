@@ -302,6 +302,7 @@ interface WeekProgress {
     // final-two speeches and jury questions, in progress
     finalTwo?: { spoke: number[]; questions: JuryQuestion[]; qIndex: number; transcript: string[] };
     meetingBy?: number[]; // players who called a house meeting this week
+    flirts?: { [pair: string]: number }; // how many times a player flirted with a houseguest this week ("player:bot")
     secretHoh?: boolean; // nobody knows who the Head of House is this week
     audienceNominee?: boolean; // the audience names one of this week's nominees
     initialNoms?: number[]; // the nominees named at the nomination ceremony
@@ -395,6 +396,7 @@ export interface BotTalk {
     warm?: boolean; // they've had a friendly word this block
     max?: number; // how many messages they have time for this block (see talkPatience)
     paid?: boolean; // the player spent the action it takes to talk to them this block
+    over?: boolean; // they ended the conversation: no more talking until the next block
     target?: number | null; // what they said about their target this block (null: they wouldn't say)
 }
 
@@ -3217,7 +3219,10 @@ export class PlayerModeController {
             case "rumour":
                 return spreadRumour(gs, this.ledger, this.book, actorId, action.botId, action.targetId, action.rumour);
             case "flirt": {
-                const result = flirt(gs, this.showmances, actorId, action.botId);
+                const flirts = (this.state.week.flirts = this.state.week.flirts || {});
+                const pair = `${actorId}:${action.botId}`;
+                const result = flirt(gs, this.showmances, actorId, action.botId, flirts[pair] || 0);
+                flirts[pair] = (flirts[pair] || 0) + 1;
                 if (result.showmance) {
                     this.showmances.push(result.showmance);
                     this.tell(
@@ -3435,6 +3440,13 @@ export class PlayerModeController {
         return !!talk && !!talk.paid && talk.key === `${this.gameState.phase}:${this.state.step}`;
     }
 
+    // Whether a bot ended its conversation with a player this block (they ran out of time for them).
+    public talkOver(viewerId: number, botId: number): boolean {
+        const mine = this.state.talks && this.state.talks[viewerId];
+        const talk = mine && mine[botId];
+        return this.talkStarted(viewerId, botId) && !!talk && !!talk.over;
+    }
+
     public talkWith(viewerId: number, botId: number): TalkLine[] {
         const mine = this.state.talks && this.state.talks[viewerId];
         return (mine && mine[botId] && mine[botId].lines) || [];
@@ -3467,11 +3479,13 @@ export class PlayerModeController {
             talk.n = 0;
             talk.warm = false;
             talk.paid = false;
+            talk.over = false;
             delete talk.target;
             // how much time they have for you: decided when you start talking, so it doesn't move mid-chat
             const traits = this.traitsOf(botId);
             talk.max = talkPatience(bot.relationships[actor.id] ?? 0, traits ? traits.chats : 1, hash01(`${s.seed}:${block}:${actor.id}:${botId}:patience`));
         }
+        if (talk.over) return null; // they've gone: the conversation's over for this block
         // talking to someone takes an action, once per houseguest a block: then say all they'll listen to
         if (!talk.paid) {
             if (this.actionsOf(actor.id) <= 0) return null;
@@ -3500,6 +3514,8 @@ export class PlayerModeController {
 
         if (talk.n > (talk.max ?? TALKS_MIN)) {
             botSays(line("tired"));
+            talk.over = true;
+            add("note", `${bot.name} ended the conversation. You can talk again next social time.`);
             return finish();
         }
 
@@ -3527,8 +3543,13 @@ export class PlayerModeController {
                 botSays(line("notNow"));
                 return finish();
             }
-            botSays(line(outcome.good ? yes : no, about));
+            botSays(line(outcome.tone === "creepy" ? "flirtCreepy" : outcome.tone === "awkward" ? "flirtAwkward" : outcome.good ? yes : no, about));
             add("note", outcome.text);
+            if (outcome.tone === "creepy") {
+                // and they're done talking to you
+                talk.over = true;
+                add("note", `${bot.name} ended the conversation.`);
+            }
             return finish(outcome);
         };
         // small talk: a friendly word helps a little, once per block

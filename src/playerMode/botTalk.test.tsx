@@ -132,6 +132,11 @@ describe("talking to bots in a season", () => {
                 const tired = controller.talkToBot(bot.id, "final two?")!;
                 expect(tired.outcome).toBeUndefined();
                 expect(controller.state.actionsLeft).toBe(n);
+                // ...and that's the end of it: the conversation is over until the next block
+                expect(tired.lines.map((l) => l.who)).toEqual(["me", "bot", "note"]);
+                expect(controller.talkOver(0, bot.id)).toBe(true);
+                expect(controller.talkToBot(bot.id, "wait, one more thing")).toBeNull();
+                expect(renderToStaticMarkup(<BotTalkPanel controller={controller} botId={bot.id} onOutcome={() => undefined} />)).not.toContain("<form");
                 // not to other players, or the evicted
                 expect(controller.talkToBot(0, "hi")).toBeNull();
                 const html = renderToStaticMarkup(<BotTalkPanel controller={controller} botId={bot.id} onOutcome={() => undefined} />);

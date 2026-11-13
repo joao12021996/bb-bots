@@ -307,7 +307,9 @@ export function SocialScreen(props: SocialScreenProps) {
                     {partner !== undefined && ` ${bot.name} is in a showmance with ${partner === human.id ? "you" : controller.player(partner).name}.`}
                 </Subtle>
                 <Subtle>
-                    {controller.talkStarted(human.id, bot.id)
+                    {controller.talkOver(human.id, bot.id)
+                        ? `${bot.name} ended the conversation. ${actionsLeft} action${actionsLeft === 1 ? "" : "s"} left.`
+                        : controller.talkStarted(human.id, bot.id)
                         ? `You're talking: say all you want, while ${bot.name} will listen. ${actionsLeft} action${actionsLeft === 1 ? "" : "s"} left.`
                         : actionsLeft > 0
                         ? `Talking to ${bot.name} uses 1 action (${actionsLeft} left).`

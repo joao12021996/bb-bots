@@ -2343,6 +2343,26 @@ describe("showmances", () => {
         expect(formed).toBeGreaterThan(10);
     });
 
+    it("a flirt can backfire, and flirting again the same week is creepy", () => {
+        let awkward = 0;
+        for (let seed = 0; seed < 40; seed++) {
+            const gs = new MutableGameState(prepareNextWeek(newGame(10), BigBrotherVanilla));
+            getById(gs, 3).relationships[0] = -0.3; // they're not into you
+            seedRng(`flirt:${seed}`);
+            if (flirt(gs, [], 0, 3).outcome.tone === "awkward") awkward++;
+        }
+        expect(awkward).toBeGreaterThan(5);
+        // once is fine, twice is creepy, three times and the house hears about it
+        const gs = new MutableGameState(prepareNextWeek(newGame(10), BigBrotherVanilla));
+        getById(gs, 3).relationships[0] = 0.5;
+        const second = flirt(gs, [], 0, 3, 1);
+        expect(second.outcome).toEqual(expect.objectContaining({ good: false, tone: "creepy" }));
+        expect(getById(gs, 3).relationships[0]).toBeLessThan(0.5);
+        const others = getById(gs, 5).relationships[0];
+        flirt(gs, [], 0, 3, 2);
+        expect(getById(gs, 5).relationships[0]).toBeLessThan(others);
+    });
+
     it("close bots pair off on their own", () => {
         let formed = 0;
         for (let seed = 0; seed < 40; seed++) {

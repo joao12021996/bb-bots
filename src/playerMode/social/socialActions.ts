@@ -40,6 +40,7 @@ export type BasicSocialAction =
 export interface SocialOutcome {
     text: string;
     good: boolean;
+    tone?: "awkward" | "creepy"; // a flirt that backfired, or one too many
 }
 
 export interface SocialMemory {

@@ -67,7 +67,8 @@ export function BotTalkPanel(props: {
     const name = (id: number) => controller.player(id).name;
     // talking takes an action (once a block); then say all you want, for as long as they'll listen
     const started = controller.talkStarted(me.id, botId);
-    const canTalk = started || actionsLeft > 0;
+    const over = controller.talkOver(me.id, botId); // they ended it: nothing more to say this block
+    const canTalk = !over && (started || actionsLeft > 0);
 
     const done = (result: { outcome?: SocialOutcome } | null) => {
         if (result && result.outcome) props.onOutcome(result.outcome);
@@ -397,7 +398,9 @@ export function BotTalkPanel(props: {
             </div>
         );
     } else
-        menu = (
+        menu = over ? (
+            <Subtle>{bot.name} has had enough talking for now. Try again next social time.</Subtle>
+        ) : (
             <Subtle>You're out of actions: talking to {bot.name} will have to wait until next time.</Subtle>
         );
 
