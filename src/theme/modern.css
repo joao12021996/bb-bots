@@ -3499,3 +3499,39 @@ table td {
 :root[data-theme="light"] .bbb-settings-panel {
     box-shadow: 0 12px 30px rgba(40, 28, 90, 0.18);
 }
+
+/* ---------- the crash screen (see errorBoundary.tsx) ---------- */
+.bbb-crash {
+    max-width: 560px;
+    margin: 12vh auto;
+    padding: 24px 16px;
+    text-align: center;
+    color: var(--bbb-text);
+}
+.bbb-crash-emoji {
+    font-size: 48px;
+}
+.bbb-crash h2 {
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin: 8px 0;
+}
+.bbb-crash-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 16px;
+}
+.bbb-crash-details {
+    margin-top: 16px;
+    text-align: left;
+    font-size: 0.75rem;
+    max-height: 240px;
+    overflow: auto;
+    white-space: pre-wrap;
+    background: var(--bbb-card-2);
+    color: var(--bbb-muted);
+    border-radius: 8px;
+    padding: 12px;
+}

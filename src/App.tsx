@@ -9,6 +9,15 @@ import "./theme/modern.css";
 import { Subscription } from "rxjs";
 import { KnownProfileModal } from "./playerMode/ui/knownProfile";
 import { Lang, language$ } from "./i18n/i18n";
+import { ErrorBoundary } from "./components/layout/errorBoundary";
+import { resumeSavedSeason } from "./playerMode/ui/playerSetup";
+import { dealNewCast } from "./cartoon/newCast";
+import { playerModeScreen$ } from "./subjects/subjects";
+
+function goHome() {
+    playerModeScreen$.next(null);
+    dealNewCast();
+}
 
 class App extends React.Component<{}, { theme: ColorTheme; lang: Lang }> {
     private sub: Subscription | null = null;
@@ -36,8 +45,10 @@ class App extends React.Component<{}, { theme: ColorTheme; lang: Lang }> {
             <ThemeProvider theme={this.state.theme}>
                 <React.Fragment key={this.state.lang}>
                     <GlobalStyles />
-                    <MainPage controller={new MainPageController()} />
-                    <KnownProfileModal />
+                    <ErrorBoundary onResume={() => resumeSavedSeason() || goHome()} onHome={goHome}>
+                        <MainPage controller={new MainPageController()} />
+                        <KnownProfileModal />
+                    </ErrorBoundary>
                 </React.Fragment>
             </ThemeProvider>
         );
