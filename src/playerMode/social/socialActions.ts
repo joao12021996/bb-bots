@@ -23,7 +23,8 @@ export type DealAction =
     | { kind: "meeting"; botId: number } // a house meeting to call someone out (two actions, once a week)
     | { kind: "snoop" } // eavesdrop on an alliance meeting
     | { kind: "rumour"; botId: number; targetId: number; rumour: "coming" | "secretAlliance" | "trashTalk" }
-    | { kind: "vetoCase"; botId: number }; // to the veto holder: a nominee, "use it on me"; the HoH, "don't use it"
+    // to the veto holder: a nominee, "use it on me"; the HoH, "don't use it"; anyone else, "use it on `targetId`"
+    | { kind: "vetoCase"; botId: number; targetId?: number };
 
 export const DEAL_KINDS = ["final2", "voteDeal", "pity", "tellVote", "tellTarget", "flirt", "confront", "meeting", "snoop", "rumour", "vetoCase"];
 

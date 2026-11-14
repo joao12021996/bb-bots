@@ -320,6 +320,32 @@ describe("player mode screens", () => {
         expect(kept.decision).toBeNull();
     });
 
+    it("anyone else can ask a bot veto holder to use the veto on one of the nominees", () => {
+        const controller = controllerAtSocial();
+        const s = controller.state;
+        s.step = Step.SocialVeto;
+        s.week = { hohId: 1, nomineeIds: [3, 4], povId: 2 };
+        s.actionsLeft = 3;
+        // the player isn't on the block: they ask for HG3
+        const outcome = controller.socialAct({ kind: "vetoCase", botId: 2, targetId: 3 })!;
+        expect(s.week.vetoCases![0]).toBe(outcome.good);
+        expect(outcome.text).toContain(controller.player(3).name);
+        // once a week
+        expect(controller.socialAct({ kind: "vetoCase", botId: 2, targetId: 4 })!.text).toContain("already");
+        // it worked: the bot uses it on HG3, and promised the player as much
+        s.week.vetoCases = { 0: true };
+        s.week.vetoAsks = { 0: 3 };
+        const sway = (controller as any).swayVeto({ decision: null, reason: "" }, controller.player(2), [controller.player(3), controller.player(4)], controller.player(1));
+        expect(sway.decision.id).toBe(3);
+        const { pledge } = require("../social/promises");
+        pledge(controller.ledger, "veto", 2, 0, controller.gameState.phase).aboutId = 3;
+        (controller as any).settleVetoPromises(2, 3);
+        expect(controller.ledger.pledges.find((p: any) => p.aboutId === 3)!.status).toBe("kept");
+        // only a nominee can be saved
+        s.week = { hohId: 1, nomineeIds: [3, 4], povId: 2 };
+        expect(controller.socialAct({ kind: "vetoCase", botId: 2, targetId: 5 })!.good).toBe(false);
+    });
+
     it("a HoH can ask allies to go up as a pawn, and they remember it when they win HoH", () => {
         const controller = controllerAtSocial();
         const s = controller.state;
@@ -346,6 +372,33 @@ describe("player mode screens", () => {
         expect((controller as any).roomSway().protect).toContain(0);
         s.week = { hohId: 2 };
         expect((controller as any).roomSway().targets).toContain(0);
+    });
+
+    it("a bot HoH puts up the player who agreed to be its pawn, and later owes them: put up by them, it takes it well", () => {
+        const controller = controllerAtSocial();
+        const s = controller.state;
+        // bot HG2 is HoH; the player agreed to go up as its pawn
+        s.week = { hohId: 1 };
+        s.week.room = openHohRoom(new MutableGameState(controller.gameState), s.book, 1, s.humanIds, []);
+        s.week.room.pawns = [{ id: 0, yes: true }];
+        const sway = (controller as any).roomSway();
+        expect(sway.pawns).toEqual([0]);
+        const { botNominate } = require("../social/alliances");
+        const options = controller.gameState.houseguests.filter((h) => h.id !== 1);
+        // even if HG2 would otherwise protect the player
+        const picks = botNominate(controller.gameState, s.book, controller.player(1), options, 2, { ...sway, protect: [0] }).picks.map((h: any) => h.id);
+        expect(picks).toContain(0);
+        s.pawnFavors = [{ hohId: 1, pawnId: 0, week: 1, agreed: true }];
+        // weeks later, the player is HoH and puts HG2 up: a quarter of the usual sting, once
+        s.week = { hohId: 0 };
+        const before = controller.player(1).relationships[0];
+        (controller as any).afterNomination(0, [1], Step.SocialCampaign);
+        const { NOMINATION_HIT, OWED_HIT } = require("../social/pawnTalk");
+        expect(controller.player(1).relationships[0]).toBeCloseTo(before - NOMINATION_HIT * OWED_HIT, 5);
+        expect(s.pawnFavors[0].repaid).toBe(true);
+        const again = controller.player(1).relationships[0];
+        (controller as any).afterNomination(0, [1], Step.SocialCampaign);
+        expect(controller.player(1).relationships[0]).toBeCloseTo(again - NOMINATION_HIT, 5);
     });
 
     it("online, social time can be everyone at once or one player at a time", () => {

@@ -246,6 +246,7 @@ interface WeekProgress {
     pawns?: PawnTalk[]; // nominees who were told "you're not the target" this week
     pawnAsk?: { ids: number[]; next: Step }; // a player HoH gives a speech about these new nominees, then on to `next`
     vetoCases?: { [playerId: number]: boolean }; // players who made their case to a bot veto holder: did it work
+    vetoAsks?: { [playerId: number]: number }; // players who asked a bot veto holder to save someone else, and won them over
     backdoor?: number; // a player HoH's backdoor plan: nominate pawns, and put this houseguest up once the veto's used
     spoke?: number[]; // nominees who have given their eviction-night speech
     wallDeals?: { hohId: number; toId: number }[]; // endurance deals: if `hohId` wins HoH, they owe `toId` safety
@@ -308,7 +309,9 @@ export interface PlayerSave {
     flirts?: { [pair: string]: number[] }; // the weeks a player flirted with a houseguest ("player:bot")
     creeped?: { [pair: string]: number }; // how many times a player creeped a houseguest out ("player:bot")
     creeps?: { playerId: number; botId: number }[]; // ...twice: they can't stand the player, for good
-    pawnFavors?: { hohId: number; pawnId: number; week: number; agreed: boolean }[]; // houseguests a HoH asked to be a pawn, then nominated
+    // houseguests a HoH asked to be a pawn, then nominated. `repaid`: the HoH who owed the pawn has since been
+    // nominated by them, and took it well: the favour's used up
+    pawnFavors?: { hohId: number; pawnId: number; week: number; agreed: boolean; repaid?: boolean }[];
     allianceFirst?: string; // the social block ("week:step") whose alliance time, before social time, is over
     allianceMet?: string; // what the house looked like the last time alliances met (see allianceSituation)
     jury?: JuryBook; // what every juror holds against (or for) everyone, and why they voted
@@ -3272,17 +3275,39 @@ export class PlayerModeController {
         news.forEach((n) => this.tell(n.toIds, n.text));
     }
 
-    // A nominee asks a bot veto holder to use the veto on them, or the HoH asks them not to use it. Once each.
-    private vetoCase(gs: MutableGameState, actorId: number, botId: number): SocialOutcome {
+    // A nominee asks a bot veto holder to use the veto on them, or the HoH asks them not to use it, or anyone else
+    // asks them to use it on one of the nominees (`targetId`). Once each.
+    private vetoCase(gs: MutableGameState, actorId: number, botId: number, targetId?: number): SocialOutcome {
         const s = this.state;
         const bot = getById(gs, botId);
         const me = getById(gs, actorId);
         const noms = s.week.nomineeIds || [];
         const asHoh = actorId === s.week.hohId && !noms.includes(actorId);
-        if (s.step !== Step.SocialVeto || s.week.povId !== botId || noms.includes(botId) || (!asHoh && !noms.includes(actorId)))
+        const forOther = targetId !== undefined && targetId !== actorId && !asHoh && !noms.includes(actorId);
+        if (
+            s.step !== Step.SocialVeto ||
+            s.week.povId !== botId ||
+            noms.includes(botId) ||
+            (forOther ? !noms.includes(targetId!) : !asHoh && !noms.includes(actorId))
+        )
             return { text: `${bot.name} has nothing you need right now.`, good: false };
         const cases = (s.week.vetoCases = s.week.vetoCases || {});
         if (cases[actorId] !== undefined) return { text: `You already made your case to ${bot.name}.`, good: cases[actorId] };
+        if (forOther) {
+            const target = getById(gs, targetId!);
+            // it's someone else's neck: how much they like you, and how much they like the nominee
+            const odds = (0.15 + 0.45 * (bot.relationships[actorId] ?? 0) + 0.35 * (bot.relationships[targetId!] ?? 0)) * socialFactor(me);
+            const yes = Math.abs(rng().randomFloat()) < Math.max(0.05, Math.min(0.85, odds));
+            cases[actorId] = yes;
+            if (yes) {
+                s.week.vetoAsks = { ...(s.week.vetoAsks || {}), [actorId]: targetId! };
+                pledge(this.ledger, "veto", botId, actorId, gs.phase).aboutId = targetId;
+            }
+            shiftRelationship(gs, actorId, botId, yes ? 0.02 : -0.02);
+            return yes
+                ? { text: `${bot.name} thinks it over: "Okay. I'll use it on ${target.name}."`, good: true }
+                : { text: `${bot.name} isn't sold: "Why would I stick my neck out for ${target.name}?"`, good: false };
+        }
         const rel = bot.relationships[actorId] ?? 0;
         // keeping the nominations the same is the easier sell
         const p = Math.max(0.05, Math.min(0.9, ((asHoh ? 0.4 : 0.25) + 0.6 * rel) * socialFactor(me)));
@@ -3336,7 +3361,7 @@ export class PlayerModeController {
             case "rumour":
                 return spreadRumour(gs, this.ledger, this.book, actorId, action.botId, action.targetId, action.rumour);
             case "vetoCase":
-                return this.vetoCase(gs, actorId, action.botId);
+                return this.vetoCase(gs, actorId, action.botId, action.targetId);
             case "flirt": {
                 // a couple of flirts within two weeks is fine; more is creepy to some people (not others), and
                 // creep someone out twice and it's for good
@@ -3716,7 +3741,7 @@ export class PlayerModeController {
                 vetoCase: ["vetoYes", "vetoNo"],
             };
             const [yes, no] = replies[action.kind] || ["heard", "listen"];
-            return act(action, yes, no, "targetId" in action ? name(action.targetId) : "");
+            return act(action, yes, no, "targetId" in action && action.targetId !== undefined ? name(action.targetId) : "");
         }
 
         switch (intent.kind) {
@@ -4938,16 +4963,32 @@ export class PlayerModeController {
             });
     }
 
+    // Nominees who owe the HoH one: the HoH went up as their pawn once, as agreed. They take being nominated much
+    // better (see nominationHit), and the favour's used up.
+    private repayPawnFavors(hohId: number, nomineeIds: number[]): number[] {
+        const owing: number[] = [];
+        (this.state.pawnFavors || []).forEach((f) => {
+            if (!f.agreed || f.repaid || f.pawnId !== hohId || !nomineeIds.includes(f.hohId) || owing.includes(f.hohId)) return;
+            f.repaid = true;
+            owing.push(f.hohId);
+            const them = this.player(f.hohId).name;
+            const hoh = this.player(hohId).name;
+            this.tell([hohId], `🙋 ${them} owed you one for going up as their pawn in week ${f.week}. They're not thrilled, but they get it. You're even now.`);
+            this.tell([f.hohId], `🙋 ${hoh} put you up. You owed them one for going up as your pawn in week ${f.week}, so you're even now.`);
+        });
+        return owing;
+    }
+
     // A player who wins HoH remembers who they went up as a pawn for (see settlePawnAsks).
     private pawnMemories(hohId: number) {
         if (!this.isHuman({ id: hohId })) return;
         (this.state.pawnFavors || [])
-            .filter((f) => f.pawnId === hohId && !this.player(f.hohId).isEvicted)
+            .filter((f) => f.pawnId === hohId && !this.player(f.hohId).isEvicted && !f.repaid)
             .forEach((f) =>
                 this.tell(
                     [hohId],
                     f.agreed
-                        ? `🙋 Remember week ${f.week}: you went up as ${this.player(f.hohId).name}'s pawn. They owe you one.`
+                        ? `🙋 Remember week ${f.week}: you went up as ${this.player(f.hohId).name}'s pawn. They owe you one: put them up, and they'll take it far better than most.`
                         : `😠 Remember week ${f.week}: ${this.player(f.hohId).name} nominated you after you said no.`
                 )
             );
@@ -5067,7 +5108,6 @@ export class PlayerModeController {
             ],
             targets: [
                 ...asked.slice(0, 1),
-                ...(room && room.hohId === hohId ? (room.pawns || []).filter((p) => p.yes).map((p) => p.id) : []),
                 ...asked.slice(1),
                 ...favors.filter((f) => !f.agreed).map((f) => f.hohId),
                 ...this.showmanceTarget(hohId),
@@ -5075,6 +5115,8 @@ export class PlayerModeController {
                 ...this.personalityTargets(hohId),
                 ...this.topThreat(hohId),
             ],
+            // whoever agreed to go up as its pawn goes up: it said it would
+            pawns: room && room.hohId === hohId ? (room.pawns || []).filter((p) => p.yes && !this.player(p.id).isEvicted).map((p) => p.id) : [],
         };
     }
 
@@ -5168,14 +5210,15 @@ export class PlayerModeController {
         const s = this.state;
         const week = s.week;
         if (week.secretHoh) return next;
+        const owing = this.repayPawnFavors(hohId, newNomineeIds);
         if (this.isHuman({ id: hohId })) {
-            this.mutate((gs) => nominationHit(gs, hohId, newNomineeIds));
+            this.mutate((gs) => nominationHit(gs, hohId, newNomineeIds, owing));
             week.pawnAsk = { ids: newNomineeIds, next };
             return Step.PawnTalk;
         }
         this.reseed(`pawn:${newNomineeIds.join(",")}`);
         const talks = this.mutate((gs) => {
-            nominationHit(gs, hohId, newNomineeIds);
+            nominationHit(gs, hohId, newNomineeIds, owing);
             return botPawnTalk(gs, getById(gs, hohId), week.nomineeIds || newNomineeIds, newNomineeIds);
         });
         week.pawns = [...(week.pawns || []), ...talks];
@@ -5688,11 +5731,16 @@ export class PlayerModeController {
             const pawn = [...noms].sort((a, b) => (pov.relationships[b.id] ?? 0) - (pov.relationships[a.id] ?? 0))[0];
             if (pawn) return { decision: pawn, reason: "It's all part of the plan." };
         }
-        const won = noms.filter((n) => cases[n.id]).sort((a, b) => (pov.relationships[b.id] ?? 0) - (pov.relationships[a.id] ?? 0));
+        // nominees who made their case, or someone made it for them, and it worked
+        const asks = Object.values(this.state.week.vetoAsks || {});
+        const won = noms.filter((n) => cases[n.id] || asks.includes(n.id)).sort((a, b) => (pov.relationships[b.id] ?? 0) - (pov.relationships[a.id] ?? 0));
         const hohWon = hoh.id !== pov.id && cases[hoh.id] === true;
         const hohRel = pov.relationships[hoh.id] ?? 0;
         if (won.length > 0 && !choice.decision && (!hohWon || (pov.relationships[won[0].id] ?? 0) > hohRel))
-            return { decision: won[0], reason: `${won[0].name} made their case, and it worked.` };
+            return {
+                decision: won[0],
+                reason: cases[won[0].id] ? `${won[0].name} made their case, and it worked.` : `I was asked to save ${won[0].name}, and I agreed.`,
+            };
         if (hohWon && choice.decision && !cases[choice.decision.id])
             return { decision: null, reason: `${hoh.name} asked me to keep the nominations the same.` };
         return choice;

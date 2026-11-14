@@ -23,7 +23,7 @@ export function PromiseList(props: { controller: PlayerModeController; actorId: 
     const what = (p: Pledge) => {
         if (p.kind === "final2") return "final two together";
         if (p.kind === "vote") return "no vote to evict";
-        if (p.kind === "veto") return "the veto";
+        if (p.kind === "veto") return p.aboutId !== undefined ? `the veto on ${name(p.aboutId)}` : "the veto";
         if (p.kind === "noVeto") return "nominations stay the same";
         if (p.week === week) return "safety this week";
         if (p.week === week + 1) return "safety next week";

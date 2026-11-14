@@ -64,6 +64,11 @@ export function BotTalkPanel(props: {
         (nomineeIds.includes(me.id) || me.id === hohId);
     const iAmNominee = nomineeIds.includes(me.id);
     const iAmHoh = me.id === hohId;
+    // anyone else can ask the veto holder to use it on one of the nominees
+    const vetoFor =
+        step === Step.SocialVeto && botId === controller.state.week.povId && !nomineeIds.includes(botId) && !iAmNominee && !iAmHoh
+            ? nomineeIds
+            : [];
     const botVotes = botId !== hohId && !nomineeIds.includes(botId);
     const otherNoms = nomineeIds.filter((id) => id !== me.id);
     const joinable = controller.alliancesOf(me.id).filter((a) => !a.memberIds.includes(botId));
@@ -273,6 +278,16 @@ export function BotTalkPanel(props: {
                         🏅 {iAmNominee ? "Ask them to use the veto on you" : "Ask them not to use the veto"}
                     </button>
                 )}
+                {vetoFor.map((id) => (
+                    <button
+                        key={`veto-${id}`}
+                        type="button"
+                        className={chip("success")}
+                        onClick={() => doAction(`You've got the veto. Use it on ${name(id)}.`, { kind: "vetoCase", botId, targetId: id })}
+                    >
+                        🏅 Ask them to use the veto on {name(id)}
+                    </button>
+                ))}
                 {campaign && iAmNominee && botVotes && (
                     <>
                         <button

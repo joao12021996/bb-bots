@@ -27,10 +27,14 @@ function clamp(n: number, lo: number, hi: number): number {
     return Math.max(lo, Math.min(hi, n));
 }
 
-// Nobody likes the person who put them on the block.
-export function nominationHit(gs: MutableGameState, hohId: number, nomineeIds: number[]) {
-    nomineeIds.forEach((id) => shiftRelationship(gs, hohId, id, -NOMINATION_HIT));
+// Nobody likes the person who put them on the block. `owing`: nominees who owe the HoH a favour (the HoH once went
+// up as their pawn), who take it much better.
+export function nominationHit(gs: MutableGameState, hohId: number, nomineeIds: number[], owing: number[] = []) {
+    nomineeIds.forEach((id) => shiftRelationship(gs, hohId, id, -NOMINATION_HIT * (owing.includes(id) ? OWED_HIT : 1)));
 }
+
+// How much of the sting is left for a nominee who owed the HoH a pawn favour.
+export const OWED_HIT = 0.25;
 
 // A player HoH tells a nominee they're the pawn. Bots believe it if they trust the player, and good talkers
 // are more convincing. Other players make up their own minds.

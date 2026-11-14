@@ -9,7 +9,8 @@ import { shiftRelationship } from "./relationships";
 // safety: "you're safe if I'm HoH" (for a given week)
 // final2: "I'll take you to the final 2"
 // vote:   "I won't vote to evict you" (at a given eviction)
-// veto:   the veto holder, to a nominee: "I'll use the veto on you" (that week)
+// veto:   the veto holder, to a nominee: "I'll use the veto on you" (that week), or to someone else: "I'll use it on
+//         `aboutId`"
 // noVeto: the veto holder, to the HoH: "the nominations stay the same" (that week)
 export type PledgeKind = "safety" | "final2" | "vote" | "veto" | "noVeto";
 export type PledgeStatus = "open" | "kept" | "broken" | "void";
@@ -22,6 +23,7 @@ export interface Pledge {
     week: number; // safety: the week it applies; vote: the eviction it's about; final2: when it was made
     status: PledgeStatus;
     known?: boolean; // whoever it was made to knows it was broken
+    aboutId?: number; // veto: who it's to be used on, when that isn't `toId`
 }
 
 // Something said to one houseguest that may or may not be true: "I'm voting to evict X", "the target is X".
@@ -277,7 +279,7 @@ export function settleVetoPledges(gs: MutableGameState, ledger: Ledger, povId: n
         .filter((p) => p.fromId === povId && p.week === week && (p.kind === "veto" || p.kind === "noVeto"))
         .forEach((p) => {
             if (getById(gs, p.toId).isEvicted) return void (p.status = "void");
-            const kept = p.kind === "veto" ? savedId === p.toId : savedId === null;
+            const kept = p.kind === "veto" ? savedId === (p.aboutId ?? p.toId) : savedId === null;
             news.push(...(kept ? keep(gs, ledger, p) : breakPledge(gs, ledger, p, true)));
         });
     return news;

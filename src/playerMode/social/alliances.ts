@@ -522,7 +522,7 @@ export function botNominate(
     hero: Houseguest,
     options: Houseguest[],
     count: number,
-    sway?: { protect: number[]; targets: number[] }
+    sway?: { protect: number[]; targets: number[]; pawns?: number[] }
 ): BotPicks {
     const allies = alliesOf(book, hero.id);
     const targets = currentTargets(book, gs, hero.id);
@@ -530,7 +530,10 @@ export function botNominate(
     options.forEach((o) => allies.has(o.id) && rand() < loyalty(gs, book, hero.id, o.id) && protectedIds.add(o.id));
     const swayed = sway ? sway.targets : [];
     if (sway) sway.protect.forEach((id) => protectedIds.add(id));
+    // houseguests who agreed to go up as the HoH's pawn go up (leaving a seat for the real target)
+    const pawns = sway && sway.pawns ? sway.pawns.slice(0, Math.max(1, count - 1)) : [];
     const score = (hg: Houseguest) => {
+        if (pawns.includes(hg.id)) return -1000 + pawns.indexOf(hg.id);
         if (protectedIds.has(hg.id)) return 10000 + hitListRank(hero, hg.id);
         if (swayed.includes(hg.id)) return -200 + swayed.indexOf(hg.id);
         const t = targets.indexOf(hg.id);
