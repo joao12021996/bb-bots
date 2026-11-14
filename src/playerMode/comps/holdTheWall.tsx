@@ -6,6 +6,7 @@ import { clamp, gaussian, Rand, seededRand } from "./random";
 const LIMIT = 300;
 const PUSH = 2.0; // strength of the player's lean
 const ZONE = 1; // marker falls off past |x| > ZONE
+const VICTORY_LAP_MS = 2500; // after the last opponent falls, the winner stays on the wall this long
 
 // Endurance: the wall sways in random gusts that grow stronger over time. Lean against the gusts
 // to keep the marker on the wall. Holding a button on a phone, or the arrow keys on a computer.
@@ -99,14 +100,20 @@ function HoldTheWall(props: CompProps) {
         </button>
     );
 
-    // last one standing: once every opponent has fallen, you've won the endurance comp
+    // last one standing: once every opponent has fallen, you've won the endurance comp. Hang on a couple more
+    // seconds (a victory lap) before it ends; falling now changes nothing.
     const everyoneElseDown = opponents.length > 0 && opponents.every((o) => o.score < survived);
+    const survivedRef = React.useRef(0);
+    survivedRef.current = survived;
     React.useEffect(() => {
-        if (everyoneElseDown && !finished.current) {
+        if (!everyoneElseDown || finished.current) return;
+        const t = setTimeout(() => {
+            if (finished.current) return;
             finished.current = true;
-            finish(survived);
-        }
-    }, [everyoneElseDown, survived, finish]);
+            finish(survivedRef.current);
+        }, VICTORY_LAP_MS);
+        return () => clearTimeout(t);
+    }, [everyoneElseDown, finish]);
 
     const standing = opponents.filter((o) => o.score > survived);
     const lastId = standing.length === 1 ? standing[0].hg.id : null;
@@ -143,7 +150,7 @@ function HoldTheWall(props: CompProps) {
     const danger = Math.abs(x) > 0.7;
     return (
         <div>
-            <Title>{fallen ? "You fell!" : "Hang on!"}</Title>
+            <Title>{everyoneElseDown ? "🏆 You're the last one on the wall!" : fallen ? "You fell!" : "Hang on!"}</Title>
             <Subtle>{survived.toFixed(1)} seconds on the wall</Subtle>
             <div
                 style={{
