@@ -400,7 +400,7 @@ function HostSettings(props: { session: NetSession; status: NetStatus }) {
                 </div>
                 <small className="bbb-subtle">
                     {setup.isPublic
-                        ? "Listed on the start screen until the season starts: anyone can join. Your name in the house is shown with it."
+                        ? "Listed on the start screen under Games waiting to start, until the season starts: anyone can join. Your name in the house is shown with it."
                         : "Only people you send the link or code to can join."}
                 </small>
             </div>
@@ -650,9 +650,10 @@ export function JoinOnline(props: { initialCode?: string; autoJoin?: boolean }) 
 
 const PUBLIC_REFRESH_MS = 15000;
 
-// Lobbies whose hosts made them public, for anyone to join. Shows nothing when the relay can't be reached.
+// The start screen's panel: every public lobby still waiting to start, for anyone to walk into.
 export function PublicGames() {
     const [games, setGames] = React.useState<PublicGame[] | null>(null);
+    const [failed, setFailed] = React.useState(false);
     React.useEffect(() => {
         if (process.env.NODE_ENV === "test") return; // no relay in tests
         let alive = true;
@@ -660,9 +661,13 @@ export function PublicGames() {
         const load = async () => {
             try {
                 const list = await listPublicGames();
-                if (alive) setGames(list);
+                if (alive) {
+                    setGames(list);
+                    setFailed(false);
+                }
             } catch (e) {
-                // keep showing what we had (or nothing): it's tried again shortly
+                // keep showing what we had: it's tried again shortly
+                if (alive) setFailed(true);
             }
             if (alive) timer = setTimeout(load, PUBLIC_REFRESH_MS);
         };
@@ -672,19 +677,21 @@ export function PublicGames() {
             clearTimeout(timer);
         };
     }, []);
-    if (games === null) return null;
     return (
-        <div className="bbb-public-games">
-            <b>{t("Public games")}</b>
-            {games.length === 0 ? (
-                <small className="bbb-subtle">{t("No public games right now. Host one and set it to Public!")}</small>
+        <div className="bbb-mode-card bbb-public-games">
+            <h3>🚪 {t("Games waiting to start")}</h3>
+            <p>{t("Online houses open to anyone. Jump in and take a bot's place before the host starts the season.")}</p>
+            {games === null ? (
+                <small className="bbb-subtle">{failed ? t("Couldn't reach the game server. Trying again…") : t("Looking for games…")}</small>
+            ) : games.length === 0 ? (
+                <small className="bbb-subtle">{t("No games waiting right now. Host one and anyone can join!")}</small>
             ) : (
-                games.map((g) => (
+                <div className="bbb-public-list">
+                    {games.map((g) => (
                         <div key={g.code} className="bbb-public-game">
                             <span>
-                                <b>{g.host ? `${g.host}'s house` : `House ${g.code}`}</b>
+                                <b>{g.host ? t("{name}'s house", { name: g.host }) : t("House {code}", { code: g.code })}</b>
                                 <small className="bbb-subtle">
-                                    {" "}
                                     🎮 {g.players}
                                     {g.want > g.players ? `/${g.want}` : ""} · 🏠 {g.size} · {difficultyLabel(g.difficulty as any)}
                                     {g.paceHours > 0 && ` · ⏰ ${PACES.find((p) => p.hours === g.paceHours)?.label || `${g.paceHours} hours`}`}
@@ -695,7 +702,8 @@ export function PublicGames() {
                                 {t("Join")}
                             </button>
                         </div>
-                ))
+                    ))}
+                </div>
             )}
         </div>
     );

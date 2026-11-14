@@ -676,7 +676,7 @@ describe("online play", () => {
         expect(prompt(a).kind).toBe("gameOver");
     });
 
-    it("a lobby is private unless the host makes it public, and comes off the list when the season starts", () => {
+    it("a lobby is public unless the host makes it private, and comes off the list when the season starts", () => {
         const hub = new FakeHub();
         const cast = testCast(8);
         const cards = cast.map((hg) => ({ name: hg.name, imageURL: hg.imageURL }));
@@ -685,9 +685,8 @@ describe("online play", () => {
         const aRoom = hub.join("a") as any;
         const a = NetSession.join(aRoom, "TEST", opts);
         hub.flush();
-        expect(hostRoom.listing).toBeNull();
+        expect(hostRoom.listing).toMatchObject({ host: "", players: 0, size: 6 });
 
-        host.updateSetup({ isPublic: true });
         host.takeSeat({ name: "Host", imageURL: "", castIndex: null });
         hub.flush();
         expect(hostRoom.listing).toMatchObject({ host: "Host", players: 1, size: 6 });

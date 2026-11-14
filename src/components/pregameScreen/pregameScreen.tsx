@@ -157,9 +157,9 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                                 {readOnlineSave() ? t("Join or rejoin a game") : t("Join a game")}
                             </button>
                         </div>
-                        <PublicGames />
                     </div>
                 </div>
+                <PublicGames />
                 <p className="bbb-steps">
                     <TopbarLink
                         onClick={() => {

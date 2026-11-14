@@ -292,12 +292,12 @@ input[type="number"] {
     border-color: rgba(167, 139, 250, 0.45);
 }
 .bbb-public-games {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-top: 14px;
-    padding-top: 12px;
-    border-top: 1px solid var(--bbb-border);
+    margin: 0 0 18px;
+}
+.bbb-public-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+    gap: 8px;
 }
 .bbb-public-game {
     display: flex;
@@ -309,6 +309,8 @@ input[type="number"] {
     background: var(--bbb-card-2);
 }
 .bbb-public-game > span {
+    display: flex;
+    flex-direction: column;
     min-width: 0;
     overflow-wrap: anywhere;
 }
