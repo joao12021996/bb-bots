@@ -4,17 +4,18 @@ import { BigButton, Face, Panel, Subtle, Title } from "../ui/common";
 import { chance, clamp, pick, Rand } from "./random";
 
 // Tainted Wine: two glasses, one of them tainted. Whoever holds the glasses knows which is which. They hand one
-// to a houseguest of their choice and keep the other, and they can say whatever they like about it: the truth, or
+// to the other houseguest on stage and keep the other, and they can say whatever they like about it: the truth, or
 // a bluff. The houseguest can drink what they were given or trade glasses. Then both drink. Drink the tainted wine
-// twice and you're out. Whoever drank the tainted glass pours next. Last one standing wins.
+// twice and you're out, and two more take the stage. Whoever drank the tainted glass pours next. Last one standing wins.
 
 export const TAINTED_WINE_ID = "tainted-wine";
 export const STRIKES_OUT = 2;
 
 export const TAINTED_WINE_RULES =
-    "Tainted Wine! Two glasses, one of them tainted. Whoever pours knows which is which: they offer one glass to a houseguest " +
-    "and keep the other, and they can tell the truth about it or bluff. The houseguest drinks what they're given or trades glasses. " +
-    `Then both drink. Drink the tainted wine ${STRIKES_OUT} times and you're out. Whoever drank the tainted glass pours next. Last one standing wins.`;
+    "Tainted Wine! Two houseguests take the stage, with two glasses, one of them tainted. Whoever pours knows which is which: they offer " +
+    "one glass to the other and keep the other, and they can tell the truth about it or bluff. The other drinks what they're given or trades glasses. " +
+    `Then both drink, and whoever drank the tainted glass pours next. Drink the tainted wine ${STRIKES_OUT} times and you're out, and the next two take the stage. ` +
+    "Nobody goes up again until everyone has had a turn. Last one standing wins.";
 
 // what the pourer says about the glass they're offering
 export type Claim = "clean" | "tainted" | "none";

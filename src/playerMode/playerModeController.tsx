@@ -37,7 +37,7 @@ import { capitalize, explainNomination, explainVote, ReasonContext } from "./soc
 import { CompDefinition, EnduranceDeals, Opponent } from "./comps/compTypes";
 import { CompRole, THROW_EFFORT, throwChance } from "./comps/throwing";
 import { KNOCKOUT_ID, KNOCKOUT_RULES } from "./comps/knockout";
-import { botPour, botSwaps, botTarget, Claim, claimLine, Pour, STRIKES_OUT, TAINTED_WINE_ID, TAINTED_WINE_RULES } from "./comps/taintedWine";
+import { botPour, botSwaps, Claim, claimLine, Pour, STRIKES_OUT, TAINTED_WINE_ID, TAINTED_WINE_RULES } from "./comps/taintedWine";
 import { compById, finaleComps, pickQuickComp, pickWeeklyComp } from "./comps";
 import { botPercentile } from "./comps/botScores";
 import { sample, seededRand } from "./comps/random";
@@ -695,6 +695,17 @@ export class PlayerModeController {
             // the player an input is for, or (drawing a screen) this device's own player
             const local = this.net && this.net.localIds ? this.net.localIds() : [];
             const id = this.actingFor !== null ? this.actingFor : local.length > 0 ? local[0] : null;
+            if (id !== null && this.state.socialBy && this.state.socialBy[id]) return this.player(id);
+        }
+        return this.turnOrder[this.state.socialTurn];
+    }
+
+    // The player whose social screen this device draws. Unlike socialActor, never the player an input is for:
+    // another player's move can redraw this screen while it's being made, and it must still be this device's own.
+    get socialViewer(): Houseguest {
+        if (this.socialTogether) {
+            const local = this.net && this.net.localIds ? this.net.localIds() : [];
+            const id = local.length > 0 ? local[0] : null;
             if (id !== null && this.state.socialBy && this.state.socialBy[id]) return this.player(id);
         }
         return this.turnOrder[this.state.socialTurn];
@@ -2262,9 +2273,11 @@ export class PlayerModeController {
         });
     }
 
-    // Tainted Wine: two glasses, one tainted. The pourer offers one to a houseguest and keeps the other, truth or
-    // bluff; the houseguest drinks or trades. Two tainted sips and you're out; whoever drank the tainted glass pours
-    // next. Every player decision is saved as it's made, and the bots' choices come from the comp's seed, so a
+    // Tainted Wine: two glasses, one tainted, two houseguests on stage at a time. The pourer offers one glass to
+    // the other and keeps the other, truth or bluff; the other drinks or trades. Whoever drank the tainted glass
+    // pours next; two tainted sips and you're out, and two more take the stage. Nobody takes the stage again until
+    // everyone still in has had their turn (with an odd number, the last one up faces someone who's been on
+    // already). Every player decision is saved as it's made, and the bots' choices come from the comp's seed, so a
     // reload replays the comp exactly up to where it was.
     private runTaintedWine(title: string, participants: Houseguest[], onWinner: (id: number, worstFirst: number[]) => void) {
         const s = this.state;
@@ -2278,13 +2291,18 @@ export class PlayerModeController {
         const offered: { pourerId: number; targetId: number }[] = [];
         let lines: string[] = [TAINTED_WINE_RULES];
         let round = 0;
+        // the stage: the two on it, who's still to go up this time round, and who's been up and is still in
+        const order = shuffled(noise, remaining);
+        let waiting = [...order];
+        let been: number[] = [];
+        let stage: [number, number] = [order[0], order[1]];
         onWinner = this.compStarts(onWinner);
         this.noteStandIns(participants);
         const skillOf = (id: number) => (this.isHuman({ id }) ? 0.5 : this.botSkill(this.player(id), `${seed}`));
 
         const captions = () => {
             const c: { [id: number]: string } = {};
-            remaining.forEach((id) => (c[id] = strikes[id] === 0 ? "🍷 no sips" : `☠️ ${strikes[id]}/${STRIKES_OUT}`));
+            remaining.forEach((id) => (c[id] = !stage.includes(id) ? (been.includes(id) ? "✅ played" : "⏳ up later") : strikes[id] === 0 ? "🎭 🍷 no sips" : `🎭 ☠️ ${strikes[id]}/${STRIKES_OUT}`));
             return c;
         };
         // as in the knockout: `stage` boards come after every glass, and are shown once
@@ -2321,7 +2339,7 @@ export class PlayerModeController {
             board(() => onWinner(winnerId, worstFirst), winnerId);
         };
 
-        const drink = (pourerId: number, targetId: number, pour: Pour, swap: boolean) => {
+        const drink = (pourerId: number, targetId: number, pour: Pour, swap: boolean): void => {
             // after the trade (if any), does the drinker hold the tainted glass?
             const drinkerTainted = pour.offerTainted !== swap;
             const victim = drinkerTainted ? targetId : pourerId;
@@ -2340,8 +2358,11 @@ export class PlayerModeController {
             }
             lines.push(line);
             if (remaining.length === 1) return finish();
-            // one glass at a time
-            board(() => pourTurn(remaining.includes(victim) ? victim : other), undefined, `wine:${seed}:${round}:seen`);
+            // one glass at a time; whoever drank the tainted glass pours next, until one of them is out
+            if (remaining.includes(victim)) return board(() => pourTurn(victim), undefined, `wine:${seed}:${round}:seen`);
+            been.push(other);
+            const next = nextUp();
+            board(() => pourTurn(next), undefined, `wine:${seed}:${round}:seen`);
         };
 
         const offer = (pourerId: number, targetId: number) => {
@@ -2389,38 +2410,28 @@ export class PlayerModeController {
             );
         };
 
-        const pourTurn = (pourerId: number) => {
-            const options = remaining.filter((id) => id !== pourerId).map((id) => this.player(id));
-            const pourer = this.player(pourerId);
-            const botPick = botTarget(pourer, options, strikes, noise).id;
-            if (options.length === 1) return offer(pourerId, options[0].id);
-            if (!this.isHuman(pourer)) return offer(pourerId, botPick);
-            this.decide<number>(
-                `wine:${seed}:${round + 1}:target`,
-                (answer) =>
-                    board(() =>
-                        this.privately(pourerId, `${pourer.name}, you're pouring`, () =>
-                            this.show({
-                                kind: "choose",
-                                actorId: pourerId,
-                                title: "Tainted Wine: who do you pour for?",
-                                text: `You hold both glasses and you know which one is tainted. Pick who you'll offer a glass to: you drink the other one. Everyone sees who you pick. Strikes: ${remaining
-                                    .map((id) => `${name(id)} ${strikes[id]}/${STRIKES_OUT}`)
-                                    .join(", ")}.`,
-                                options,
-                                count: 1,
-                                confirmLabel: "Pour for them",
-                                resolve: (ids) => answer(ids[0]),
-                            })
-                        )
-                    ),
-                (targetId) => offer(pourerId, targetId)
-            );
+        // The next two to take the stage (the first of them pours first). Those who haven't been up go first;
+        // once everyone has, everyone still in goes round again.
+        const nextUp = (): number => {
+            if (waiting.length === 0) {
+                waiting = order.filter((id) => been.includes(id));
+                been = [];
+            }
+            let pair: number[];
+            if (waiting.length >= 2) pair = waiting.slice(0, 2);
+            else pair = [waiting[0], been[0]]; // odd one left: they face whoever's been waiting longest
+            waiting = waiting.filter((id) => !pair.includes(id));
+            been = been.filter((id) => !pair.includes(id));
+            stage = [pair[0], pair[1]];
+            pair.forEach((id) => (strikes[id] = 0)); // a fresh game for both
+            lines.push(`🎭 ${name(pair[0])} and ${name(pair[1])} take the stage. ${name(pair[0])} pours first.`);
+            return pair[0];
         };
 
-        const first = sample(noise, remaining, 1)[0];
-        lines.push(`🎲 ${name(first)} was drawn to pour first.`);
-        pourTurn(first);
+        const pourTurn = (pourerId: number): void => offer(pourerId, stage[0] === pourerId ? stage[1] : stage[0]);
+
+        lines.push(`🎲 The draw: ${order.map(name).join(", ")}.`);
+        pourTurn(nextUp());
     }
 
     // Memory Duel: Concentration, king of the hill. Two at a time, in a drawn order: the winner of each duel faces

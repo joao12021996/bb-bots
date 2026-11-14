@@ -17,7 +17,7 @@ type Tab = "target" | "backstab";
 function TalkItOut(props: { controller: PlayerModeController; alliance: Alliance; onDone: (lines: string[]) => void }) {
     const { controller, alliance: a } = props;
     const gs = controller.gameState;
-    const me = controller.socialActor;
+    const me = controller.socialViewer;
     const sides = positionsOf(gs, a);
     const name = (id: number) => (id === me.id ? "you" : controller.player(id).name);
     return (
@@ -62,7 +62,7 @@ function TalkItOut(props: { controller: PlayerModeController; alliance: Alliance
 function AllianceCard(props: { controller: PlayerModeController; alliance: Alliance; onChange: () => void }) {
     const { controller, alliance: a } = props;
     const gs = controller.gameState;
-    const me = controller.socialActor;
+    const me = controller.socialViewer;
     const [result, setResult] = React.useState<string[] | null>(null);
     const [picked, setPicked] = React.useState<number | null>(null);
     const [backup, setBackup] = React.useState<number | null>(null); // plan B
@@ -326,7 +326,7 @@ function AllianceCard(props: { controller: PlayerModeController; alliance: Allia
 // Alliance time: each of the player's alliances meets to pick a target. Players can also backstab.
 export function AllianceScreen(props: AllianceScreenProps) {
     const { controller } = props;
-    const me = controller.socialActor;
+    const me = controller.socialViewer;
     // keep showing alliances the player leaves or gets kicked out of during this screen
     const [alliances] = React.useState(() => controller.meetingAlliancesOf(me.id));
     const hohId = controller.state.step === Step.AllianceHoh ? controller.state.week.hohId : undefined; // asking about nominations

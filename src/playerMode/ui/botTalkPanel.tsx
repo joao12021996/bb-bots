@@ -29,7 +29,7 @@ export function BotTalkPanel(props: {
     onOutcome: (o: SocialOutcome | null) => void;
 }) {
     const { controller, botId } = props;
-    const me = controller.socialActor;
+    const me = controller.socialViewer;
     const bot = controller.player(botId);
     const [text, setText] = React.useState("");
     const [picker, setPicker] = React.useState<Picker | null>(null);

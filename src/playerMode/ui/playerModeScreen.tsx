@@ -31,6 +31,9 @@ import { POWERS } from "../social/powers";
 import { Tip } from "../coach";
 import { t } from "../../i18n/i18n";
 
+// The screens of a comp, from playing it to its results.
+const COMP_SCREENS: string[] = ["compPlay", "compResults", "tiebreak", "tiebreakResults", "hideTiebreak", "hideResults", "knockout", "memoryDuel", "winePour", "wineDrink"];
+
 // Guided seasons: the coach explains a part of the week, the first time it comes up.
 export function CoachTip(props: { tip: Tip; onDismiss: () => void; onStop: () => void }) {
     const { tip } = props;
@@ -641,8 +644,15 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                 break;
         }
         const day = prompt.kind !== "gameOver" && prompt.kind !== "handoff" ? controller.dayText() : null;
+        // a comp's on (playing, waiting on the others, the results): no house wall
+        const inComp =
+            COMP_SCREENS.includes(prompt.kind) || (prompt.kind === "waiting" && !!prompt.comp);
+        // a Have-Not's week is grey, part of the punishment (but not their comps: some are played by colour)
+        const viewer = session ? session.localPlayerId : controller.state.humanIds.length === 1 ? controller.state.humanIds[0] : actor;
+        const haveNot =
+            viewer !== null && !inComp && controller.state.humanIds.includes(viewer) && controller.isHaveNot(viewer) && !controller.player(viewer).isEvicted;
         return (
-            <div className="bbb-player-mode">
+            <div className={`bbb-player-mode${haveNot ? " bbb-have-not" : ""}`}>
                 {session && <OnlineBar session={session} controller={controller} />}
                 {day && <div className="bbb-day">📅 {day}</div>}
                 {banner &&
@@ -652,7 +662,7 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                         <div className="bbb-banner">{banner}</div>
                     )}
                 {!["handoff", "compPlay", "tiebreak", "hideTiebreak", "memoryDuel", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(chrome) && <LiveFeed controller={controller} />}
-                {!["handoff", "compPlay", "tiebreak", "hideTiebreak", "memoryDuel", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(chrome) && (
+                {!["handoff", "compPlay", "tiebreak", "hideTiebreak", "memoryDuel", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(chrome) && !inComp && (
                     <div className="bbb-mwall-box">
                         <button
                             type="button"
@@ -688,6 +698,9 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                 )}
                 {session && !session.spectating && owner === null && actor === null && !session.amHost && !session.everyoneContinues && prompt.kind !== "gameOver" && prompt.kind !== "waiting" && prompt.kind !== "break" && (
                     <div className="bbb-online-note">⏩ The host moves the show along from here.</div>
+                )}
+                {session && !session.spectating && owner === null && actor === null && session.everyoneContinues && !session.mayContinue && prompt.kind !== "gameOver" && prompt.kind !== "waiting" && prompt.kind !== "break" && (
+                    <div className="bbb-online-note">⏩ The players still in the house move the show along from here.</div>
                 )}
                 {this.state.tip && owner === null && (
                     <CoachTip

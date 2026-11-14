@@ -1020,16 +1020,33 @@ export class NetSession {
         return p.name === "continue" && !!this.rawPrompt && actorOf(this.rawPrompt) === null;
     }
 
-    // The players whose Continue is waited for: everyone connected (an expelled player only watches).
-    private continuers(): number[] {
+    // The players here (connected) with a device.
+    private here(): number[] {
         return Object.keys(this.claims)
             .map(Number)
-            .filter((id) => this.connected(this.claims[id]) && !(this.controller && this.controller.isRuleBreaker(id)));
+            .filter((id) => this.connected(this.claims[id]));
     }
 
-    // Whether a screen everyone watches waits for everyone's Continue (with one player there's nobody to wait for).
+    // The players whose Continue is waited for: everyone here who's still in the house. An expelled player only
+    // watches, and so does an evicted one (the host too): they can't hold the show up. Once every player here is
+    // out, the show is all bots, and any of them may move it on.
+    private continuers(): number[] {
+        const c = this.controller;
+        const here = this.here().filter((id) => !(c && c.isRuleBreaker(id)));
+        const inHouse = here.filter((id) => !c || !getById(c.gameState, id) || !getById(c.gameState, id).isEvicted);
+        return inHouse.length > 0 ? inHouse : here;
+    }
+
+    // Whether this device's player's Continue counts on a screen everyone watches.
+    public get mayContinue(): boolean {
+        const me = this.localPlayerId;
+        return me !== null && this.continuers().includes(me);
+    }
+
+    // Whether a screen everyone watches moves on by players' Continue presses, rather than the host's alone
+    // (with one player there's nobody else to press it).
     public get everyoneContinues(): boolean {
-        return this.started && this.localPlayerId !== null && this.continuers().length > 1;
+        return this.started && this.localPlayerId !== null && this.here().length > 1;
     }
 
     // A shared screen's Continue, the same as any input on it except that any player's device may press it.
@@ -1047,7 +1064,7 @@ export class NetSession {
     private pressContinue(pressed: Proposal): undefined {
         const at = this.sharedStamp.at;
         const p = { ...pressed, at }; // for the screen it was pressed on
-        if (!this.validContinue(p, this.room.selfId)) return undefined;
+        if (!this.validContinue(p, this.room.selfId) || !this.mayContinue) return undefined;
         if (this.myReadyAt === at && !this.isHost) return undefined; // pressed already
         this.myReadyAt = at;
         if (this.isHost) this.receiveReady(toWireInput({ ...p, seq: 0 }), this.room.selfId);
@@ -1063,7 +1080,7 @@ export class NetSession {
         if (!this.validContinue(p, from)) return;
         const at = this.sharedStamp.at;
         const playerId = Number(Object.keys(this.claims).find((id) => this.claims[Number(id)] === from));
-        if (p.at !== at) return;
+        if (p.at !== at || !this.continuers().includes(playerId)) return; // out of the house: only watching
         if (this.readyAt !== at) {
             this.readyAt = at;
             this.readyIds = [];
@@ -1098,7 +1115,7 @@ export class NetSession {
     public get waitingText(): string | null {
         const me = this.localPlayerId;
         const at = this.sharedStamp.at;
-        const pressed = me !== null && (this.myReadyAt === at || (this.readyAt === at && this.readyIds.includes(me)));
+        const pressed = me !== null && this.mayContinue && (this.myReadyAt === at || (this.readyAt === at && this.readyIds.includes(me)));
         if (!this.started || !this.controller || !pressed || !this.rawPrompt || actorOf(this.rawPrompt) !== null) return null;
         const done = this.readyAt === at ? this.readyIds : [];
         const names = this.continuers()

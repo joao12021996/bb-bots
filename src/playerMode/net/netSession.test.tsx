@@ -467,6 +467,44 @@ describe("online play", () => {
         expectInSync([host, clients[0]]);
     });
 
+    it("an evicted player, even the host, can't hold up a screen everyone watches", () => {
+        const { hub, host, clients, all } = setup(10, [1, 4, 7], 23);
+        let found = false;
+        for (let guard = 0; guard < 8000 && !found; guard++) {
+            const c = host.controller!;
+            const out = [1, 4, 7].filter((id) => c.player(id).isEvicted);
+            const p = prompt(host);
+            if (out.length > 0 && out.length < 3 && actorOf(p) === null && p.kind === "scene" && all.every((s) => prompt(s).kind === "scene")) {
+                found = true;
+                break;
+            }
+            if (!step(hub, all)) break;
+        }
+        expect(found).toBe(true);
+        const c = host.controller!;
+        const evicted = all.filter((s) => c.player(s.localPlayerId!).isEvicted);
+        const inHouse = all.filter((s) => !c.player(s.localPlayerId!).isEvicted);
+        evicted.forEach((s) => expect(s.mayContinue).toBe(false));
+        inHouse.forEach((s) => expect(s.mayContinue).toBe(true));
+        const before = host.appliedInputs;
+        // the evicted ones press: nothing happens, and nobody waits on them
+        hub.instant = true;
+        evicted.forEach((s) => s.controller!.continue());
+        hub.instant = false;
+        hub.flush();
+        expect(host.appliedInputs).toBe(before);
+        evicted.forEach((s) => expect(s.waitingText).toBeNull());
+        // the ones still in the house press: it moves on
+        hub.instant = true;
+        inHouse.forEach((s) => s.controller!.continue());
+        hub.instant = false;
+        hub.flush();
+        expect(host.appliedInputs).toBe(before + 1);
+        settle(hub, host);
+        expectInSync(all);
+        void clients;
+    });
+
     it("only lets the player a prompt belongs to answer it", () => {
         const { hub, host, clients, all } = setup(8, [0, 3], 5);
         let guard = 0;
@@ -798,7 +836,7 @@ describe("online play", () => {
     });
 
     it("a bot takes over a comp the player had up when they went away, and the others keep playing", () => {
-        const { hub, host, clients } = setup(8, [0, 3, 5], 19);
+        const { hub, host, clients } = setup(8, [0, 3, 5], 22);
         const all = [host, ...clients];
         expect(untilOwnScreens(hub, all, 3)).toBe(true);
         clients[1].leave();

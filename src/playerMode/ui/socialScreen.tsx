@@ -214,24 +214,30 @@ export function SocialScreen(props: SocialScreenProps) {
     const [mode, setMode] = React.useState<Mode>({ kind: "pickBot" });
     const [outcomes, setOutcomes] = React.useState<SocialOutcome[]>([]);
     const [allianceName, setAllianceName] = React.useState("");
-    const [news] = React.useState(() => controller.newsFor(controller.socialActor.id));
+    const [news] = React.useState(() => controller.newsFor(controller.socialViewer.id));
     const [, rerender] = React.useState(0);
     const [confirming, setConfirming] = React.useState<number[] | null>(null);
     // online: everyone's social time is at once, and players text each other from here
     const session = controller.socialTogether ? sessionFor(controller) : null;
-    const me = controller.socialActor.id;
+    const me = controller.socialViewer.id;
     const chat = useSubject(session ? session.chat$ : NO_CHAT);
     const unreadFrom = useUnreadFrom(session || NO_SESSION, me);
     const since = React.useMemo(() => (session ? blockStart(session, controller) : 0), [session, controller]);
     // online: other players' moves land while you're here (an invitation, an alliance forming...)
     React.useEffect(() => {
         if (!session) return;
-        const sub = controller.changed$.subscribe(() => rerender((n) => n + 1));
-        return () => sub.unsubscribe();
+        // (after the move is done: while it's being made, the controller acts as the player who made it, and
+        // drawing then would show this screen as theirs: their conversations, their menus)
+        let live = true;
+        const sub = controller.changed$.subscribe(() => Promise.resolve().then(() => live && rerender((n) => n + 1)));
+        return () => {
+            live = false;
+            sub.unsubscribe();
+        };
     }, [session, controller]);
 
     const gs = controller.gameState;
-    const human = controller.socialActor;
+    const human = controller.socialViewer;
     const allies = controller.allyIds(human.id);
     const myAlliances = controller.alliancesOf(human.id);
     const approaches = controller.approachesFor(human.id);

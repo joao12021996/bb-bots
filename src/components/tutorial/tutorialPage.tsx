@@ -117,7 +117,7 @@ const SECTIONS_EN: Section[] = [
                     </li>
                     <li>
                         <b>Knockout</b>: head-to-head duels until one is left. <b>Tainted Wine</b>: the pourer
-                        offers you a glass and may bluff about it. Drink the tainted one twice and you're out.
+                        offers you a glass and may bluff about it. Two at a time on stage; drink the tainted one twice and you're out, and the next two go up.
                     </li>
                     <li>
                         <b>Hide the {VETO}</b> breaks ties: everyone hides one {VETO.toLowerCase()} and the first

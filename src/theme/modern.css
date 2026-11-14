@@ -324,6 +324,11 @@ input[type="number"] {
 .bbb-player-mode {
     padding-top: 4px;
 }
+/* a Have-Not's week: slop, cold showers, and no colour */
+.bbb-player-mode.bbb-have-not {
+    filter: grayscale(1);
+    transition: filter 0.6s;
+}
 .bbb-banner {
     max-width: 720px;
     margin: 0 auto 10px;
