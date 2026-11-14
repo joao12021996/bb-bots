@@ -291,7 +291,7 @@ export function SocialScreen(props: SocialScreenProps) {
         body = (
             <div>
                 {controller.isHaveNot(human.id) && (
-                    <Subtle>🥫 You're a Have-Not this week (bottom of the {HOH} comp): slop, cold showers, and only one social action per block.</Subtle>
+                    <Subtle>🥫 You're a Have-Not this week (bottom of the {HOH} comp): only one social action per block, and the house in greyscale until the eviction.</Subtle>
                 )}
                 {idle && (
                     <div className="bbb-card-box">
