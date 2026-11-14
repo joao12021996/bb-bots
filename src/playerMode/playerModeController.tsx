@@ -2276,7 +2276,7 @@ export class PlayerModeController {
             if (hoh && this.useKnockout(competitors)) return KNOCKOUT_ID;
             if (this.useTaintedWine(competitors)) return TAINTED_WINE_ID;
             if (this.useMemoryDuel(competitors)) return MEMORY_DUEL_ID;
-            return pickWeeklyComp(this.state.gameState, this.state.history, this.state.usedComps, this.rules.kinds).id;
+            return pickWeeklyComp(this.state.gameState, this.state.history, this.state.usedComps, this.rules.kinds, this.haveNotCompeting(competitors)).id;
         });
     }
 
@@ -4627,10 +4627,13 @@ export class PlayerModeController {
     // ---------- Have-Nots ----------
 
     // The worst scorers in the HoH comp are this week's Have-Nots. Until the next HoH comp (the week's end), they get
-    // one social action per block, and a human Have-Not's screen goes grey, comps included.
+    // one social action per block, and a human Have-Not's screen goes grey, comps included. Only in the first half
+    // of the season: once half the house is gone, no more Have-Nots.
     private pickHaveNots(worstFirst: number[]) {
         const s = this.state;
-        const ids = worstFirst.slice(0, haveNotCount(nonEvictedHouseguests(s.gameState).length));
+        const all = s.gameState.houseguests;
+        const halfGone = all.filter((hg) => hg.isEvicted).length * 2 >= all.length;
+        const ids = halfGone ? [] : worstFirst.slice(0, haveNotCount(nonEvictedHouseguests(s.gameState).length));
         s.week.haveNots = ids;
         if (ids.length === 0) return;
         const names = listNames(ids.map((id) => this.player(id).name));
@@ -4640,6 +4643,11 @@ export class PlayerModeController {
             `The worst scores in the ${HOH} competition: ${names}.`,
             `Until the next ${HOH} comp, they only have the energy for one social action at a time, and the house is in greyscale for them, comps included.`,
         ]);
+    }
+
+    // A Have-Not (who sees in greyscale) is in this comp: nothing played by colour.
+    private haveNotCompeting(competitors: Houseguest[]): boolean {
+        return competitors.some((c) => this.isHaveNot(c.id) && !this.player(c.id).isEvicted);
     }
 
     public isHaveNot(id: number): boolean {
@@ -4675,7 +4683,7 @@ export class PlayerModeController {
             ]);
             return this.run();
         }
-        const comp = compById(this.compChoice(() => pickQuickComp(s.gameState, s.history, s.usedComps, this.rules.kinds).id));
+        const comp = compById(this.compChoice(() => pickQuickComp(s.gameState, s.history, s.usedComps, this.rules.kinds, this.haveNotCompeting(candidates)).id));
         this.runComp("🔙 Battle Back Competition", comp, candidates, (winnerId) => {
             const back = this.player(winnerId);
             const wasJuror = back.isJury;
@@ -5821,7 +5829,7 @@ export class PlayerModeController {
     private blockbuster() {
         const s = this.state;
         const noms = s.week.nomineeIds!.map((id) => getById(s.gameState, id));
-        const comp = compById(this.compChoice(() => pickQuickComp(s.gameState, s.history, s.usedComps, this.rules.kinds).id));
+        const comp = compById(this.compChoice(() => pickQuickComp(s.gameState, s.history, s.usedComps, this.rules.kinds, this.haveNotCompeting(noms)).id));
         this.runComp("Block Breaker Competition", comp, noms, (winnerId) => {
             const [gs, scene, remaining] = generateBlockbusterScene(s.gameState, noms, winnerId);
             s.gameState = gs;

@@ -79,6 +79,7 @@ export interface CompDefinition {
     hideTimer?: boolean; // for comps about judging time: don't show the countdown
     finaleOnly?: boolean; // reserved for the final HoH
     tiebreakOnly?: boolean; // not a weekly comp: Hide the Veto, which breaks ties now
+    needsColour?: boolean; // played by colour: never picked while a Have-Not (who sees in greyscale) is competing
     Component: React.ComponentType<CompProps>;
     // A bot plays the same instance the players got (same questions, dice, maze...). `skill` is the bot's
     // performance percentile from its Comp score (0 = worst, 1 = best); `noise` is the bot's own seeded randomness.

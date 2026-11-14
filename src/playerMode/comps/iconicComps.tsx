@@ -961,6 +961,7 @@ function simulateBBComics(ctx: SimContext, skill: number, noise: Rand): SimResul
 export const BBComicsComp: CompDefinition = {
     id: "bb-comics",
     name: "House Comics",
+    needsColour: true,
     emoji: "🦸",
     kind: "memory",
     rules:

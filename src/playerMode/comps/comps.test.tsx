@@ -672,3 +672,19 @@ describe("Packing Day", () => {
         expect(settle({ ...full, piece: { ...full.piece, row: 0 } }, order).over).toBe(true);
     });
 });
+
+describe("comps played by colour", () => {
+    it("are never picked while a Have-Not is competing", () => {
+        const { pickWeeklyComp, pickQuickComp, WEEKLY_COMPS } = require("./index");
+        const gs = game();
+        const colour = WEEKLY_COMPS.filter((c: any) => c.needsColour).map((c: any) => c.id).sort();
+        expect(colour).toEqual(["bb-comics", "color-clash", "reaction-lights"]);
+        for (let i = 0; i < 60; i++) {
+            expect(pickWeeklyComp(gs, history, [], undefined, true).needsColour).toBeFalsy();
+            expect(pickQuickComp(gs, history, [], undefined, true).needsColour).toBeFalsy();
+        }
+        // with no Have-Not in it, they can come up
+        const used = WEEKLY_COMPS.filter((c: any) => !c.needsColour).map((c: any) => c.id);
+        expect(pickWeeklyComp(gs, history, used).needsColour).toBe(true);
+    });
+});

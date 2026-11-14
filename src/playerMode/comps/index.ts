@@ -83,8 +83,9 @@ export const WEEKLY_COMPS = ALL_COMPS.filter((c) => !c.finaleOnly && !c.tiebreak
 
 // Picks a comp for a weekly HoH or veto. Never repeats a comp within a season while unplayed ones remain;
 // only a season longer than the comp library (more than ~13 weeks) falls back to the least recently played.
-export function pickWeeklyComp(gameState: GameState, history: WeekRecord[], used: string[], kinds?: CompKind[]): CompDefinition {
-    const fits = WEEKLY_COMPS.filter((c) => !c.available || c.available(gameState, history));
+// `noColour`: a Have-Not is competing, so nothing played by colour.
+export function pickWeeklyComp(gameState: GameState, history: WeekRecord[], used: string[], kinds?: CompKind[], noColour = false): CompDefinition {
+    const fits = WEEKLY_COMPS.filter((c) => (!c.available || c.available(gameState, history)) && !(noColour && c.needsColour));
     // the house rules can leave some kinds of comp out (if that leaves nothing, anything goes)
     const allowed = kinds ? fits.filter((c) => kinds.includes(c.kind)) : fits;
     const available = allowed.length > 0 ? allowed : fits;
@@ -121,8 +122,8 @@ export const QUICK_COMPS: CompDefinition[] = [
 ];
 
 // Picks the Block Breaker: a quick one, not played yet this season if possible.
-export function pickQuickComp(gameState: GameState, history: WeekRecord[], used: string[], kinds?: CompKind[]): CompDefinition {
-    const fits = QUICK_COMPS.filter((c) => !c.available || c.available(gameState, history));
+export function pickQuickComp(gameState: GameState, history: WeekRecord[], used: string[], kinds?: CompKind[], noColour = false): CompDefinition {
+    const fits = QUICK_COMPS.filter((c) => (!c.available || c.available(gameState, history)) && !(noColour && c.needsColour));
     const allowed = kinds ? fits.filter((c) => kinds.includes(c.kind)) : fits;
     const available = allowed.length > 0 ? allowed : fits;
     const unused = available.filter((c) => !used.includes(c.id));

@@ -244,6 +244,7 @@ function simulateReactionLights(ctx: SimContext, skill: number, noise: Rand): Si
 export const ReactionLightsComp: CompDefinition = {
     id: "reaction-lights",
     name: "Reaction Lights",
+    needsColour: true,
     emoji: "🚦",
     kind: "reflex",
     rules: `${LIGHT_ROUNDS} rounds. The light turns red, then green after a random wait. Tap as soon as it turns green. Tapping too early counts as 1 second. The fastest average wins.`,
@@ -324,6 +325,7 @@ function simulateColorClash(ctx: SimContext, skill: number, noise: Rand): SimRes
 export const ColorClashComp: CompDefinition = {
     id: "color-clash",
     name: "Color Clash",
+    needsColour: true,
     emoji: "🎨",
     kind: "reflex",
     rules: "A color word appears in a different color of ink. Tap the button for the INK color. +1 if right, −1 if wrong. 45 seconds.",

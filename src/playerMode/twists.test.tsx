@@ -54,7 +54,8 @@ describe("Have-Nots", () => {
             const recorded = Object.values(weeks);
             expect(recorded.length).toBeGreaterThan(4);
             recorded.forEach((w) => {
-                expect(w.ids.length).toBe(haveNotCount(w.alive));
+                // none once half the house (of 10) is gone
+                expect(w.ids.length).toBe(w.alive * 2 > 10 ? haveNotCount(w.alive) : 0);
                 if (w.hohId !== undefined) expect(w.ids).not.toContain(w.hohId);
                 expect(new Set(w.ids).size).toBe(w.ids.length);
             });
