@@ -319,7 +319,20 @@ describe("the Block Breaker", () => {
             expect(c.id).not.toBe("wine-cellar");
             expect(c.maxSeconds).toBeLessThanOrEqual(120);
         }
-        expect(seen.size).toBe(QUICK_COMPS.length);
+        // every quick comp that fits this early house (Face Off waits until halfway)
+        expect(seen.size).toBe(QUICK_COMPS.filter((c: any) => !c.available || c.available(gs, history)).length);
+    });
+});
+
+describe("Face Off", () => {
+    it("only comes up once at least half the house is evicted", () => {
+        const { FaceOffComp } = require("./faceOff");
+        const gs = game();
+        const total = gs.houseguests.length;
+        gs.houseguests.forEach((hg: any, i: number) => (hg.isEvicted = i < Math.ceil(total / 2) - 1));
+        expect(FaceOffComp.available(gs, history)).toBe(false);
+        gs.houseguests.forEach((hg: any, i: number) => (hg.isEvicted = i < Math.ceil(total / 2)));
+        expect(FaceOffComp.available(gs, history)).toBe(true);
     });
 });
 

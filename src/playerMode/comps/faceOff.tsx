@@ -8,6 +8,9 @@ const GRID_SIZE = 9;
 
 const SECONDS = 45;
 
+// Only from halfway through the season: at least half the cast evicted.
+export const faceOffAvailable = (gs: { houseguests: Houseguest[] }) => gs.houseguests.filter((hg) => hg.isEvicted).length * 2 >= gs.houseguests.length;
+
 // One round: a grid of faces and the one to find. Rounds come from the comp's seed in order,
 // so round N is the same for everyone.
 export function nextFaceOffRound(rand: Rand, pool: Houseguest[]) {
@@ -79,6 +82,7 @@ export const FaceOffComp: CompDefinition = {
     maxSeconds: SECONDS,
     Component: FaceOff,
     simulate: simulateFaceOff,
+    available: faceOffAvailable,
     botScore: (p) => Math.round(6 + 38 * p),
     format: (s) => `${s} points`,
 };
