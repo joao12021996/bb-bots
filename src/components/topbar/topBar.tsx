@@ -254,17 +254,15 @@ export class Topbar extends React.Component<{ style?: any }, { tab: Screens }> {
         const style = { ...(this.props.style || {}) };
         return (
             <Box className="bbb-topbar" style={style}>
-                <div className="bbb-brand">
-                    <span className="bbb-brand-eye">👁️</span>
-                    Houseguest <span className="dim">Bots</span>
-                </div>
                 <nav className="bbb-nav">
-                    <BackToGameLink tab={this.state.tab} />
                     <ChooseCastLink />
+                    <StatsLink />
+                    <BackToGameLink tab={this.state.tab} />
+                </nav>
+                <nav className="bbb-nav">
                     <CastingScreenLink />
                     <EditSeasonLink />
                     <TutorialLink />
-                    <StatsLink />
                     <MuteButton />
                     <SettingsMenu />
                 </nav>

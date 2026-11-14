@@ -153,32 +153,6 @@ input[type="number"] {
     padding: 0.7rem 1rem !important;
     margin-bottom: 12px !important;
 }
-.bbb-brand {
-    font-family: var(--bbb-display);
-    font-weight: 800;
-    font-size: 1.25rem;
-    letter-spacing: 0.01em;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--bbb-text);
-    cursor: pointer;
-}
-.bbb-brand-eye {
-    display: inline-flex;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, var(--bbb-accent), var(--bbb-accent-2));
-    box-shadow: 0 0 18px rgba(139, 92, 246, 0.6);
-    font-size: 1rem;
-}
-.bbb-brand span.dim {
-    color: var(--bbb-muted);
-    font-weight: 600;
-}
 .bbb-nav {
     display: flex;
     gap: 6px;
@@ -307,6 +281,13 @@ input[type="number"] {
     padding: 6px 10px;
     border-radius: var(--bbb-radius);
     background: var(--bbb-card-2);
+}
+.bbb-other-game {
+    color: var(--bbb-text) !important;
+    text-decoration: none;
+}
+.bbb-other-game:hover {
+    background: rgba(var(--bbb-ink), 0.06);
 }
 .bbb-public-game > span {
     display: flex;
