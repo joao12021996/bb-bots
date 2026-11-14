@@ -13,7 +13,9 @@ import { DifficultyPicker, RulesEditor } from "./rulesEditor";
 import { DEFAULT_RULES, SeasonRules, withDefaults } from "../rules";
 import { loadCareer } from "../../career/career";
 import { t } from "../../i18n/i18n";
-import { cartoonFor } from "../../cartoon/cartoon";
+import { cartoonCast, cartoonFor } from "../../cartoon/cartoon";
+import { DAILY_BOTS, dailyKey, dailySeed } from "../../career/daily";
+import { count } from "../../analytics/analytics";
 import { FaceEditor, Look } from "./faceEditor";
 import { PlayerModeScreen } from "./playerModeScreen";
 import { loadPref, savePref } from "../../prefs/prefs";
@@ -28,6 +30,37 @@ export function launch(controller: PlayerModeController) {
     // controller, and the screen must follow it rather than keep showing the old one
     const key = ++launches;
     activatePlayerMode(controller, () => <PlayerModeScreen key={key} controller={controller} />);
+}
+
+// The daily season: the day's cast and seed (the same for everyone), with you added to the house.
+export async function startDaily(name: string, imageURL?: string) {
+    const key = dailyKey();
+    const seed = dailySeed(key);
+    const bots = cartoonCast(DAILY_BOTS, seed);
+    const clean = name.trim().slice(0, 24) || "You";
+    // (a bot with your name would be confusing: it gets a number)
+    bots.forEach((b) => {
+        if (b.name.toLowerCase() === clean.toLowerCase()) b.name = `${b.name} II`;
+    });
+    const me: PlayerProfile = { name: clean, imageURL: imageURL || cartoonFor(clean), social: 5, comp: 5 };
+    const setup = buildSeason(
+        [me, ...bots],
+        [0],
+        bots.map((_, i) => i + 1)
+    );
+    await inlineBlobImages(setup.gameState.houseguests);
+    const save = newPlayerSave(setup.gameState, setup.humanIds, setup.castOptions, true, {
+        difficulty: "normal",
+        powers: "surprise",
+        battleBack: true,
+        rules: DEFAULT_RULES,
+        seed,
+        daily: key,
+    });
+    count("daily:start");
+    await newEpisode(null);
+    await newEpisode(new PregameEpisode(setup.gameState));
+    launch(new PlayerModeController(save));
 }
 
 // The cast to pick from, and season settings from the season editor if the user set one up.

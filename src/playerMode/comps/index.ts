@@ -19,6 +19,7 @@ import { StopTheClockComp } from "./stopTheClock";
 import { WINE_CELLAR_ID, WineCellarComp } from "./wineCellar";
 import { BalanceBeamComp, BuzzerBashComp, WhoSaidItComp } from "./newComps";
 import { BBComicsComp, DaysQuizComp, FaceMorphComp, HideAndGoVetoComp, OtevComp, OverOrUnderComp } from "./iconicComps";
+import { HotHandsComp, LuckyDiceComp, MysteryDoorsComp, RollCallComp } from "./moreComps";
 
 export const ALL_COMPS: CompDefinition[] = [
     // originals
@@ -58,6 +59,11 @@ export const ALL_COMPS: CompDefinition[] = [
     HigherOrLowerComp,
     BankOrBustComp,
     BuzzerBashComp,
+    MysteryDoorsComp,
+    LuckyDiceComp,
+    // endurance
+    RollCallComp,
+    HotHandsComp,
     // house knowledge
     ZoomInComp,
     FactOrFictionComp,
@@ -119,6 +125,8 @@ export const QUICK_COMPS: CompDefinition[] = [
     HigherOrLowerComp,
     StopTheClockComp,
     ZoomInComp,
+    MysteryDoorsComp,
+    LuckyDiceComp,
 ];
 
 // Picks the Block Breaker: a quick one, not played yet this season if possible.

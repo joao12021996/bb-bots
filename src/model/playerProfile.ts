@@ -5,6 +5,17 @@ interface InitPlayerProfile {
     readonly comp?: number;
 }
 
+// A returning houseguest's last season, in short.
+export interface PastSeason {
+    placement: number;
+    castSize: number;
+    won: boolean;
+    comps: number; // comp wins
+    story: string; // "Won a 12-person season", "Runner-up of 16", "First out of 12"...
+    // what happened between them and the player they shared that season with (by the player's name)
+    withPlayer?: { name: string; feeling: number; why: string };
+}
+
 // Stats range from MIN_STAT to MAX_STAT. DEFAULT_STAT is neutral (no advantage or disadvantage).
 export const MIN_STAT = 1;
 export const MAX_STAT = 10;
@@ -21,6 +32,8 @@ export class PlayerProfile {
     // Hall seasons: the same bot as in the season they came from (see career/halls.ts)
     public personality?: string;
     public throws?: number;
+    // All-Stars: what they did in the season they're coming back from (see career/halls.ts)
+    public past?: PastSeason;
     constructor(init: InitPlayerProfile) {
         if (!init) {
             return;

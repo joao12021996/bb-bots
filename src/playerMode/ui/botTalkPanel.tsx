@@ -16,7 +16,8 @@ type Picker =
     | { kind: "reason"; targetId: number; bus?: boolean }
     | { kind: "rumour" }
     | { kind: "rumourKind"; targetId: number }
-    | { kind: "tell"; what: "tellVote" | "tellTarget" };
+    | { kind: "tell"; what: "tellVote" | "tellTarget" }
+    | { kind: "final3" };
 
 const chip = (kind: string) => `button is-small is-${kind}`;
 
@@ -185,6 +186,16 @@ export function BotTalkPanel(props: {
                 </div>
             </>
         );
+    } else if (picker && picker.kind === "final3") {
+        const pool = others.filter((hg) => controller.pactPartners(hg.id).length === 0);
+        menu = (
+            <>
+                <Subtle>
+                    You, {bot.name}, and who? All three of you promise not to put each other up next week. Both of them have to want it.
+                </Subtle>
+                {faces(pool, (id) => doAction(`You, me and ${name(id)}: final three. Deal?`, { kind: "final3", botId, targetId: id }))}
+            </>
+        );
     } else if (picker && picker.kind === "tell") {
         const vote = picker.what === "tellVote";
         const pool = vote
@@ -260,6 +271,21 @@ export function BotTalkPanel(props: {
                         onClick={() => doAction("You and me, final two. Deal?", { kind: "final2", botId })}
                     >
                         🏁 Final two deal
+                    </button>
+                )}
+                {controller.endgameOpen() && everyoneElse.length >= 3 && controller.pactPartners(me.id).length === 0 && controller.pactPartners(botId).length === 0 && (
+                    <button type="button" className={chip("success")} onClick={() => setPicker({ kind: "final3" })}>
+                        🔺 Final three pact
+                    </button>
+                )}
+                {controller.endgameOpen() && !controller.madeCaseTo(me.id, botId) && (
+                    <button
+                        type="button"
+                        className={chip("info")}
+                        title="If they end up on the jury, they'll remember it. It lands with people who like and believe you."
+                        onClick={() => doAction("If it's me at the end, here's why I deserve your vote.", { kind: "juryCase", botId })}
+                    >
+                        ⚖️ Make your case for the jury
                     </button>
                 )}
                 {vetoCase && (

@@ -3681,3 +3681,41 @@ table td {
     color: var(--bbb-rose-text);
     font-weight: 700;
 }
+
+/* ---------- the daily season's card (start screen, and the end of a daily season) ---------- */
+.bbb-daily {
+    max-width: 760px;
+    margin: 0 auto 18px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid var(--bbb-accent);
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.16), rgba(219, 39, 119, 0.1)), var(--bbb-card);
+    text-align: left;
+}
+.bbb-daily h3 {
+    font-weight: 800;
+    font-size: 1.15rem;
+    margin-bottom: 4px;
+}
+.bbb-daily-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 10px;
+}
+.bbb-daily-row .input {
+    max-width: 220px;
+}
+.bbb-daily-share {
+    white-space: pre-wrap;
+    font-family: inherit;
+    background: var(--bbb-card-2);
+    color: var(--bbb-text);
+    border: 1px solid var(--bbb-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-top: 10px;
+    line-height: 1.5;
+    overflow-x: auto;
+}

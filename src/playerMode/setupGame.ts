@@ -30,6 +30,10 @@ export function buildSeason(
         social: cast[i].social,
         comp: cast[i].comp,
         castingScreenId: cast[i].castingScreenId,
+        // who they are as a bot, when that's been chosen (the cast editor, a Hall season, All-Stars)
+        ...(cast[i].personality !== undefined ? { personality: cast[i].personality } : {}),
+        ...(cast[i].throws !== undefined ? { throws: cast[i].throws } : {}),
+        ...(cast[i].past !== undefined ? { past: cast[i].past } : {}),
     }));
     const gameState = new GameState({ players, jury: jury !== undefined && validateJurySize(jury, players.length) ? jury : defaultJurySize(players.length), hohPlaysVeto });
     const newId = (castIndex: number) => chosen.indexOf(castIndex);

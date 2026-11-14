@@ -24,9 +24,12 @@ export type DealAction =
     | { kind: "snoop" } // eavesdrop on an alliance meeting
     | { kind: "rumour"; botId: number; targetId: number; rumour: "coming" | "secretAlliance" | "trashTalk" }
     // to the veto holder: a nominee, "use it on me"; the HoH, "don't use it"; anyone else, "use it on `targetId`"
-    | { kind: "vetoCase"; botId: number; targetId?: number };
+    | { kind: "vetoCase"; botId: number; targetId?: number }
+    // the endgame (see endgame.ts): a three-way pact with `botId` and `targetId`; making your case to a future juror
+    | { kind: "final3"; botId: number; targetId: number }
+    | { kind: "juryCase"; botId: number };
 
-export const DEAL_KINDS = ["final2", "voteDeal", "pity", "tellVote", "tellTarget", "flirt", "confront", "meeting", "snoop", "rumour", "vetoCase"];
+export const DEAL_KINDS = ["final2", "voteDeal", "pity", "tellVote", "tellTarget", "flirt", "confront", "meeting", "snoop", "rumour", "vetoCase", "final3", "juryCase"];
 
 export function isDealAction(action: SocialAction): action is DealAction {
     return DEAL_KINDS.includes(action.kind);

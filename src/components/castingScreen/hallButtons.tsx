@@ -3,7 +3,8 @@ import { Hall, HALL_MIN, loadHalls } from "../../career/halls";
 import { PlayerProfile } from "../../model";
 import { t } from "../../i18n/i18n";
 
-// Casting: a season of every past first boot, or every past winner, as the same bots they were.
+// Casting: a season of every past first boot, every past winner, or the All-Stars (past seasons' final fours, and
+// whoever sent you home), as the same bots they were.
 export function HallButtons(props: { onLoad: (cast: PlayerProfile[]) => void }) {
     const halls = loadHalls();
     const button = (hall: Hall, label: string) => {
@@ -25,6 +26,7 @@ export function HallButtons(props: { onLoad: (cast: PlayerProfile[]) => void }) 
         <div className="bbb-cast-share-buttons">
             {button("losers", `🥾 ${t("Hall of Losers")}`)}
             {button("winners", `🏆 ${t("Hall of Winners")}`)}
+            {button("stars", `⭐ ${t("All-Stars")}`)}
         </div>
     );
 }

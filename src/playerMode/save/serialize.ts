@@ -130,6 +130,7 @@ export interface SaveInfo {
     cast: number;
     difficulty?: string;
     image?: string; // the first player's picture
+    daily?: string; // the daily season: which day's
 }
 
 // True once a save couldn't be written (storage is full, or blocked): the season's screen warns the player.
@@ -147,6 +148,7 @@ function infoOf(data: any, id: string): SaveInfo {
         left: hgs.filter((h) => !h.isEvicted).length,
         cast: hgs.length,
         difficulty: data.difficulty,
+        ...(data.daily ? { daily: String(data.daily) } : {}),
         image: humans[0] && typeof humans[0].imageURL === "string" && humans[0].imageURL.length < 40000 ? humans[0].imageURL : undefined,
     };
 }

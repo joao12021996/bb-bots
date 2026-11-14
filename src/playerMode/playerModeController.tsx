@@ -117,6 +117,9 @@ import {
 } from "./social/powers";
 import { FeedLine, houseFeed, madeUp, Rivalry } from "./social/feed";
 import { exitReport } from "./social/exit";
+import { recordDaily } from "../career/daily";
+import { DailyCard } from "./ui/dailyCard";
+import { endgameOpen, makeYourCase, offerFinal3, Pact, pactBroken, pactOf } from "./social/endgame";
 import { evictionIntro, finaleIntro, previouslyOn } from "./social/narration";
 import { montageLines } from "./social/montage";
 import { MoveRecord, seasonAwards, seasonStats } from "./social/awards";
@@ -147,7 +150,8 @@ import {
 } from "./social/promises";
 import { Standing, WeekReview, WhyTheyDidIt } from "./ui/weekReview";
 import { recordSeason, SeasonSummary } from "../career/career";
-import { Hall, recordHall } from "../career/halls";
+import { Hall, pastStory, recordHall } from "../career/halls";
+import { PastSeason } from "../model/playerProfile";
 import { SeasonCard } from "../career/seasonCard";
 import { play as playCue } from "../sound/sound";
 import { reasonLine } from "./social/pitch";
@@ -317,6 +321,10 @@ export interface PlayerSave {
     showmances?: Showmance[];
     rivalries?: Rivalry[]; // houseguests who blew up at each other and haven't made up
     doubleDone?: boolean; // the season's Double Eviction has happened
+    daily?: string; // the daily season: which day's ("2026-11-14")
+    reunited?: boolean; // All-Stars: returning houseguests have been reminded of their history with the players
+    pacts?: Pact[]; // final-three pacts (see endgame.ts)
+    juryCases?: { [playerId: number]: number[] }; // houseguests each player has already made their case to
     flirts?: { [pair: string]: number[] }; // the weeks a player flirted with a houseguest ("player:bot")
     creeped?: { [pair: string]: number }; // how many times a player creeped a houseguest out ("player:bot")
     creeps?: { playerId: number; botId: number }[]; // ...twice: they can't stand the player, for good
@@ -2730,6 +2738,34 @@ export class PlayerModeController {
         countOnce(season, finale ? "week:finale" : counterName("week", Math.min(s.history.length + 1, 20)));
     }
 
+    // All-Stars: returning houseguests who shared a season with one of the players don't start as strangers. They
+    // pick up where it ended, softened by time, and the player is told.
+    private reunite() {
+        const s = this.state;
+        s.reunited = true;
+        const humans = s.humanIds.map((id) => this.player(id));
+        s.gameState.houseguests
+            .filter((hg) => !this.isHuman(hg) && hg.past && hg.past.withPlayer)
+            .forEach((bot) => {
+                const w = bot.past!.withPlayer!;
+                const player = humans.find((h) => h.name === w.name);
+                if (!player) return;
+                const start = Math.max(-0.5, Math.min(0.5, 0.5 * w.feeling));
+                this.mutate((gs) => {
+                    shiftRelationship(gs, bot.id, player.id, start);
+                });
+                this.noteIntel(player.id, bot.id, `🔁 You've played together before: ${w.why}.`);
+                this.tell(
+                    [player.id],
+                    start > 0.1
+                        ? `🔁 ${bot.name} lit up when they saw you: ${w.why}.`
+                        : start < -0.1
+                        ? `🔁 ${bot.name} hasn't forgotten: ${w.why}.`
+                        : `🔁 ${bot.name} remembers you from last time.`
+                );
+            });
+    }
+
     // The Double Eviction: once a season, when the house is down to the right size (see doubleEvictionAt).
     private doubleEvictionDue(): boolean {
         const s = this.state;
@@ -2775,6 +2811,7 @@ export class PlayerModeController {
         const title = finale ? "Finale" : `Day ${weekStartDay(s.gameState, s.gameState.phase)}`;
         s.step = finale ? Step.SocialFinale1 : Step.SocialMorning;
         this.countWeek(finale);
+        if (s.history.length === 0 && !s.reunited) this.reunite();
         // "Previously on…": last week, and last week's secret Head of Household, revealed
         const last = s.history[s.history.length - 1];
         const lastSecret = !!last && this.powers.slots.some((sl) => sl.id === "secretHoh" && sl.week === last.week);
@@ -3320,6 +3357,8 @@ export class PlayerModeController {
                 status: p.status,
             })),
             voteSaid: said !== undefined ? this.player(said).name : undefined,
+            // an All-Star: what they did last time is public knowledge
+            returning: other.past ? other.past.story : undefined,
             notes: [...this.intelOn(viewerId, otherId)].reverse(),
             // bots only: what you've noticed about how they play, more as the weeks go on
             tells: this.isHuman(other) ? [] : noticedTells(this.personalities[otherId], this.state.history.length, `${this.state.seed}:${otherId}`),
@@ -3431,6 +3470,25 @@ export class PlayerModeController {
                 return spreadRumour(gs, this.ledger, this.book, actorId, action.botId, action.targetId, action.rumour);
             case "vetoCase":
                 return this.vetoCase(gs, actorId, action.botId, action.targetId);
+            case "final3": {
+                if (!this.endgameOpen()) return { text: "It's too early for a final-three pact.", good: false };
+                const result = offerFinal3(gs, this.ledger, this.pacts, actorId, action.botId, action.targetId, week, (id) => this.isHuman({ id }));
+                if (result.pact) {
+                    this.pacts.push(result.pact);
+                    const me = this.player(actorId).name;
+                    const others = [action.botId, action.targetId].filter((id) => this.isHuman({ id }));
+                    this.tell(others, `🤝 ${me} set up a final-three pact: ${me}, ${this.player(action.botId).name} and ${this.player(action.targetId).name}. Nobody in it puts the others up next week.`);
+                }
+                return result.outcome;
+            }
+            case "juryCase": {
+                if (!this.endgameOpen()) return { text: "It's too early to be making your case.", good: false };
+                if (this.madeCaseTo(actorId, action.botId)) return { text: `You've already made your case to ${this.player(action.botId).name}.`, good: false };
+                const cases = (this.state.juryCases = this.state.juryCases || {});
+                cases[actorId] = [...(cases[actorId] || []), action.botId];
+                const moves = (this.state.moves || []).filter((m) => m.actorId === actorId && m.kind === "move").length;
+                return makeYourCase(gs, this.ledger, this.juryBook, actorId, action.botId, this.jurorTypeOf(action.botId), compWins(this.player(actorId), this.state.history), moves);
+            }
             case "flirt": {
                 // a couple of flirts within two weeks is fine; more is creepy to some people (not others), and
                 // creep someone out twice and it's for good
@@ -3814,6 +3872,8 @@ export class PlayerModeController {
                 tellVote: ["heard", "listen"],
                 tellTarget: ["heard", "listen"],
                 vetoCase: ["vetoYes", "vetoNo"],
+                final3: ["accept", "decline"],
+                juryCase: ["heard", "listen"],
             };
             const [yes, no] = replies[action.kind] || ["heard", "listen"];
             return act(action, yes, no, "targetId" in action && action.targetId !== undefined ? name(action.targetId) : "");
@@ -4163,6 +4223,43 @@ export class PlayerModeController {
     public traitsOf(id: number): PersonalityInfo | undefined {
         const p = this.personalities[id];
         return p ? PERSONALITIES[p] : undefined;
+    }
+
+    // ---------- the endgame: final-three pacts, and making your case (see endgame.ts) ----------
+
+    get pacts(): Pact[] {
+        if (!this.state.pacts) this.state.pacts = [];
+        return this.state.pacts;
+    }
+
+    // Whether the endgame's extra social actions are open (the last few houseguests).
+    public endgameOpen(): boolean {
+        return endgameOpen(this.gameState);
+    }
+
+    // The two others in a houseguest's final-three pact, while all three are still in the house.
+    public pactPartners(id: number): number[] {
+        const pact = pactOf(this.pacts, id, this.gameState);
+        return pact ? pact.ids.filter((x) => x !== id) : [];
+    }
+
+    public madeCaseTo(playerId: number, botId: number): boolean {
+        return ((this.state.juryCases || {})[playerId] || []).includes(botId);
+    }
+
+    // Someone in a pact put another member on the block: the pact's over, and everyone in it knows who ended it.
+    private checkPacts(byId: number, nomineeIds: number[]) {
+        nomineeIds.forEach((nominee) => {
+            const pact = this.mutate((gs) => pactBroken(gs, this.pacts, byId, nominee));
+            if (!pact) return;
+            this.state.pacts = this.pacts.filter((p) => p !== pact);
+            const by = this.player(byId).name;
+            this.tell(
+                pact.ids.filter((id) => id !== byId),
+                `💔 So much for the final three: ${by} put ${this.player(nominee).name} on the block.`
+            );
+            this.logMove("backstab", byId, nominee, `${by} broke a final-three pact and nominated ${this.player(nominee).name}`, 2.5);
+        });
     }
 
     get rivalries(): Rivalry[] {
@@ -5400,6 +5497,8 @@ export class PlayerModeController {
             protect: [
                 ...(room ? room.safe : []),
                 ...partners,
+                // its final-three pact, if it's the kind to keep one
+                ...this.pactPartners(hohId).filter((id) => Math.abs(rng().randomFloat()) < this.honor(hohId, id)),
                 ...(love !== undefined ? [love] : []),
                 ...favors.filter((f) => f.agreed).map((f) => f.hohId),
             ],
@@ -5507,6 +5606,7 @@ export class PlayerModeController {
     private afterNomination(hohId: number, newNomineeIds: number[], next: Step): Step {
         const s = this.state;
         const week = s.week;
+        this.checkPacts(hohId, newNomineeIds);
         if (week.secretHoh) return next;
         const owing = this.repayPawnFavors(hohId, newNomineeIds);
         if (this.isHuman({ id: hohId })) {
@@ -6707,6 +6807,51 @@ export class PlayerModeController {
         };
         keep("losers", firstOut ? firstOut.evictedIds[0] : undefined);
         keep("winners", log ? log.winner : undefined);
+        // the All-Stars: the final four, and whoever sent each player on this device home
+        const rows = seasonStats(gs, s.history, log ? log.winner : undefined);
+        const me = this.devicePlayers()[0];
+        const nemeses = this.devicePlayers()
+            .map((id) => s.history.find((w) => w.evictedIds.includes(id)))
+            .map((w) => (w ? w.hohId : undefined))
+            .filter((id): id is number => id !== undefined);
+        const stars = Array.from(new Set([...rows.filter((r) => r.placement <= 4).map((r) => r.id), ...nemeses]));
+        stars.forEach((id) => {
+            const hg = gs.houseguests[id];
+            const row = rows.find((r) => r.id === id);
+            if (!hg || !row) return;
+            const castSize = gs.houseguests.length;
+            const past: PastSeason = {
+                placement: row.placement,
+                castSize,
+                won: row.placement === 1,
+                comps: row.hohWins + row.vetoWins + row.lastChanceWins,
+                story: pastStory(row.placement, castSize),
+            };
+            if (!this.isHuman(hg) && me !== undefined && me !== id) {
+                const grudge = this.state.jury ? grudgeOf(this.juryBook, id, me) : { amount: 0, reasons: [] };
+                const feeling = Math.max(-1, Math.min(1, (hg.relationships[me] ?? 0) + grudge.amount));
+                const sentHome = nemeses.includes(id);
+                past.withPlayer = {
+                    name: this.player(me).name,
+                    feeling,
+                    why: sentHome
+                        ? "they sent you home last time"
+                        : grudge.reasons.length > 0
+                        ? `last time, you ${grudge.reasons[0]}`
+                        : feeling > 0.3
+                        ? "you were close last time"
+                        : feeling < -0.3
+                        ? "you never got along last time"
+                        : "you shared a house last time",
+                };
+            }
+            const profile: PlayerProfile = { name: hg.name, imageURL: hg.imageURL, social: hg.social, comp: hg.comp, past };
+            if (!this.isHuman(hg)) {
+                profile.personality = this.personalities[id];
+                profile.throws = this.throwScore(id);
+            }
+            recordHall("stars", { key: `${s.seed}:${id}`, when: Date.now(), castSize, profile });
+        });
     }
 
     // The players on this device.
@@ -6794,6 +6939,25 @@ export class PlayerModeController {
                 const summary = this.summaryFor(id);
                 return { summary, unlocked: recordSeason(summary) };
             });
+        // the daily season: the day's result, the first time it's finished
+        const dailyCard = this.state.daily && !this.net ? cards[0] : undefined;
+        if (dailyCard) {
+            const m = dailyCard.summary;
+            recordDaily({
+                key: this.state.daily!,
+                when: Date.now(),
+                name: m.name,
+                placement: m.placement,
+                castSize: m.castSize,
+                won: m.won,
+                hohWins: m.hohWins,
+                vetoWins: m.vetoWins,
+                juryVotesFor: m.juryVotesFor,
+                juryVotesTotal: m.juryVotesTotal,
+                weeks: m.castSize - m.placement,
+            });
+            countOnce(String(this.state.seed), "daily:end", counterName("daily:place", m.placement));
+        }
         if (cards.some((c) => c.unlocked.length > 0)) setTimeout(() => playCue("achievement"), 2200);
         newEpisode(generateGameOver(new GameState(new MutableGameState(gs)), weekLabel));
         if (this.net) this.net.ended();
@@ -6803,6 +6967,7 @@ export class PlayerModeController {
             kind: "gameOver",
             content: (
                 <div>
+                    {dailyCard && <DailyCard />}
                     {cards.length > 0 && (
                         <div className="bbb-season-cards">
                             {cards.map((c) => (
@@ -6842,9 +7007,17 @@ export function newPlayerSave(
     humanIds: number[],
     castOptions?: CastOptionsOverride,
     statsHidden?: boolean,
-    extras: { difficulty?: Difficulty; powers?: PowerId[] | "surprise"; battleBack?: boolean; rules?: SeasonRules; guided?: boolean } = {}
+    extras: {
+        difficulty?: Difficulty;
+        powers?: PowerId[] | "surprise";
+        battleBack?: boolean;
+        rules?: SeasonRules;
+        guided?: boolean;
+        seed?: number; // the daily season: everyone's season comes from the same seed
+        daily?: string;
+    } = {}
 ): PlayerSave {
-    const seed = Date.now() % 1000000007;
+    const seed = extras.seed !== undefined ? extras.seed : Date.now() % 1000000007;
     const rand = seededRand(hashcode(`${seed}:powers`));
     const chosen = extras.powers === "surprise" ? surprisePowers(rand) : (extras.powers || []).filter((p) => ALL_POWERS.includes(p));
     if (extras.battleBack && !chosen.includes("battleBack")) chosen.push("battleBack");
@@ -6876,5 +7049,6 @@ export function newPlayerSave(
         rules: extras.rules ? withDefaults(extras.rules) : undefined,
         powers,
         guided: extras.guided || undefined,
+        ...(extras.daily ? { daily: extras.daily } : {}),
     };
 }

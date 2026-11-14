@@ -33,6 +33,12 @@ export function KnownProfileCard(props: { controller: PlayerModeController; view
                     </div>
                 </div>
             </div>
+            {hg.past && (
+                <p>
+                    🔁 <b>Returning.</b> {hg.past.story}
+                    {hg.past.comps > 0 ? `, with ${hg.past.comps} comp win${hg.past.comps === 1 ? "" : "s"}` : ""}.
+                </p>
+            )}
             {self && <p>That's you.</p>}
             {viewerId === undefined && <p>Open this on your own turn to see your notes on {hg.name}.</p>}
             {p && (
