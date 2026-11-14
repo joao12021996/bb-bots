@@ -203,31 +203,6 @@ input[type="number"] {
     padding: 6px 12px;
 }
 
-/* ---------- sidebar ---------- */
-.bbb-sidebar br {
-    display: none;
-}
-.bbb-sidebar b,
-.bbb-sidebar a {
-    display: block;
-    padding: 5px 10px;
-    border-radius: 10px;
-    cursor: pointer;
-    color: var(--bbb-text);
-}
-.bbb-sidebar a {
-    font-size: 0.9rem;
-    color: var(--bbb-muted);
-    padding-left: 22px;
-}
-.bbb-sidebar b:hover,
-.bbb-sidebar a:hover {
-    background: rgba(var(--bbb-ink), 0.05);
-}
-.bbb-sidebar mark {
-    display: inline-block;
-}
-
 /* ---------- start screen hero ---------- */
 .bbb-hero {
     text-align: center;
