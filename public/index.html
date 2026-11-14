@@ -13,7 +13,8 @@
             rel="stylesheet"
         />
         <title>Houseguest Bots</title>
-        <!-- Ads (Ezoic, same setup as Find Donald), only on spotlegame.co.uk: not on GitHub Pages or in development.
+        <!-- Ezoic ads, only on spotlegame.co.uk: not on GitHub Pages or in development. No AdSense script: with Auto ads
+             on, Google stacked extra ads at the top of the page.
              Inserted in order (async = false) so the consent manager loads before the ad script. -->
         <script>
             window.bbbAds = /(^|\.)spotlegame\.co\.uk$/.test(location.hostname);
@@ -25,13 +26,11 @@
                     ["https://cmp.gatekeeperconsent.com/min.js", true],
                     ["https://the.gatekeeperconsent.com/cmp.min.js", true],
                     ["https://www.ezojs.com/ezoic/sa.min.js", false],
-                    ["https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2446576727143381", false],
                 ].forEach(function (src) {
                     var s = document.createElement("script");
                     s.src = src[0];
                     s.async = !src[1];
                     if (src[1]) s.setAttribute("data-cfasync", "false");
-                    if (src[0].indexOf("adsbygoogle") >= 0) s.crossOrigin = "anonymous";
                     document.head.appendChild(s);
                 });
             }
