@@ -19,6 +19,7 @@ import { names$, renameCount } from "../../i18n/rename";
 import { NamesDialog } from "./namesDialog";
 import { OtherGamesMenu } from "./otherGames";
 import { shareCounts$ } from "../../analytics/analytics";
+import { colourBlind$ } from "../../prefs/colourBlind";
 
 export enum Screens {
     Deck = 1,
@@ -202,6 +203,7 @@ export function SettingsMenu(): JSX.Element {
     const themeChoice = useSubject(themeChoice$);
     const lang = useSubject(language$);
     const shareCounts = useSubject(shareCounts$);
+    const colourBlind = useSubject(colourBlind$);
     const renamed = renameCount(useSubject(names$));
     const [renaming, setRenaming] = React.useState(false);
     // changing language redraws the page, which would restart a comp in progress
@@ -220,6 +222,10 @@ export function SettingsMenu(): JSX.Element {
                     <label className="bbb-toggle">
                         <input type="checkbox" checked={calm} onChange={(e) => reduceMotion$.next(e.target.checked)} />
                         <span>🧘 {t("Reduce motion (no sliding, spinning or pulsing)")}</span>
+                    </label>
+                    <label className="bbb-toggle" title={t("Comps played by colour add a shape or a written name to every colour, and use colours that are easier to tell apart.")}>
+                        <input type="checkbox" checked={colourBlind} onChange={(e) => colourBlind$.next(e.target.checked)} />
+                        <span>🎨 {t("Colour-blind mode (shapes and names, not just colours)")}</span>
                     </label>
                     <label className="bbb-toggle" title={t("Counts like 'week 3 reached' or 'this comp was played', with nothing about you or your device. They show us where people stop playing.")}>
                         <input type="checkbox" checked={shareCounts} onChange={(e) => shareCounts$.next(e.target.checked)} />

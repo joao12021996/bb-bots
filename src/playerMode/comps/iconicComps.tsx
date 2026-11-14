@@ -7,6 +7,7 @@ import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { AnswerReveal, Keypad, Reveal, revealRows, rightSoFar, sumSoFar, useQuizClock } from "./compUi";
 import { answerQuestion, chance, clamp, gaussian, pick, Rand, randInt, sample, seededRand, shuffled } from "./random";
 import { cartoonURL, lookOf, skinColor } from "../../cartoon/cartoon";
+import { colourName, useColourBlind } from "../../prefs/colourBlind";
 
 // Comps in the style of the show's best-known formats: the oracle that sends you hunting for answers,
 // hiding your veto somewhere in the house, comic book covers, counting, the days quiz and the face morph.
@@ -471,6 +472,8 @@ function forgery(rand: Rand, real: Cover, rivals: number[]): Cover {
 
 function ComicCover(props: { hg: Houseguest; rival?: Houseguest; cover: Cover; onClick?: () => void }) {
     const { hg, rival, cover } = props;
+    // colour-blind mode: the colours a fake can change (the cover, the suit, the cape) are written on the cover
+    const colourBlind = useColourBlind();
     const style = { "--comic-bg": cover.color } as React.CSSProperties;
     return (
         <button type="button" className="bbb-comic" style={style} disabled={!props.onClick} onClick={props.onClick}>
@@ -485,6 +488,13 @@ function ComicCover(props: { hg: Houseguest; rival?: Houseguest; cover: Cover; o
             </div>
             <div className="bbb-comic-panel">
                 <ComicHero cover={cover} hg={hg} />
+                {colourBlind && (
+                    <div className="bbb-comic-colours">
+                        <span>cover {colourName(cover.color)}</span>
+                        <span>suit {colourName(cover.suit)}</span>
+                        <span>cape {colourName(cover.cape)}</span>
+                    </div>
+                )}
                 <div className="bbb-comic-bubble">{cover.quote}</div>
                 <div className="bbb-comic-sfx">{cover.sfx}</div>
                 <div className="bbb-comic-prop">{cover.prop}</div>

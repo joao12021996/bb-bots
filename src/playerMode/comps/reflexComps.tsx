@@ -4,6 +4,7 @@ import { BigButton, pressable, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { AnswerReveal, bestOf, Reveal, revealRows, sumSoFar, useAnimationFrame } from "./compUi";
 import { chance, clamp, gaussian, Rand, randInt, seededRand, shuffled } from "./random";
+import { useColourBlind } from "../../prefs/colourBlind";
 
 // ---------------- Whack-a-Houseguest ----------------
 
@@ -193,7 +194,9 @@ function ReactionLights(props: CompProps) {
         }
     };
 
-    const colors = { idle: "#444", wait: "#b33", go: "#2b2", done: "#444" };
+    // colour-blind mode: told apart by brightness and by a big sign, not by red and green
+    const colourBlind = useColourBlind();
+    const colors = colourBlind ? { idle: "#444", wait: "#1f2937", go: "#fde047", done: "#444" } : { idle: "#444", wait: "#b33", go: "#2b2", done: "#444" };
     const last = times[times.length - 1];
     return (
         <div>
@@ -214,12 +217,13 @@ function ReactionLights(props: CompProps) {
                     justifyContent: "center",
                     fontSize: "2rem",
                     fontWeight: 800,
+                    color: colourBlind && phase === "go" ? "#111" : undefined,
                     touchAction: "manipulation",
                     userSelect: "none",
                     cursor: "pointer",
                 }}
             >
-                {phase === "wait" ? "Wait for green…" : phase === "go" ? "TAP!" : phase === "done" ? (last >= 1000 ? "Too early!" : `${last} ms`) : "Ready?"}
+                {phase === "wait" ? (colourBlind ? "✋ Wait…" : "Wait for green…") : phase === "go" ? (colourBlind ? "▶ TAP!" : "TAP!") : phase === "done" ? (last >= 1000 ? "Too early!" : `${last} ms`) : "Ready?"}
             </div>
             {phase === "done" && reveal && <AnswerReveal reveal={reveal} last={times.length >= LIGHT_ROUNDS} onNext={next} nextLabel="Next round" />}
             {phase === "idle" && (
@@ -258,11 +262,13 @@ export const ReactionLightsComp: CompDefinition = {
 
 // ---------------- Color Clash ----------------
 
+// `safe`: a colour that stays apart from the others for the common kinds of colour blindness; `shape`: drawn
+// next to the ink in colour-blind mode, so the ink can be told without seeing its colour at all.
 const COLORS = [
-    { name: "RED", css: "#ff4d4d" },
-    { name: "BLUE", css: "#5b8cff" },
-    { name: "GREEN", css: "#3ecf5a" },
-    { name: "YELLOW", css: "#ffd23f" },
+    { name: "RED", css: "#ff4d4d", safe: "#d55e00", shape: "▲" },
+    { name: "BLUE", css: "#5b8cff", safe: "#56b4e9", shape: "●" },
+    { name: "GREEN", css: "#3ecf5a", safe: "#009e73", shape: "■" },
+    { name: "YELLOW", css: "#ffd23f", safe: "#f0e442", shape: "★" },
 ];
 
 // Cards come from the comp's seed in order, so card N is the same for everyone.
@@ -278,6 +284,8 @@ function ColorClash(props: CompProps) {
     const next = React.useCallback(() => nextColorCard(rand), [rand]);
     const [card, setCard] = React.useState(next);
     const [score, setScore] = React.useState(0);
+    const colourBlind = useColourBlind();
+    const ink = COLORS[card.ink];
     const answer = (i: number) => {
         const s = score + (i === card.ink ? 1 : -1);
         setScore(s);
@@ -287,8 +295,15 @@ function ColorClash(props: CompProps) {
     return (
         <div>
             <Title>Score: {score}</Title>
-            <Subtle>Tap the COLOR of the ink, not the word.</Subtle>
-            <div style={{ fontSize: "3.5rem", fontWeight: 900, color: COLORS[card.ink].css, margin: "12px 0" }}>
+            <Subtle>
+                {colourBlind ? "Tap the COLOR of the ink, not the word. The shape beside the word is the ink's: it's on its button too." : "Tap the COLOR of the ink, not the word."}
+            </Subtle>
+            <div style={{ fontSize: "3.5rem", fontWeight: 900, color: colourBlind ? ink.safe : ink.css, margin: "12px 0" }}>
+                {colourBlind && (
+                    <span aria-label={`${ink.name} ink`} style={{ marginRight: 12 }}>
+                        {ink.shape}
+                    </span>
+                )}
                 {COLORS[card.word].name}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, maxWidth: 340, margin: "0 auto" }}>
@@ -300,6 +315,11 @@ function ColorClash(props: CompProps) {
                         style={{ touchAction: "manipulation" }}
                         onClick={() => answer(i)}
                     >
+                        {colourBlind && (
+                            <span aria-hidden="true" style={{ color: c.safe, marginRight: 6 }}>
+                                {c.shape}
+                            </span>
+                        )}
                         {c.name}
                     </button>
                 ))}
