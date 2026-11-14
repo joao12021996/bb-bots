@@ -1,18 +1,57 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <meta charset="utf-8" name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="shortcut icon" href="%PUBLIC_URL%/favicon.ico" />
+        <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <link rel="shortcut icon" href="%PUBLIC_URL%/favicon.ico" />
+        <link rel="apple-touch-icon" href="%PUBLIC_URL%/icon-192.png" />
         <meta name="theme-color" content="#0c0a1a" />
         <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+        <meta
+            name="description"
+            content="A free reality TV strategy game in your browser. Move into a house of cartoon houseguests: make alliances, win comps, survive the vote and face the jury. Play solo, pass-and-play, or online with friends."
+        />
+        <!-- How a shared link looks (the game lives at spotlegame.co.uk/houseguests, wherever this copy is served). -->
+        <link rel="canonical" href="https://spotlegame.co.uk/houseguests/" />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="Houseguest Bots" />
+        <meta property="og:title" content="Houseguest Bots: scheme, compete and vote your way to the end" />
+        <meta
+            property="og:description"
+            content="A free reality TV strategy game: alliances, comps, evictions and a jury. Play solo, pass the phone, or online with friends."
+        />
+        <meta property="og:url" content="https://spotlegame.co.uk/houseguests/" />
+        <meta property="og:image" content="https://spotlegame.co.uk/houseguests/share.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="Houseguest Bots: reality TV, simulated" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Houseguest Bots" />
+        <meta name="twitter:description" content="A free reality TV strategy game: alliances, comps, evictions and a jury. Solo or online with friends." />
+        <meta name="twitter:image" content="https://spotlegame.co.uk/houseguests/share.png" />
+        <script type="application/ld+json">
+            {
+                "@context": "https://schema.org",
+                "@type": "VideoGame",
+                "name": "Houseguest Bots",
+                "url": "https://spotlegame.co.uk/houseguests/",
+                "image": "https://spotlegame.co.uk/houseguests/share.png",
+                "description": "A free reality TV strategy game in your browser: make alliances, win comps, survive the vote and face the jury.",
+                "genre": ["Strategy", "Simulation"],
+                "gamePlatform": "Web browser",
+                "applicationCategory": "Game",
+                "playMode": ["SinglePlayer", "MultiPlayer"],
+                "inLanguage": ["en", "fr"],
+                "offers": { "@type": "Offer", "price": "0", "priceCurrency": "GBP" }
+            }
+        </script>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link
             href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;700;800&display=swap"
             rel="stylesheet"
         />
-        <title>Houseguest Bots</title>
+        <title>Houseguest Bots: a reality TV strategy game</title>
         <!-- Ezoic ads, only on spotlegame.co.uk: not on GitHub Pages or in development. No AdSense script: with Auto ads
              on, Google stacked extra ads at the top of the page.
              Inserted in order (async = false) so the consent manager loads before the ad script. -->
@@ -41,7 +80,7 @@
         </style>
     </head>
     <body>
-        <noscript>You need to enable JavaScript to run this app.</noscript>
+        <noscript>Houseguest Bots is a reality TV strategy game that runs in your browser. It needs JavaScript: turn it on to play.</noscript>
         <div class="bbb-ad-band" id="ezoic-pub-ad-placeholder-120"></div>
         <div id="root">
             <div style="min-height: 90vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #a9a3c7; font-family: system-ui, sans-serif">
