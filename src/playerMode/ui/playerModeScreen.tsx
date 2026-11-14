@@ -1,4 +1,5 @@
 import React from "react";
+import { SaveWarning } from "./savedSeasons";
 import { Subscription } from "rxjs";
 import { continueOverride$ } from "../../subjects/subjects";
 import { CompPlay, CompResults, LiveStandings } from "../comps/compRunner";
@@ -654,6 +655,7 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         return (
             <div className={`bbb-player-mode${haveNot ? " bbb-have-not" : ""}`}>
                 {session && <OnlineBar session={session} controller={controller} />}
+                {!session && !controller.watching && <SaveWarning />}
                 {day && <div className="bbb-day">📅 {day}</div>}
                 {banner &&
                     prompt.kind !== "handoff" &&

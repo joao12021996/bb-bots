@@ -4,6 +4,7 @@ import { SeasonCard, placementText } from "./seasonCard";
 import { ALL_COMPS } from "../playerMode/comps";
 import { bestScore, clearPref } from "../prefs/prefs";
 import { HasText } from "../components/layout/text";
+import { describeBackup, downloadText, makeBackup, parseBackup, pickTextFile, restoreBackup } from "../prefs/backup";
 
 // My Stats: everything this device remembers about your seasons.
 export function StatsPage() {
@@ -17,6 +18,37 @@ export function StatsPage() {
     const bests = ALL_COMPS.filter((c) => bestScore(c.id) !== undefined);
     const unlockedCount = ACHIEVEMENTS.filter((a) => career.unlocked[a.id]).length;
     const recent = [...career.seasons].reverse();
+    const [backupNote, setBackupNote] = React.useState("");
+    const saveCopy = () => {
+        const day = new Date().toISOString().slice(0, 10);
+        downloadText(`houseguest-bots-${day}.json`, JSON.stringify(makeBackup()));
+        setBackupNote("Saved. Keep the file somewhere safe: loading it on any device brings everything back.");
+    };
+    const loadCopy = async () => {
+        const text = await pickTextFile();
+        if (text === null) return;
+        const backup = parseBackup(text);
+        if (!backup) return setBackupNote("That file isn't a Houseguest Bots copy.");
+        const has = describeBackup(backup);
+        let ok = true;
+        try {
+            ok = window.confirm(
+                `This copy has ${has.seasons} finished season${has.seasons === 1 ? "" : "s"}, ${has.achievements} achievement${has.achievements === 1 ? "" : "s"} and ${has.saves} saved season${has.saves === 1 ? "" : "s"}. Loading it replaces everything this device remembers now. Go ahead?`
+            );
+        } catch (e) {
+            ok = true;
+        }
+        if (!ok) return;
+        if (!restoreBackup(backup)) return setBackupNote("There wasn't room for it on this device. Nothing was changed.");
+        // settings (theme, language, sound) are read when the page loads
+        try {
+            window.location.reload();
+        } catch (e) {
+            // fine
+        }
+        setBackupNote("Loaded.");
+        setVersion(version + 1);
+    };
     return (
         <HasText>
             <div className="bbb-stats-page">
@@ -105,6 +137,23 @@ export function StatsPage() {
                             ))}
                         </div>
                     )}
+                </section>
+
+                <section className="bbb-tutorial-section">
+                    <h2>📦 Keep a copy</h2>
+                    <p>
+                        Everything here lives in this browser, on this device. Save a copy to a file as a backup, or to move your stats, achievements, settings and
+                        saved seasons to another phone or computer.
+                    </p>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                        <button type="button" className="button is-small is-light" onClick={saveCopy}>
+                            ⬇ Save a copy to a file
+                        </button>
+                        <button type="button" className="button is-small is-light" onClick={loadCopy}>
+                            ⬆ Load a copy
+                        </button>
+                        {backupNote && <small className="bbb-subtle">{backupNote}</small>}
+                    </div>
                 </section>
 
                 <p style={{ textAlign: "center" }}>

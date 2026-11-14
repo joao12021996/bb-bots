@@ -6,7 +6,7 @@ import { cast$, episodes$, getCast, newEpisode } from "../../subjects/subjects";
 import { PregameEpisode } from "../../components/episode/pregameEpisode";
 import { activatePlayerMode, Difficulty, migrateSave, newPlayerSave, PlayerModeController, PlayerSave } from "../playerModeController";
 import { ALL_POWERS, PowerId, POWERS } from "../social/powers";
-import { clearSave, inlineBlobImages, readSave } from "../save/serialize";
+import { inlineBlobImages, readSave } from "../save/serialize";
 import { buildSeason } from "../setupGame";
 import { BigButton, Face, Grid, Loading, Panel, Stepper, Subtle, Title } from "./common";
 import { DifficultyPicker, RulesEditor } from "./rulesEditor";
@@ -158,7 +158,6 @@ export function PlayerSetup() {
     const start = async () => {
         if (!ready) return;
         setStarting(true);
-        clearSave();
         // skill randomizer: everyone gets secret, random Social and Comp scores
         const roll = () => statRoll(Math.random);
         const players = hideSkills ? pool.map((hg) => ({ ...hg, social: roll(), comp: roll() })) : pool;
@@ -379,8 +378,8 @@ const ResumedEpisodeType: EpisodeType = {
 
 // Resumes a saved player mode season. Past weeks' scenes aren't saved, so the sidebar starts with a
 // summary of what happened (no votes; those stay secret until the end).
-export function resumeSavedSeason(): boolean {
-    const save = migrateSave(readSave<any>());
+export function resumeSavedSeason(id?: string): boolean {
+    const save = migrateSave(readSave<any>(id));
     if (!save) return false;
     showSeasonSoFar(save, false);
     launch(new PlayerModeController(save));

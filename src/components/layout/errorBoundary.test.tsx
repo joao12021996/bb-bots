@@ -65,7 +65,7 @@ describe("ErrorBoundary", () => {
     });
 
     it("offers to resume a saved season", () => {
-        window.localStorage.setItem("bb-bots-player-save", "{}");
+        window.localStorage.setItem("bb-bots-player-save", JSON.stringify({ seed: 1, humanIds: [], gameState: { houseguests: [] } }));
         const armed = { on: true };
         const onResume = jest.fn(() => (armed.on = false));
         act(() => {

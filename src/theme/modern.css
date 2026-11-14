@@ -3555,3 +3555,75 @@ table td {
     border-radius: 3px;
     background: linear-gradient(90deg, var(--bbb-accent), var(--bbb-accent-2));
 }
+
+/* ---------- saved seasons (start screen), and the warning when a season can't be saved ---------- */
+.bbb-saves {
+    max-width: 760px;
+    margin: 18px auto 0;
+    padding: 14px 16px;
+    background: var(--bbb-card);
+    border: 1px solid var(--bbb-border);
+    border-radius: 14px;
+    text-align: left;
+}
+.bbb-saves h3 {
+    font-weight: 800;
+    margin-bottom: 8px;
+}
+.bbb-save-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-top: 1px solid var(--bbb-border);
+}
+.bbb-save-row img,
+.bbb-save-noimage {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bbb-card-2);
+}
+.bbb-save-about {
+    flex: 1;
+    min-width: 0;
+}
+.bbb-save-buttons {
+    display: flex;
+    gap: 6px;
+    flex: none;
+}
+.bbb-save-footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-top: 10px;
+    border-top: 1px solid var(--bbb-border);
+}
+.bbb-save-warning {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: space-between;
+    margin: 0 0 10px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--bbb-danger);
+    background: rgba(225, 29, 72, 0.12);
+    color: var(--bbb-text);
+}
+@media (max-width: 600px) {
+    .bbb-save-row {
+        flex-wrap: wrap;
+    }
+    .bbb-save-buttons {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
