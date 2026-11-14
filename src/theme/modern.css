@@ -292,7 +292,7 @@ input[type="number"] {
     border-color: rgba(167, 139, 250, 0.45);
 }
 .bbb-public-games {
-    margin: 0 0 18px;
+    margin: 18px 0;
 }
 .bbb-public-list {
     display: grid;

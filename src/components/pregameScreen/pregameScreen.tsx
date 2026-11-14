@@ -1,6 +1,5 @@
 import React from "react";
 import { PlayerProfile } from "../../model";
-import { MemoryWall } from "../memoryWall";
 import { HasText } from "../layout/text";
 import { popularityMode } from "../../model/portraitDisplayMode";
 import { cast$, displayMode$, pushToMainContentStream, switchSceneRelative } from "../../subjects/subjects";
@@ -9,7 +8,7 @@ import { SeasonEditorPage } from "../seasonEditor/seasonEditorPage";
 import { CastingScreen } from "../castingScreen/castingScreen";
 import { dealNewCast, loadCast } from "../../cartoon/newCast";
 import { castFromUrl } from "../../cartoon/castCode";
-import { EditRelationshipsScreen, getProfiles } from "../editRelationshipsScreen/editRelationshipScreen";
+import { EditRelationshipsScreen } from "../editRelationshipsScreen/editRelationshipScreen";
 import { Tribe } from "../../model/tribe";
 import { selectPlayer } from "../playerPortrait/selectedPortrait";
 import { PlayerSetup, resumeSavedSeason } from "../../playerMode/ui/playerSetup";
@@ -69,9 +68,6 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
         const relationships = this.state.relationships || props.options?.relationships;
         const initialTribes = this.state.initialTribes || props.options?.initialTribes;
         const currentTribes = this.state.currentTribes || props.options?.currentTribes;
-        const profiles = relationships
-            ? getProfiles(props.cast, relationships, currentTribes || {}, false, false)
-            : props.cast;
         return (
             <HasText>
                 <div className="bbb-hero">
@@ -159,7 +155,6 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                         </div>
                     </div>
                 </div>
-                <PublicGames />
                 <p className="bbb-steps">
                     <TopbarLink
                         onClick={() => {
@@ -186,14 +181,6 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                     </TopbarLink>
                     .
                 </p>
-                {props.cast.length === 0 ? "" : <MemoryWall splits={[{ houseguests: profiles }]} />}
-                {props.cast.length === 0 ? (
-                    ""
-                ) : (
-                    <p>
-                        <b> {t("You can use the ⬅️ and ➡️ arrow keys to move forwards and backwards.")}</b>
-                    </p>
-                )}
                 <div style={{ justifyContent: "space-between", display: "flex" }}>
                     {props.cast.length === 0 ? (
                         ""
@@ -216,6 +203,7 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                         </button>
                     )}
                 </div>
+                <PublicGames />
             </HasText>
         );
     }
