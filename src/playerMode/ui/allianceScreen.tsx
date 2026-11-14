@@ -233,7 +233,7 @@ function AllianceCard(props: { controller: PlayerModeController; alliance: Allia
                             <>
                                 <Subtle>
                                     🔁 Plan B (optional): who {a.name} goes after if {controller.player(picked).name}{" "}
-                                    {block ? "wins the Last Chance comp" : "comes off the block (a used veto, a Last Chance comp)"}.
+                                    {block ? "wins the Block Breaker" : "comes off the block (a used veto, a Block Breaker)"}.
                                 </Subtle>
                                 <Grid>
                                     {targetOptions

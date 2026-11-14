@@ -17,25 +17,25 @@ export interface Veto {
 }
 
 export const GoldenVeto: Veto = {
-    name: "Golden Veto",
+    name: "Golden Power of Veto",
     emoji: "",
     use: useGoldenVeto,
 };
 
 export const DiamondVeto: Veto = {
-    name: "Diamond Veto",
+    name: "Diamond Power of Veto",
     emoji: "💎",
     use: useDiamondVeto,
 };
 
 export const SpotlightVeto: Veto = {
-    name: "Spotlight Veto",
+    name: "Spotlight Power of Veto",
     emoji: "🔦",
     use: useSpotlightVeto,
 };
 
 export const BoomerangVeto: Veto = {
-    name: "Boomerang Veto",
+    name: "Boomerang Power of Veto",
     emoji: "🪃",
     use: useBoomerangVeto,
 };

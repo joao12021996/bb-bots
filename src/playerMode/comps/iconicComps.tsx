@@ -42,7 +42,7 @@ function otevFacts(gs: GameState, history: WeekRecord[]): { prompt: string; answ
         if (w.evictedIds.length > 0)
             facts.push({ prompt: `the houseguest evicted on ${dayLabel(gs, w.week, DAY_PART.eviction)}`, answerId: w.evictedIds[0] });
         if (w.blockbusterId !== undefined)
-            facts.push({ prompt: `the houseguest who won the Last Chance comp on ${dayLabel(gs, w.week, DAY_PART.blockbuster)}`, answerId: w.blockbusterId });
+            facts.push({ prompt: `the houseguest who won the Block Breaker on ${dayLabel(gs, w.week, DAY_PART.blockbuster)}`, answerId: w.blockbusterId });
     });
     return facts;
 }

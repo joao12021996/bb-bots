@@ -88,7 +88,7 @@ export function diaryEntries(w: DiaryWeek): DiaryEntry[] {
             );
         }
 
-        if (rec && rec.blockbusterId === id) lines.push("Three of us on the block, and I won the Last Chance comp to get off it.");
+        if (rec && rec.blockbusterId === id) lines.push("Three of us on the block, and I won the Block Breaker to get off it.");
 
         if (everyNom.includes(id) && !evicted && !(rec && (rec.povId === id || rec.blockbusterId === id))) {
             lines.push(
@@ -166,7 +166,7 @@ export function recapText(input: {
             if (rec.hohId !== undefined) out.push(`👑 ${HOH}: ${name(rec.hohId)}`);
             if (rec.nomineeIds.length) out.push(`🎯 On the block: ${listNames(rec.nomineeIds.map(name))}`);
             if (rec.povId !== undefined) out.push(`🏅 Veto: ${name(rec.povId)}`);
-            if (rec.blockbusterId !== undefined) out.push(`🎬 Last Chance comp: ${name(rec.blockbusterId)}`);
+            if (rec.blockbusterId !== undefined) out.push(`🎬 Block Breaker: ${name(rec.blockbusterId)}`);
             if (rec.evictedIds.length) out.push(`🚪 Evicted: ${listNames(rec.evictedIds.map(name))}`);
         }
         if (input.battleBack && input.battleBack.week === week + 1) out.push(`🔙 ${name(input.battleBack.id)} won the Battle Back and returned to the house!`);

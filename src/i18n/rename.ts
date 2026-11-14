@@ -1,6 +1,6 @@
 import { BehaviorSubject } from "rxjs";
 import { prefSubject } from "../prefs/prefs";
-import { APP_NAME, HOH, LAST_CHANCE, POWER_NAMES, SHOW_NAME, VETO } from "../playerMode/terms";
+import { APP_NAME, HOH, LAST_CHANCE, POV, POWER_NAMES, SHOW_NAME, VETO } from "../playerMode/terms";
 import { language$, t } from "./i18n";
 
 // Renaming: the player's own words for the game's terms ("Head of Household" -> "Leader of the House", "HoH" -> "LoH").
@@ -14,21 +14,27 @@ export interface Names {
 
 export const RENAMEABLE: { group: string; terms: string[] }[] = [
     { group: "Roles", terms: [HOH, "HoH", "Houseguest", "Nominee", "Juror", "Jury", "Alliance"] },
-    { group: "Week", terms: [VETO, LAST_CHANCE, "Comp", "Competition", "Block", "Evict", "Evicted", "Eviction"] },
+    { group: "Week", terms: [POV, VETO, LAST_CHANCE, "Comp", "Competition", "Block", "Evict", "Evicted", "Eviction"] },
     { group: "Secret powers", terms: Object.values(POWER_NAMES) },
     { group: "The show", terms: [SHOW_NAME, APP_NAME] },
 ];
 
 export const names$: BehaviorSubject<Names> = prefSubject<Names>("names", { terms: {}, custom: [] });
 
-// The game used to say "Head of House": a word saved for it carries over to "Head of Household".
+// Terms the game used to say: a word saved for one carries over to what it says now.
 (() => {
+    const renamed: [string, string][] = [
+        ["Head of House", HOH],
+        ["Last Chance comp", LAST_CHANCE],
+    ];
     const terms = (names$.value && names$.value.terms) || {};
-    const old = terms["Head of House"];
-    if (old === undefined) return;
+    if (!renamed.some(([old]) => terms[old] !== undefined)) return;
     const next = { ...terms };
-    delete next["Head of House"];
-    if (next[HOH] === undefined) next[HOH] = old;
+    renamed.forEach(([old, now]) => {
+        if (next[old] === undefined) return;
+        if (next[now] === undefined) next[now] = next[old];
+        delete next[old];
+    });
     names$.next({ ...names$.value, terms: next });
 })();
 

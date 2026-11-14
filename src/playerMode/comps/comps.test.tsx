@@ -306,7 +306,7 @@ describe("Fact or Fiction", () => {
     });
 });
 
-describe("the Last Chance comp", () => {
+describe("the Block Breaker", () => {
     it("is always a quick comp, never a long puzzle like Wine Cellar", () => {
         const { pickQuickComp, QUICK_COMPS } = require("./index");
         const gs = game();

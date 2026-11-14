@@ -225,7 +225,7 @@ describe("player mode season", () => {
             // HoH + veto every week, a Blockbuster in weeks with 7+ houseguests, and three finale parts
             const blockbusters = 16 - 7 + 1;
             expect(used.length).toBe(2 * (16 - 3) + blockbusters + 3);
-            // Last Chance comps come from the small pool of quick comps, so those can come round again sooner
+            // Block Breakers come from the small pool of quick comps, so those can come round again sooner
             const quick = new Set(require("./comps").QUICK_COMPS.map((c: any) => c.id));
             const firstRound = used.slice(0, WEEKLY_COMPS.length - 2).filter((id) => !quick.has(id));
             expect(new Set(firstRound).size).toBe(firstRound.length);
@@ -244,7 +244,7 @@ describe("player mode season", () => {
         counts.forEach(([alive, count]) => expect(count).toBe(alive >= 7 ? 3 : 2));
         expect(counts.some(([alive]) => alive >= 7)).toBe(true);
         expect(counts.some(([alive]) => alive < 7)).toBe(true);
-        expect(scenes.has("Last Chance")).toBe(true);
+        expect(scenes.has("Block Breaker")).toBe(true);
     });
 
     it("bots form their own named alliances, and players get alliance time", () => {
@@ -277,11 +277,11 @@ describe("house rules and difficulty", () => {
         expect(DIFFICULTIES.map((d: any) => d.id)).toEqual(["easy", "normal", "hard", "cutthroat"]);
     });
 
-    it("without big weeks there are always two nominees and no Last Chance comp", () => {
+    it("without big weeks there are always two nominees and no Block Breaker", () => {
         const { nomCounts, scenes } = playSeason(10, [0], "random", true, { rules: withDefaults({ lastChance: false }) });
         expect(nomCounts.length).toBeGreaterThan(0);
         nomCounts.forEach(([, count]) => expect(count).toBe(2));
-        expect(scenes.has("Last Chance")).toBe(false);
+        expect(scenes.has("Block Breaker")).toBe(false);
     });
 
     it("only the chosen kinds of comp come up each week, and the social block has the chosen number of actions", () => {
@@ -3093,7 +3093,7 @@ describe("watching comps you're not in", () => {
         controller.prompt$.subscribe((p) => (prompt = p));
         const bots = nonEvictedHouseguests(controller.gameState).filter((hg) => hg.id !== 0);
         let winner = -1;
-        (controller as any).runComp("Veto Competition", WEEKLY_COMPS[0], bots.slice(0, 6), (id: number) => (winner = id));
+        (controller as any).runComp("Power of Veto Competition", WEEKLY_COMPS[0], bots.slice(0, 6), (id: number) => (winner = id));
         const p = prompt as unknown as Extract<Prompt, { kind: "compResults" }>;
         expect(p.kind).toBe("compResults");
         expect(p.spectating).toBe(true);

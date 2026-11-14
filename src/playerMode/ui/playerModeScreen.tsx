@@ -218,7 +218,7 @@ export function cueFor(prompt: Prompt | null, mine: number[]): Cue | null {
             if (/Nomination Ceremony|Replacement Nominee/.test(title)) return "nominate";
             if (/Eviction$|Live Eviction|Final Eviction/.test(title) && !/Speech/.test(title)) return "evict";
             if (Object.values(POWERS).some((p) => title.includes(p.name))) return "power";
-            if (/Competition|Veto Winner|Veto Ceremony|Last Chance/.test(title)) return "reveal";
+            if (/Competition|Veto Winner|Veto Ceremony|Block Breaker/.test(title)) return "reveal";
             return null;
         }
         case "compResults": {

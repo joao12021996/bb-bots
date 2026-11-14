@@ -118,7 +118,7 @@ import { evictionIntro, finaleIntro, previouslyOn } from "./social/narration";
 import { montageLines } from "./social/montage";
 import { MoveRecord, seasonAwards, seasonStats } from "./social/awards";
 import { listNames } from "../utils/listStrings";
-import { HOH, VETO } from "./terms";
+import { HOH, POV, VETO } from "./terms";
 import {
     emptyLedger,
     final2Partners,
@@ -772,7 +772,7 @@ export class PlayerModeController {
         });
     }
 
-    // Plan B only matters in Blockbuster weeks, where the target can still win the Last Chance comp.
+    // Plan B only matters in Blockbuster weeks, where the target can still win the Block Breaker.
     public get planBWeek(): boolean {
         return !!this.state.week.blockbuster;
     }
@@ -5117,7 +5117,7 @@ export class PlayerModeController {
                 betrayed
             );
         }
-        const lastChance = s.week.blockbuster ? " After the veto, the nominees play the Last Chance comp, and the winner comes off the block." : "";
+        const lastChance = s.week.blockbuster ? " After the veto, the nominees play the Block Breaker, and the winner comes off the block." : "";
         const howMany = hohCount === 1 ? "one houseguest" : hohCount === 2 ? "two houseguests" : "three houseguests";
         const pawns = ((s.week.room && s.week.room.pawns) || []).filter((p) => p.yes).map((p) => this.player(p.id).name);
         const backdoor = s.week.backdoor;
@@ -5405,9 +5405,9 @@ export class PlayerModeController {
             const next = this.vetoUsable(s.week.nomineeIds!, pov.id, hoh.id) ? Step.SocialVeto : Step.VetoCeremony;
             this.showScene(this.vetoWinnerScene(players, pov, noms, hoh), next);
         };
-        if (choice === TAINTED_WINE_ID) return this.runTaintedWine("Veto Competition", players, onWinner);
-        if (choice === MEMORY_DUEL_ID) return this.runMemoryDuel("Veto Competition", players, onWinner);
-        this.runComp("Veto Competition", compById(choice), players, onWinner, "veto");
+        if (choice === TAINTED_WINE_ID) return this.runTaintedWine("Power of Veto Competition", players, onWinner);
+        if (choice === MEMORY_DUEL_ID) return this.runMemoryDuel("Power of Veto Competition", players, onWinner);
+        this.runComp("Power of Veto Competition", compById(choice), players, onWinner, "veto");
     }
 
     // The Veto winner gets their own moment: the necklace goes on, and what it means for the block.
@@ -5637,7 +5637,7 @@ export class PlayerModeController {
                     kind: "choose",
                     actorId: pov.id,
                     title: "Veto Ceremony",
-                    text: "You hold the Veto. Will you use it to save one of the nominees?",
+                    text: "You hold the Power of Veto. Will you use it to save one of the nominees?",
                     options: noms,
                     count: 1,
                     noneLabel: "Don't use the veto",
@@ -5696,7 +5696,7 @@ export class PlayerModeController {
     private vetoUsedScene(pov: Houseguest, saved: Houseguest, hoh: Houseguest, options: Houseguest[]): Scene {
         const secret = !!this.state.week.secretHoh;
         return this.textScene("Veto Ceremony", [
-            `🏅 ${pov.name} has decided to use the Power of ${VETO} on ${saved.id === pov.id ? "themselves" : saved.name}.`,
+            `🏅 ${pov.name} has decided to use the ${POV} on ${saved.id === pov.id ? "themselves" : saved.name}.`,
             secret
                 ? "“Since I have just vetoed one of the nominations, the Head of Household must name a replacement nominee.”"
                 : `“${hoh.name}, since I have just vetoed one of your nominations, you must name a replacement nominee.”`,
@@ -5725,7 +5725,7 @@ export class PlayerModeController {
         const s = this.state;
         const noms = s.week.nomineeIds!.map((id) => getById(s.gameState, id));
         const comp = compById(this.compChoice(() => pickQuickComp(s.gameState, s.history, s.usedComps, this.rules.kinds).id));
-        this.runComp("Last Chance Competition", comp, noms, (winnerId) => {
+        this.runComp("Block Breaker Competition", comp, noms, (winnerId) => {
             const [gs, scene, remaining] = generateBlockbusterScene(s.gameState, noms, winnerId);
             s.gameState = gs;
             s.week.blockbusterId = winnerId;
@@ -6282,7 +6282,7 @@ export class PlayerModeController {
                                 <th>Houseguest</th>
                                 <th title={HOH}>👑</th>
                                 <th title="Veto">🏅</th>
-                                <th title="Last Chance comp">🎬</th>
+                                <th title="Block Breaker">🎬</th>
                                 <th title="Times on the block">🎯</th>
                                 <th title="Survived the block">🧗</th>
                             </tr>

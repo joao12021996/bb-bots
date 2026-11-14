@@ -22,7 +22,7 @@ export function DifficultyPicker(props: { value: Difficulty; onChange: (d: Diffi
     );
 }
 
-// House rules: jury size, whether the HoH plays in the veto, Last Chance weeks, social actions per block, and
+// House rules: jury size, whether the HoH plays in the veto, Block Breaker weeks, social actions per block, and
 // which comps can come up.
 export function RulesEditor(props: {
     rules: SeasonRules;

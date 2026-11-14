@@ -104,7 +104,7 @@ export function finaleComps(gameState: GameState, history: WeekRecord[], used: s
     return [HoldTheWallComp, skill, quiz];
 }
 
-// The Last Chance comp is a quick one: under a minute or so of play, simple rules, no long puzzles or quizzes.
+// The Block Breaker is a quick one: under a minute or so of play, simple rules, no long puzzles or quizzes.
 export const QUICK_COMPS: CompDefinition[] = [
     SteadyHandComp,
     CatchTheKeysComp,
@@ -120,7 +120,7 @@ export const QUICK_COMPS: CompDefinition[] = [
     ZoomInComp,
 ];
 
-// Picks the Last Chance comp: a quick one, not played yet this season if possible.
+// Picks the Block Breaker: a quick one, not played yet this season if possible.
 export function pickQuickComp(gameState: GameState, history: WeekRecord[], used: string[], kinds?: CompKind[]): CompDefinition {
     const fits = QUICK_COMPS.filter((c) => !c.available || c.available(gameState, history));
     const allowed = kinds ? fits.filter((c) => kinds.includes(c.kind)) : fits;

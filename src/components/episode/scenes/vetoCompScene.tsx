@@ -89,7 +89,7 @@ export function generateVetoCompScene(
     }
     const vetoEmoji = veto.emoji ? `${veto.emoji} ` : "";
     const scene = new Scene({
-        title: "Veto Competition",
+        title: "Power of Veto Competition",
         gameState: initialGameState,
         content: (
             <div>

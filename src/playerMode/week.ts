@@ -94,7 +94,7 @@ const STEPS: { [step: string]: StepInfo } = {
     },
     [Step.VetoCeremony]: { day: DAY_PART.vetoCeremony },
     [Step.SocialBlockbuster]: {
-        block: "Before the Last Chance comp",
+        block: "Before the Block Breaker",
         then: Step.Blockbuster,
         day: DAY_PART.blockbuster,
         noms: true,

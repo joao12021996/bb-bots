@@ -159,7 +159,8 @@ export const FR: { [english: string]: string } = {
     "Back to the usual rules": "Revenir aux règles habituelles",
     "Head of Household": "Chef de la maison",
     Veto: "Veto",
-    "Last Chance comp": "épreuve de la dernière chance",
+    "Power of Veto": "Pouvoir de Veto",
+    "Block Breaker": "Block Breaker",
 
     // ---------- secret powers ----------
     Overthrow: "Renversement",
@@ -244,7 +245,7 @@ export const FR: { [english: string]: string } = {
     "Save a nominee, or keep the nominations the same. Saving an ally earns their loyalty. Saving someone the HoH wanted gone makes an enemy.":
         "Sauve un nominé, ou garde les nominations telles quelles. Sauver un allié te vaut sa loyauté. Sauver quelqu'un que le Chef voulait voir partir te fait un ennemi.",
     "If you're on the block yourself, use it on yourself.": "Si tu es toi-même sur la sellette, utilise-le sur toi.",
-    "The Last Chance comp": "L'épreuve de la dernière chance",
+    "The Block Breaker": "Le Block Breaker",
     "In big weeks there are three nominees. After the Veto, they play one more comp, and the winner comes off the block.":
         "Les grandes semaines, il y a trois nominés. Après le Veto, ils jouent une épreuve de plus, et le gagnant quitte la sellette.",
     "That leaves two nominees for the vote.": "Il reste alors deux nominés pour le vote.",

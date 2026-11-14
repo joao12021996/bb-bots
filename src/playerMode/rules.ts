@@ -38,7 +38,7 @@ export const SPECIAL_FORMATS: { id: SpecialFormat; label: string }[] = [
 ];
 
 export interface SeasonRules {
-    lastChance: boolean; // big weeks: three nominees, and a Last Chance comp after the veto
+    lastChance: boolean; // big weeks: three nominees, and a Block Breaker after the veto
     actions: number; // social actions per block
     kinds: CompKind[]; // which kinds of weekly comp can come up
     formats: SpecialFormat[]; // which special comp formats can come up

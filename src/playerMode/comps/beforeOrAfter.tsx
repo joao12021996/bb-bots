@@ -42,7 +42,7 @@ export function buildQuiz(gs: GameState, history: WeekRecord[], rand: Rand): Que
         }
         if (w.povId !== undefined) {
             qs.push({
-                prompt: `Who won the Veto on ${dayLabel(gs, w.week, DAY_PART.veto)}?`,
+                prompt: `Who won the Power of Veto on ${dayLabel(gs, w.week, DAY_PART.veto)}?`,
                 options: faceOptions(gs, getById(gs, w.povId), rand),
                 answer: `${w.povId}`,
             });

@@ -5,8 +5,9 @@ export const SHOW_NAME = "The Houseguests";
 export const APP_NAME = "Houseguest Bots";
 
 export const HOH = "Head of Household"; // abbreviated "HoH"
-export const VETO = "Veto";
-export const LAST_CHANCE = "Last Chance comp"; // three nominees play it after the veto; the winner comes off the block
+export const VETO = "Veto"; // the short word: "the Veto", "Veto Ceremony"
+export const POV = "Power of Veto"; // the full name, where it's formal
+export const LAST_CHANCE = "Block Breaker"; // three nominees play it after the veto; the winner comes off the block
 
 // secret powers
 export const POWER_NAMES = {

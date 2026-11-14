@@ -21,7 +21,7 @@ function generateCoHoH(initialGamestate: GameState): Episode {
         coHohIsFinal: true,
         tieBreaker: (povWinner) => {
             return povWinner
-                ? { hg: povWinner, text: "Veto winner", voteType: (id) => new PoVvote(id) }
+                ? { hg: povWinner, text: "Power of Veto winner", voteType: (id) => new PoVvote(id) }
                 : undefined;
         },
     });

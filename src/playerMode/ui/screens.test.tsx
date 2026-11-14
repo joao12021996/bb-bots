@@ -911,7 +911,7 @@ describe("player mode screens", () => {
         let winner = -1;
         const c = mount(
             <CompResults
-                title="Veto Competition"
+                title="Power of Veto Competition"
                 comp={FactOrFictionComp}
                 participants={bots}
                 humanIds={[0]}

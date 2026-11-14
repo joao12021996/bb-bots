@@ -17,7 +17,7 @@ export interface Alliance {
     formedWeek: number;
     target?: number; // agreed at the latest alliance meeting
     targetWeek?: number;
-    backup?: number; // plan B, if the target comes off the block (a used veto, a Last Chance comp)
+    backup?: number; // plan B, if the target comes off the block (a used veto, a Block Breaker)
     backupSuggestions?: { [memberId: number]: number | null }; // players' plan B picks this social block
     suggestions: { [memberId: number]: number | null }; // players' suggestions in the current social block
     met: boolean; // has met in the current social block
@@ -235,7 +235,7 @@ export function botBackup(gs: GameState, a: Alliance, botId: number, primary: nu
     return entry ? entry.id : null;
 }
 
-// The target is off the block (the veto, a Last Chance comp): alliances whose plan B is on it switch to plan B.
+// The target is off the block (the veto, a Block Breaker): alliances whose plan B is on it switch to plan B.
 export function fallBackToPlanB(gs: GameState, book: AllianceBook, block: number[]): { alliance: Alliance; from: number; to: number }[] {
     const switched: { alliance: Alliance; from: number; to: number }[] = [];
     book.alliances.forEach((a) => {
@@ -257,7 +257,7 @@ export interface MeetingResult {
 
 // An alliance meeting: everyone suggests a target, the persuasive (high Social) members try to win the others
 // over, and the alliance goes with the most influential pick. Disagreement costs chemistry.
-// A plan B is only picked in Blockbuster weeks (`planB`), where the target can still win the Last Chance comp.
+// A plan B is only picked in Blockbuster weeks (`planB`), where the target can still win the Block Breaker.
 export function holdMeeting(
     gs: MutableGameState,
     a: Alliance,

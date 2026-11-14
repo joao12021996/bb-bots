@@ -193,7 +193,7 @@ export function makeFacts(gs: GameState, rand: Rand, history: WeekRecord[] = [])
         },
         () => {
             const a = pick(rand, former);
-            return { text: `${a.name} won the Veto at least once.`, truth: a.povWins > 0 };
+            return { text: `${a.name} won the Power of Veto at least once.`, truth: a.povWins > 0 };
         },
         () => {
             const a = pick(rand, former);
