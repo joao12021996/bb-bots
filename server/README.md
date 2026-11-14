@@ -11,6 +11,31 @@ cd server && npm install && node relay.js          # listens on 127.0.0.1:8787
 REACT_APP_RELAY_URL=ws://localhost:8787 npm start
 ```
 
+## Tests
+
+```sh
+cd server && npm install && npm test
+```
+
+## Limits
+
+So one visitor (or one script) can't take the relay down for everyone:
+
+- **Websites**: browsers must come from one of our sites. `ALLOWED_ORIGINS` is a comma-separated list of hostnames
+  (`.example.com` also allows every subdomain); the default is `.spotlegame.co.uk,.github.io,localhost,127.0.0.1`.
+  A connection with no `Origin` at all (wscat, a script) is let in, and the limits below still apply to it.
+- **Per address**: 12 connections (`MAX_CONNECTIONS_PER_IP`), 6 open rooms it started (`MAX_ROOMS_PER_IP`),
+  2 public listings (`MAX_LISTINGS_PER_IP`). The address comes from `CF-Connecting-IP`, then `X-Forwarded-For`.
+- **Per connection**: 100 messages and 512 KB a second, with room for bursts. A connection that goes over gets
+  `{"op":"error","reason":"slow down"}`, and is dropped the third time.
+
+Set the environment variables in the systemd unit (`Environment=ALLOWED_ORIGINS=...`) to change them.
+
+## Is it up?
+
+`curl https://api.spotlegame.co.uk/bb-relay/health` answers with the number of connections, rooms, players and
+listings, and how many connections were refused or dropped since it started.
+
 ## Droplet setup: one command
 
 On the droplet that already runs CoSpotle, as root:

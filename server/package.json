@@ -5,7 +5,8 @@
     "description": "WebSocket relay for bb-bots online games",
     "main": "relay.js",
     "scripts": {
-        "start": "node relay.js"
+        "start": "node relay.js",
+        "test": "node relay.test.js"
     },
     "engines": {
         "node": ">=18"
