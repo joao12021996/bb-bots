@@ -257,7 +257,7 @@ interface WeekProgress {
     // final-two speeches and jury questions, in progress
     finalTwo?: { spoke: number[]; questions: JuryQuestion[]; qIndex: number; transcript: string[] };
     meetingBy?: number[]; // players who called a house meeting this week
-    secretHoh?: boolean; // nobody knows who the Head of House is this week
+    secretHoh?: boolean; // nobody knows who the Head of Household is this week
     audienceNominee?: boolean; // the audience names one of this week's nominees
     initialNoms?: number[]; // the nominees named at the nomination ceremony
     nominators?: { [nomineeId: number]: number }; // who put each nominee up (-1: the audience)
@@ -440,7 +440,7 @@ export type Prompt =
           results: CompResult[];
           tiedIds?: number[]; // a tie for first that the tiebreaker (Hide the Veto) will settle
           spectating?: boolean; // no players in it: the players watch the results come in
-          sealed?: boolean; // a secret Head of House week: the winner stays a secret
+          sealed?: boolean; // a secret Head of Household week: the winner stays a secret
           onDone: (winnerId: number) => void;
       }
     | {
@@ -470,7 +470,7 @@ export type Prompt =
           tied: Houseguest[];
           hides: VetoHide[];
           winnerId?: number; // none: still tied, and they hide again
-          sealed?: boolean; // a secret Head of House week: the winner stays a secret
+          sealed?: boolean; // a secret Head of Household week: the winner stays a secret
           onDone: () => void;
       }
     | {
@@ -480,7 +480,7 @@ export type Prompt =
           tied: Houseguest[];
           guesses: TiebreakGuess[];
           winnerId?: number; // none: still tied, another question follows
-          sealed?: boolean; // a secret Head of House week: the winner stays a secret
+          sealed?: boolean; // a secret Head of Household week: the winner stays a secret
           onDone: () => void;
       }
     | {
@@ -1255,7 +1255,7 @@ export class PlayerModeController {
         );
     }
 
-    // The Head of House names someone else (Hidden Immunity, mostly).
+    // The Head of Household names someone else (Hidden Immunity, mostly).
     private hohRepick(hoh: Houseguest, pool: Houseguest[], text: string, cb: (id: number) => void) {
         if (pool.length === 0) return cb(-1);
         if (!this.isHuman(hoh)) return cb(botNominate(this.gameState, this.book, hoh, pool, 1, this.roomSway()).picks[0].id);
@@ -1365,7 +1365,7 @@ export class PlayerModeController {
         );
     }
 
-    // Eviction night: the Overthrow dethrones the Head of House, and its holder names new nominees. Publicly.
+    // Eviction night: the Overthrow dethrones the Head of Household, and its holder names new nominees. Publicly.
     private overthrow(slot: PowerSlot, next: () => void) {
         const s = this.state;
         const holder = this.player(slot.holderId!);
@@ -1419,7 +1419,7 @@ export class PlayerModeController {
         );
     }
 
-    // In a secret Head of House week, only the HoH (and nobody else) sees who it is.
+    // In a secret Head of Household week, only the HoH (and nobody else) sees who it is.
     public publicHohId(viewerId?: number): number | undefined {
         const s = this.state;
         if (!s.week.secretHoh || this.watching) return s.week.hohId;
@@ -1649,8 +1649,8 @@ export class PlayerModeController {
                     this.pushEpisode(BigBrotherVanilla, `Day ${dayOf(s.gameState, phase, DAY_PART.eviction)}`);
                     s.step = Step.Fallout;
                 } else if (s.week.hohId === id && !s.week.nomineeIds) {
-                    // the Head of House is gone before nominations: the HoH comp's results stand, without them
-                    lines.push(`The Head of House is gone. The comp results stand without ${name}.`);
+                    // the Head of Household is gone before nominations: the HoH comp's results stand, without them
+                    lines.push(`The Head of Household is gone. The comp results stand without ${name}.`);
                     s.week.hohId = undefined;
                     s.week.room = undefined;
                     s.step = Step.Hoh;
@@ -1926,7 +1926,7 @@ export class PlayerModeController {
                 onDone: tiebreak ? () => this.tiebreak(title, tiedIds, seed, done) : () => done(tiedIds[0]),
             });
         };
-        // a secret Head of House comp: you play blind (nobody else's score) and there are no deals on the wall
+        // a secret Head of Household comp: you play blind (nobody else's score) and there are no deals on the wall
         const blind = this.sealed();
         const deals = (player: Houseguest) =>
             role === "hoh" && comp.kind === "endurance" && !blind ? this.wallDeals(player, bots, seed) : undefined;
@@ -2703,7 +2703,7 @@ export class PlayerModeController {
         pruneAlliances(s.gameState, s.book).forEach((a) => this.tellAlliance(a, `💔 ${a.name} is no more.`));
         const title = finale ? "Finale" : `Day ${weekStartDay(s.gameState, s.gameState.phase)}`;
         s.step = finale ? Step.SocialFinale1 : Step.SocialMorning;
-        // "Previously on…": last week, and last week's secret Head of House, revealed
+        // "Previously on…": last week, and last week's secret Head of Household, revealed
         const last = s.history[s.history.length - 1];
         const lastSecret = !!last && this.powers.slots.some((sl) => sl.id === "secretHoh" && sl.week === last.week);
         const recap = previouslyOn(s.gameState, last, [], lastSecret && last.hohId !== undefined ? this.player(last.hohId).name : undefined);
@@ -4522,7 +4522,7 @@ export class PlayerModeController {
     private hohComp() {
         const s = this.state;
         const competitors = exclude(nonEvictedHouseguests(s.gameState), s.gameState.previousHOH || []);
-        const title = "Head of House Competition";
+        const title = "Head of Household Competition";
         const onWinner = (winnerId: number, worstFirst: number[]) => {
             const [gs, scene, hohs] = generateHohCompScene(s.gameState, { forcedWinners: [getById(s.gameState, winnerId)] });
             s.gameState = gs;
@@ -4686,8 +4686,8 @@ export class PlayerModeController {
     // ---------- alliances convene before nominations ----------
 
     // Who can't be the alliance's target right now: the new HoH can't be nominated (unless it's a secret).
-    // Who an alliance can't target: this week's Head of House, who's safe until the eviction (unless it's a
-    // secret who the Head of House is).
+    // Who an alliance can't target: this week's Head of Household, who's safe until the eviction (unless it's a
+    // secret who the Head of Household is).
     public targetExclude(): number[] {
         const s = this.state;
         if (s.week.secretHoh || s.week.hohId === undefined || this.player(s.week.hohId).isEvicted) return [];
@@ -4772,7 +4772,7 @@ export class PlayerModeController {
     private hohRoom() {
         const s = this.state;
         const hohId = s.week.hohId!;
-        // nobody can visit a Head of House nobody knows (and a secret HoH can't ask anyone to be a pawn, or plan a
+        // nobody can visit a Head of Household nobody knows (and a secret HoH can't ask anyone to be a pawn, or plan a
         // backdoor with their alliance, without giving it away)
         if (s.week.secretHoh) return this.goTo(Step.Noms);
         if (!s.week.room) {
@@ -5249,7 +5249,7 @@ export class PlayerModeController {
     private vetoSpeechPrompt(pov: Houseguest, hoh: Houseguest, noms: Houseguest[], used: boolean, next: () => void) {
         const s = this.state;
         const everyone = nonEvictedHouseguests(s.gameState).filter((hg) => hg.id !== pov.id);
-        // in a secret HoH week, nobody can call out a Head of House they don't know
+        // in a secret HoH week, nobody can call out a Head of Household they don't know
         const onStage = (this.state.week.secretHoh ? noms : [hoh, ...noms]).filter((hg) => hg.id !== pov.id);
         const tones: SpeechTone[] = [
             { id: "gracious", label: "🕊️ Gracious", blurb: "Love for everyone. A small boost with the HoH and the nominees." },
@@ -5419,7 +5419,7 @@ export class PlayerModeController {
         const what = onBlock
             ? `${pov.name} was on the block. Now they can save themselves.`
             : isHoh
-            ? `The Head of House won it too. The nominations only change if ${pov.name} wants them to.`
+            ? `The Head of Household won it too. The nominations only change if ${pov.name} wants them to.`
             : `${pov.name} now decides whether the nominations stay the same.`;
         const others = players.filter((p) => p.id !== pov.id);
         return new Scene({
@@ -5594,7 +5594,7 @@ export class PlayerModeController {
                 this.allianceTimeOpen() && heard.length > 0
                     ? ` Your alliance's advice: ${heard.map((x) => `${this.player(x.by).name} says ${this.player(x.pick).name}`).join(", ")}.`
                     : "";
-            this.privately(hoh.id, `${hoh.name}, Head of House`, () =>
+            this.privately(hoh.id, `${hoh.name}, Head of Household`, () =>
                 this.show({
                     kind: "choose",
                     actorId: hoh.id,
@@ -5698,7 +5698,7 @@ export class PlayerModeController {
         return this.textScene("Veto Ceremony", [
             `🏅 ${pov.name} has decided to use the Power of ${VETO} on ${saved.id === pov.id ? "themselves" : saved.name}.`,
             secret
-                ? "“Since I have just vetoed one of the nominations, the Head of House must name a replacement nominee.”"
+                ? "“Since I have just vetoed one of the nominations, the Head of Household must name a replacement nominee.”"
                 : `“${hoh.name}, since I have just vetoed one of your nominations, you must name a replacement nominee.”`,
             ...(options.length === 1 ? [`Only ${options[0].name} is left who can take their place.`] : []),
         ]);
@@ -5832,12 +5832,12 @@ export class PlayerModeController {
             const max = Math.max(...counts);
             const tied = noms.filter((_, i) => counts[i] === max);
             if (tied.length > 1 && this.isHuman(hoh)) {
-                this.privately(hoh.id, `${hoh.name}, Head of House`, () =>
+                this.privately(hoh.id, `${hoh.name}, Head of Household`, () =>
                     this.show({
                         kind: "choose",
                         actorId: hoh.id,
                         title: "Tie Breaker",
-                        text: "The vote is tied! As Head of House, you must cast the deciding vote to evict.",
+                        text: "The vote is tied! As Head of Household, you must cast the deciding vote to evict.",
                         options: tied,
                         count: 1,
                         confirmLabel: "Evict",
@@ -6011,7 +6011,7 @@ export class PlayerModeController {
                 this.pushJuryHouse();
                 const kept = others.find((o) => o.id !== evicted.id);
                 this.addDiary(gs.phase, hoh.id, [
-                    `I won the final Head of House, and I had to cut ${evicted.name}.${kept ? ` I'm sitting next to ${kept.name}. I think I can beat them.` : ""}`,
+                    `I won the final Head of Household, and I had to cut ${evicted.name}.${kept ? ` I'm sitting next to ${kept.name}. I think I can beat them.` : ""}`,
                 ]);
                 this.addDiary(gs.phase, evicted.id, [`So close. Final three, and ${hoh.name} cut me. I'll have my say on the jury.`]);
             }
@@ -6027,12 +6027,12 @@ export class PlayerModeController {
                 return finish(others.find((o) => o.id !== partners[0])!.id);
             return finish();
         }
-        this.privately(hoh.id, `${hoh.name}, final Head of House`, () =>
+        this.privately(hoh.id, `${hoh.name}, final Head of Household`, () =>
             this.show({
                 kind: "choose",
                 actorId: hoh.id,
                 title: "Final Eviction",
-                text: "You are the final Head of House. Who will you evict? The one you keep sits next to you in the final 2.",
+                text: "You are the final Head of Household. Who will you evict? The one you keep sits next to you in the final 2.",
                 options: others,
                 count: 1,
                 promisedIds: final2Partners(this.ledger, hoh.id),

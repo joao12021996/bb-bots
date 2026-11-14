@@ -13,7 +13,7 @@ const TIPS: { [id: string]: Omit<Tip, "id"> } = {
     welcome: {
         title: "Welcome to the house!",
         lines: [
-            "Each week has the same rhythm: a competition crowns the Head of House, they nominate, the Veto can save someone, and the house votes one nominee out.",
+            "Each week has the same rhythm: a competition crowns the Head of Household, they nominate, the Veto can save someone, and the house votes one nominee out.",
             "Stay off the block, make friends, win when it counts, and get to the final two. Then the evicted houseguests on the jury pick the winner.",
             "I'll pop up the first time each part of the week comes around. You can turn me off whenever you like.",
         ],
@@ -57,7 +57,7 @@ const TIPS: { [id: string]: Omit<Tip, "id"> } = {
     hohRoom: {
         title: "Your room, your rules",
         lines: [
-            "As Head of House, people come up to your room to make their case. Listen: who's scared tells you who's guilty.",
+            "As Head of Household, people come up to your room to make their case. Listen: who's scared tells you who's guilty.",
             "Promising safety is free now and costly later. A broken promise is remembered by the whole house.",
         ],
     },
@@ -112,7 +112,7 @@ const TIPS: { [id: string]: Omit<Tip, "id"> } = {
     eviction: {
         title: "Eviction night",
         lines: [
-            "The house votes and the nominee with the most votes leaves. If it ties, the Head of House breaks the tie.",
+            "The house votes and the nominee with the most votes leaves. If it ties, the Head of Household breaks the tie.",
             "Later in the season, evicted houseguests join the jury. Keep them happy: they decide the winner.",
         ],
     },

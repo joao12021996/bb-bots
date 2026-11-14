@@ -188,7 +188,7 @@ const SECTIONS_EN: Section[] = [
                     <b>🌐 Play online</b>: host a game and share the code. The house starts full of bots, and every
                     friend who joins takes the place of one. Late to the party? Tap 👀 Just watch to follow the season live.
                     For a big group, set the <b>⏰ Pace</b> to real time: a break of an hour to two days before each comp
-                    and eviction (Head of House one day, Veto the next…), unless every player votes to move on sooner.
+                    and eviction (Head of Household one day, Veto the next…), unless every player votes to move on sooner.
                     The host can wait for everyone, or start early with bots in the empty spots. With ⏱️ Time to act,
                     anyone who takes too long over a decision gets a bot to make that one call. A bot plays for anyone who
                     drops out too, but a comp a bot played for you can't be won: you're last, whatever it scored. Back in the middle of a comp? The bot finishes it, then it's you again. Need a break? ⏸️ Ask
@@ -201,7 +201,7 @@ const SECTIONS_EN: Section[] = [
                 </li>
                 <li>
                     <b>🎚️ Difficulty and 📜 House rules</b>: from Casual (forgiving bots) to Cutthroat (bots that doubt
-                    you and break their word). House rules set the jury size, whether the Head of House plays in the
+                    you and break their word). House rules set the jury size, whether the Head of Household plays in the
                     Veto, big three-nominee weeks, actions per social block, and which kinds of comp come up.
                 </li>
                 <li>

@@ -283,7 +283,7 @@ export function settleVetoPledges(gs: MutableGameState, ledger: Ledger, povId: n
     return news;
 }
 
-// The final Head of House decides who goes to the final 2.
+// The final Head of Household decides who goes to the final 2.
 export function settleFinalPledges(gs: MutableGameState, ledger: Ledger, hohId: number, evictedId: number): LedgerNews[] {
     const news: LedgerNews[] = [];
     openPledges(ledger, "final2").forEach((p) => {

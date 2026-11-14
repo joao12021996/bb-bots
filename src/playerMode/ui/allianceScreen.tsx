@@ -344,8 +344,8 @@ export function AllianceScreen(props: AllianceScreenProps) {
             {hohId !== undefined && (
                 <Subtle>
                     {hohId === me.id
-                        ? "👑 You're Head of House. Your alliance weighs in: who should you nominate?"
-                        : `👑 ${controller.player(hohId).name} won Head of House and wants your alliance's help: who should go up?`}
+                        ? "👑 You're Head of Household. Your alliance weighs in: who should you nominate?"
+                        : `👑 ${controller.player(hohId).name} won Head of Household and wants your alliance's help: who should go up?`}
                 </Subtle>
             )}
             {round === "before" && <Subtle>Alliances meet first: make a plan, then go work the house. You'll meet again after social time.</Subtle>}

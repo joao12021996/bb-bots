@@ -36,7 +36,7 @@ function otevFacts(gs: GameState, history: WeekRecord[]): { prompt: string; answ
     const facts: { prompt: string; answerId: number }[] = [];
     history.forEach((w) => {
         if (w.hohId !== undefined)
-            facts.push({ prompt: `the Head of House crowned on ${dayLabel(gs, w.week, DAY_PART.hoh)}`, answerId: w.hohId });
+            facts.push({ prompt: `the Head of Household crowned on ${dayLabel(gs, w.week, DAY_PART.hoh)}`, answerId: w.hohId });
         if (w.povId !== undefined)
             facts.push({ prompt: `the winner of the veto on ${dayLabel(gs, w.week, DAY_PART.veto)}`, answerId: w.povId });
         if (w.evictedIds.length > 0)
@@ -310,7 +310,7 @@ const COMIC_QUOTES = [
 const VILLAIN_QUOTES = [
     "Your game ends tonight!",
     "I've got the votes!",
-    "Bow to the Head of House!",
+    "Bow to the Head of Household!",
     "The backdoor is OPEN!",
     "Who needs friends?",
     "Mwahaha! Blindside!",
@@ -1120,7 +1120,7 @@ function dayFacts(gs: GameState, history: WeekRecord[]): DayQuestion[] {
     const facts: DayQuestion[] = [];
     history.forEach((w) => {
         if (w.hohId !== undefined)
-            facts.push({ prompt: `On which day did ${name(w.hohId)} win the Head of House that put ${w.nomineeIds.map(name).join(" and ")} on the block?`, answer: dayOf(gs, w.week, DAY_PART.hoh) });
+            facts.push({ prompt: `On which day did ${name(w.hohId)} win the Head of Household that put ${w.nomineeIds.map(name).join(" and ")} on the block?`, answer: dayOf(gs, w.week, DAY_PART.hoh) });
         if (w.povId !== undefined && w.evictedIds.length > 0)
             facts.push({ prompt: `On which day did ${name(w.povId)} win the veto, the week ${name(w.evictedIds[0])} went home?`, answer: dayOf(gs, w.week, DAY_PART.veto) });
         w.evictedIds.forEach((id) => facts.push({ prompt: `On which day was ${name(id)} evicted?`, answer: dayOf(gs, w.week, DAY_PART.eviction) }));

@@ -10,14 +10,14 @@ import { Rand, shuffled } from "../comps/random";
 // see the list: a power only becomes known when someone gets it, or uses it.
 //
 // Holdable powers go to one houseguest on a scheduled week, in secret:
-//   overthrow  - on eviction night, dethrone the Head of House and name new nominees (public)
+//   overthrow  - on eviction night, dethrone the Head of Household and name new nominees (public)
 //   immunity   - when you're nominated, play it: you're off the block, and whoever nominated you picks again
 //   ghostSwap  - before the veto, anonymously take one nominee off the block and put someone else on it
 //   extraVote  - cast a second eviction vote
 //   nullifier  - cancel one vote to evict the nominee of your choice
 // Season twists:
 //   audience   - the audience hands out the powers (to its favorite), and one week it names a nominee itself
-//   secretHoh  - one week, nobody knows who the Head of House is
+//   secretHoh  - one week, nobody knows who the Head of Household is
 //   battleBack - right before the jury starts, the evicted houseguests compete to come back (see twists.ts)
 
 export type PowerId = "overthrow" | "immunity" | "ghostSwap" | "extraVote" | "nullifier" | "audience" | "secretHoh" | "battleBack";
@@ -38,8 +38,8 @@ export const POWERS: { [id in PowerId]: PowerInfo } = {
         id: "overthrow",
         name: POWER_NAMES.overthrow,
         emoji: "⚡",
-        blurb: "On eviction night, the holder can dethrone the Head of House and name new nominees. Everyone will know.",
-        howTo: "On eviction night, before the vote, you can overthrow the Head of House and name the nominees yourself. One use. Everyone will know it was you.",
+        blurb: "On eviction night, the holder can dethrone the Head of Household and name new nominees. Everyone will know.",
+        howTo: "On eviction night, before the vote, you can overthrow the Head of Household and name the nominees yourself. One use. Everyone will know it was you.",
     },
     immunity: {
         id: "immunity",
@@ -80,7 +80,7 @@ export const POWERS: { [id in PowerId]: PowerInfo } = {
         id: "secretHoh",
         name: POWER_NAMES.secretHoh,
         emoji: "🕶️",
-        blurb: "One week, nobody knows who the Head of House is, or who nominated them.",
+        blurb: "One week, nobody knows who the Head of Household is, or who nominated them.",
         howTo: "",
     },
     battleBack: {

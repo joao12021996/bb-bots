@@ -77,7 +77,7 @@ export function generateVetoCompScene(
         introText = "Everyone left in the house will compete in this challenge.";
     } else {
         introText = `${
-            hohPlaysVeto ? `${listNames(HoHs.map((h) => h.name))}, as Head of House, and ` : ``
+            hohPlaysVeto ? `${listNames(HoHs.map((h) => h.name))}, as Head of Household, and ` : ``
         }${listNames(nominees.map((nom) => nom.name))} as nominees, will compete, as well as ${
             povPlayers.length - (hohPlaysVeto ? HoHs.length : 0) - nominees.length
         } others chosen by random draw.`;

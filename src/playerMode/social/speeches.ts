@@ -131,7 +131,7 @@ export function vetoSpeech(
     if (tone === "promise" && ids.length > 0) {
         return {
             lines: [
-                `“${ids.map(name).join(" and ")}: if I win Head of House next week, you have my word that you're safe.”`,
+                `“${ids.map(name).join(" and ")}: if I win Head of Household next week, you have my word that you're safe.”`,
                 ...ids.map((id) => makePromise(gs, deals, povId, id, humanIds)),
             ],
             talks: [],
@@ -157,7 +157,7 @@ export function evictionSpeech(
     if (tone === "promise" && ids.length > 0) {
         return {
             lines: [
-                `“Keep me here, ${ids.map(name).join(" and ")}, and if I win Head of House you are safe. That's a promise.”`,
+                `“Keep me here, ${ids.map(name).join(" and ")}, and if I win Head of Household you are safe. That's a promise.”`,
                 ...ids.map((id) => makePromise(gs, deals, speakerId, id, humanIds)),
             ],
             talks: [],

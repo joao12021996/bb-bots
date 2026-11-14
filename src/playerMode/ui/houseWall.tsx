@@ -9,7 +9,7 @@ export function HouseWall(props: { controller: PlayerModeController }) {
     const { controller } = props;
     const gs = controller.gameState;
     const week = controller.state.week;
-    // a secret Head of House wears no crown (except on their own screen, in single player)
+    // a secret Head of Household wears no crown (except on their own screen, in single player)
     const viewer = controller.state.humanIds.length === 1 ? controller.state.humanIds[0] : undefined;
     const hohId = week.finalHoh !== undefined ? week.finalHoh : controller.publicHohId(viewer);
     const nominees = week.nomineeIds || [];
@@ -23,7 +23,7 @@ export function HouseWall(props: { controller: PlayerModeController }) {
             {gs.houseguests.map((hg) => {
                 const out = hg.isEvicted;
                 const badges: { cls: string; icon: string; label: string }[] = [];
-                if (!out && hg.id === hohId) badges.push({ cls: "is-crown", icon: "👑", label: "Head of House" });
+                if (!out && hg.id === hohId) badges.push({ cls: "is-crown", icon: "👑", label: "Head of Household" });
                 if (!out && hg.id === week.povId) badges.push({ cls: "is-necklace", icon: "🏅", label: "Veto" });
                 if (!out && nominees.includes(hg.id)) badges.push({ cls: "is-key", icon: "🔑", label: "Nominated" });
                 return (

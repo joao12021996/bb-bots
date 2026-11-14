@@ -5,7 +5,7 @@ import { listNames } from "../../utils/listStrings";
 
 // The host: "Previously on…", "But first…", and the live eviction night framing.
 
-// Last week, in a few lines. `secretHohName`: last week's secret Head of House, revealed now.
+// Last week, in a few lines. `secretHohName`: last week's secret Head of Household, revealed now.
 export function previouslyOn(gs: GameState, last: WeekRecord | undefined, extra: string[], secretHohName?: string): string[] {
     if (!last) return [`Welcome to ${SHOW_NAME}. ${gs.houseguests.length} houseguests, one house, and only one winner.`];
     const name = (id: number) => getById(gs, id).name;
@@ -21,7 +21,7 @@ export function previouslyOn(gs: GameState, last: WeekRecord | undefined, extra:
     if (last.blockbusterId !== undefined) lines.push(`${name(last.blockbusterId)} won the ${LAST_CHANCE} and came off the block.`);
     lines.push(...extra);
     if (last.evictedIds.length > 0) lines.push(`And in the end, ${listNames(last.evictedIds.map(name))} walked out the door.`);
-    lines.push("Tonight: a new week, and a new Head of House. But first, let's see how the house is taking it…");
+    lines.push("Tonight: a new week, and a new Head of Household. But first, let's see how the house is taking it…");
     return lines;
 }
 

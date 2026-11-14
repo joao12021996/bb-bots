@@ -38,7 +38,7 @@ describe("watching the bots", () => {
         expect(hasSave()).toBe(false);
     });
 
-    it("the viewer knows who the secret Head of House is", () => {
+    it("the viewer knows who the secret Head of Household is", () => {
         const save = newPlayerSave(newGame(8), []);
         save.watching = true;
         save.week = { hohId: 3, secretHoh: true };

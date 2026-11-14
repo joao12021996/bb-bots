@@ -74,7 +74,7 @@ export const FINAL_THREE: Step[] = [
 
 const STEPS: { [step: string]: StepInfo } = {
     [Step.SocialMorning]: { block: "Morning in the house", then: Step.Hoh, day: DAY_PART.hoh },
-    [Step.Hoh]: { day: DAY_PART.hoh, breakFor: "the Head of House comp" },
+    [Step.Hoh]: { day: DAY_PART.hoh, breakFor: "the Head of Household comp" },
     [Step.AllianceHoh]: { day: DAY_PART.nominations },
     [Step.HohRoom]: { day: DAY_PART.nominations },
     [Step.Noms]: { day: DAY_PART.nominations },
@@ -103,11 +103,11 @@ const STEPS: { [step: string]: StepInfo } = {
     [Step.SocialCampaign]: { block: "Campaign time", then: Step.Speeches, noms: true },
     [Step.Eviction]: { breakFor: "eviction night" },
     [Step.SocialFinale1]: { block: "Final 3: before Part 1", then: Step.FinaleHoh1, day: 0 },
-    [Step.FinaleHoh1]: { day: 0, breakFor: "Part 1 of the final Head of House comp" },
+    [Step.FinaleHoh1]: { day: 0, breakFor: "Part 1 of the final Head of Household comp" },
     [Step.SocialFinale2]: { block: "Final 3: before Part 2", then: Step.FinaleHoh2, day: 0.35 },
-    [Step.FinaleHoh2]: { day: 0.35, breakFor: "Part 2 of the final Head of House comp" },
+    [Step.FinaleHoh2]: { day: 0.35, breakFor: "Part 2 of the final Head of Household comp" },
     [Step.SocialFinale3]: { block: "Final 3: before Part 3", then: Step.FinaleHoh3, day: 0.7 },
-    [Step.FinaleHoh3]: { day: 0.7, breakFor: "Part 3 of the final Head of House comp" },
+    [Step.FinaleHoh3]: { day: 0.7, breakFor: "Part 3 of the final Head of Household comp" },
     [Step.FinalTwo]: { breakFor: "finale night" },
 };
 

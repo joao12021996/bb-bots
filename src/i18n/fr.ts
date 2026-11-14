@@ -1,6 +1,6 @@
 // French. Keys are the English text exactly as written in the code (see i18n.ts). Anything missing stays in English.
 //
-// Words used throughout: Head of House → Chef de la maison, comp → épreuve, houseguest → colocataire,
+// Words used throughout: Head of Household → Chef de la maison, comp → épreuve, houseguest → colocataire,
 // nominee → nominé·e, eviction → expulsion, the block → la sellette.
 
 export const FR: { [english: string]: string } = {
@@ -157,7 +157,7 @@ export const FR: { [english: string]: string } = {
     "🃏 Memory Duel": "🃏 Duel de mémoire",
     "The final {hoh} is always the classic three parts.": "La finale du {hoh} se joue toujours en trois parties, comme d'habitude.",
     "Back to the usual rules": "Revenir aux règles habituelles",
-    "Head of House": "Chef de la maison",
+    "Head of Household": "Chef de la maison",
     Veto: "Veto",
     "Last Chance comp": "épreuve de la dernière chance",
 
@@ -168,9 +168,9 @@ export const FR: { [english: string]: string } = {
     "Extra Vote": "Vote supplémentaire",
     "Vote Nullifier": "Annulation de vote",
     "Audience Vote": "Vote du public",
-    "Secret Head of House": "Chef de la maison secret",
+    "Secret Head of Household": "Chef de la maison secret",
     "Battle Back": "Retour en jeu",
-    "On eviction night, the holder can dethrone the Head of House and name new nominees. Everyone will know.":
+    "On eviction night, the holder can dethrone the Head of Household and name new nominees. Everyone will know.":
         "Le soir de l'expulsion, son détenteur peut détrôner le Chef de la maison et nommer de nouveaux nominés. Tout le monde le saura.",
     "When the holder is nominated, they can play it to come off the block. Whoever nominated them picks again.":
         "Quand son détenteur est nominé, il peut la jouer pour quitter la sellette. Celui qui l'a nominé doit choisir quelqu'un d'autre.",
@@ -180,7 +180,7 @@ export const FR: { [english: string]: string } = {
     "The holder cancels one vote to evict the nominee of their choice.": "Son détenteur annule un vote contre le nominé de son choix.",
     "The audience hands out the secret powers to its favorites, and one week it names a nominee itself.":
         "Le public distribue les pouvoirs secrets à ses favoris, et une semaine il désigne lui-même un nominé.",
-    "One week, nobody knows who the Head of House is, or who nominated them.":
+    "One week, nobody knows who the Head of Household is, or who nominated them.":
         "Une semaine, personne ne sait qui est le Chef de la maison, ni qui l'a nominé.",
     "Right before the jury starts, every evicted houseguest plays one comp. The winner comes back into the house.":
         "Juste avant le début du jury, tous les colocataires expulsés jouent une épreuve. Le gagnant revient dans la maison.",
@@ -190,7 +190,7 @@ export const FR: { [english: string]: string } = {
     "Got it": "Compris",
     "Turn off tips": "Désactiver les conseils",
     "Welcome to the house!": "Bienvenue dans la maison !",
-    "Each week has the same rhythm: a competition crowns the Head of House, they nominate, the Veto can save someone, and the house votes one nominee out.":
+    "Each week has the same rhythm: a competition crowns the Head of Household, they nominate, the Veto can save someone, and the house votes one nominee out.":
         "Chaque semaine suit le même rythme : une épreuve désigne le Chef de la maison, qui nomine, le Veto peut sauver quelqu'un, et la maison vote pour expulser un nominé.",
     "Stay off the block, make friends, win when it counts, and get to the final two. Then the evicted houseguests on the jury pick the winner.":
         "Reste loin de la sellette, fais-toi des amis, gagne quand ça compte et atteins la finale à deux. Ensuite, les colocataires expulsés du jury choisissent le gagnant.",
@@ -213,16 +213,16 @@ export const FR: { [english: string]: string } = {
         "Les épreuves sont de vrais mini-jeux : ton score est ton résultat. Les bots jouent au même jeu, avec des scores qui dépendent de leur note Épreuves.",
     "Read the instructions on the next screen, then give it your best. If you lose, the social game can still keep you safe.":
         "Lis les instructions à l'écran suivant, puis donne tout. Si tu perds, le jeu social peut encore te sauver.",
-    "The Head of House is safe for the week and picks who goes on the block. Winning keeps you safe, but every nominee will remember it was you.":
+    "The Head of Household is safe for the week and picks who goes on the block. Winning keeps you safe, but every nominee will remember it was you.":
         "Le Chef de la maison est protégé pour la semaine et choisit qui passe sur la sellette. Gagner te protège, mais chaque nominé se souviendra que c'était toi.",
     "You can't win it two weeks in a row.": "Impossible de le remporter deux semaines de suite.",
-    "Visiting the Head of House": "Rendre visite au Chef de la maison",
-    "Before nominations, houseguests go up to the Head of House's room to plead their case. Going up can keep you off the block, especially if you two get along.":
+    "Visiting the Head of Household": "Rendre visite au Chef de la maison",
+    "Before nominations, houseguests go up to the Head of Household's room to plead their case. Going up can keep you off the block, especially if you two get along.":
         "Avant les nominations, les colocataires montent dans la chambre du Chef de la maison pour plaider leur cause. Y aller peut t'éviter la sellette, surtout si vous vous entendez bien.",
     "Offer a deal (your safety for theirs next week) if you need to. Just remember you'll be expected to keep it.":
         "Propose un marché (ta protection contre la sienne la semaine prochaine) si besoin. Souviens-toi juste qu'on attendra de toi que tu le respectes.",
     "Your room, your rules": "Ta chambre, tes règles",
-    "As Head of House, people come up to your room to make their case. Listen: who's scared tells you who's guilty.":
+    "As Head of Household, people come up to your room to make their case. Listen: who's scared tells you who's guilty.":
         "En tant que Chef de la maison, les autres montent dans ta chambre plaider leur cause. Écoute : ceux qui ont peur ont souvent quelque chose à se reprocher.",
     "Promising safety is free now and costly later. A broken promise is remembered by the whole house.":
         "Promettre la sécurité ne coûte rien maintenant, mais cher plus tard. Une promesse trahie, toute la maison s'en souvient.",
@@ -231,14 +231,14 @@ export const FR: { [english: string]: string } = {
         "Choisis qui passe sur la sellette. L'un d'eux risque de partir cette semaine, sauf si le Veto le sauve.",
     "Nominate a big threat and you might take them out, but miss and they'll come for you. Some HoHs nominate a 'pawn' they don't want gone, as cover.":
         "Nomine une grosse menace et tu pourrais l'éliminer, mais si tu la rates, elle viendra pour toi. Certains Chefs nominent un « pion » qu'ils ne veulent pas voir partir, pour brouiller les pistes.",
-    "The Head of House has named the nominees. If you're on the block, don't panic: win the Veto or win the votes.":
+    "The Head of Household has named the nominees. If you're on the block, don't panic: win the Veto or win the votes.":
         "Le Chef de la maison a désigné les nominés. Si tu es sur la sellette, pas de panique : gagne le Veto ou gagne les votes.",
     "If you're safe, think about who you'd rather see go, and who'd be grateful if you helped them stay.":
         "Si tu es en sécurité, réfléchis à qui tu préférerais voir partir, et qui te serait reconnaissant de l'aider à rester.",
     "The Veto": "Le Veto",
-    "The Head of House, the nominees and a few houseguests drawn at random play for the Veto. The winner can take a nominee off the block.":
+    "The Head of Household, the nominees and a few houseguests drawn at random play for the Veto. The winner can take a nominee off the block.":
         "Le Chef de la maison, les nominés et quelques colocataires tirés au sort jouent pour le Veto. Le gagnant peut retirer un nominé de la sellette.",
-    "Then the Head of House names a replacement, so using it always puts someone else in danger.":
+    "Then the Head of Household names a replacement, so using it always puts someone else in danger.":
         "Le Chef de la maison désigne alors un remplaçant : l'utiliser met donc toujours quelqu'un d'autre en danger.",
     "Using the Veto": "Utiliser le Veto",
     "Save a nominee, or keep the nominations the same. Saving an ally earns their loyalty. Saving someone the HoH wanted gone makes an enemy.":
@@ -257,12 +257,12 @@ export const FR: { [english: string]: string } = {
     "If you promised someone your vote, breaking that promise is a backstab they won't forget.":
         "Si tu as promis ton vote à quelqu'un, revenir sur ta parole est une trahison qu'il n'oubliera pas.",
     "Eviction night": "Soirée d'expulsion",
-    "The house votes and the nominee with the most votes leaves. If it ties, the Head of House breaks the tie.":
+    "The house votes and the nominee with the most votes leaves. If it ties, the Head of Household breaks the tie.":
         "La maison vote et le nominé qui a le plus de voix s'en va. En cas d'égalité, le Chef de la maison tranche.",
     "Later in the season, evicted houseguests join the jury. Keep them happy: they decide the winner.":
         "Plus tard dans la saison, les colocataires expulsés rejoignent le jury. Ménage-les : ce sont eux qui désignent le gagnant.",
     "The final three": "Les trois finalistes",
-    "The final Head of House is played in three parts. The winner of Part 3 takes one person to the final two and evicts the other.":
+    "The final Head of Household is played in three parts. The winner of Part 3 takes one person to the final two and evicts the other.":
         "Le dernier Chef de la maison se joue en trois parties. Le gagnant de la partie 3 emmène une personne en finale et expulse l'autre.",
     "Who you take matters: the jury is more likely to vote for whoever played the better game.":
         "Ton choix compte : le jury vote plus volontiers pour celui qui a le mieux joué.",

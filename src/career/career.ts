@@ -47,7 +47,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     { id: "snake", emoji: "🐍", title: "Snake in the Grass", how: "Win a season without winning a single comp.", check: (s) => s.won && comps(s) === 0 },
     { id: "unanimous", emoji: "💯", title: "Unanimous", how: "Win with every jury vote.", check: (s) => s.won && s.juryVotesTotal > 2 && s.juryVotesFor === s.juryVotesTotal },
     { id: "comp-beast", emoji: "💪", title: "Comp Beast", how: "Win 5 comps in one season.", check: (s) => comps(s) >= 5 },
-    { id: "hoh-3", emoji: "👑", title: "Head Honcho", how: `Win Head of House 3 times in one season.`, check: (s) => s.hohWins >= 3 },
+    { id: "hoh-3", emoji: "👑", title: "Head Honcho", how: `Win Head of Household 3 times in one season.`, check: (s) => s.hohWins >= 3 },
     { id: "veto-3", emoji: "🛡️", title: "Veto King", how: "Win the Veto 3 times in one season.", check: (s) => s.vetoWins >= 3 },
     { id: "survivor", emoji: "🧗", title: "Cockroach", how: "Survive the block 4 times in one season.", check: (s) => s.survivedBlock >= 4 },
     { id: "floater", emoji: "🎈", title: "Floater", how: "Make the final four without winning a comp or ever being nominated.", check: (s) => s.placement <= 4 && comps(s) === 0 && s.nominated === 0 },

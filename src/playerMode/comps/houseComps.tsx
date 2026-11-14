@@ -177,7 +177,7 @@ export function makeFacts(gs: GameState, rand: Rand, history: WeekRecord[] = [])
     const gens: (() => Fact | null)[] = [
         () => {
             const a = pick(rand, former);
-            return { text: `${a.name} won Head of House at least once.`, truth: a.hohWins > 0 };
+            return { text: `${a.name} won Head of Household at least once.`, truth: a.hohWins > 0 };
         },
         () => {
             const a = pick(rand, former);

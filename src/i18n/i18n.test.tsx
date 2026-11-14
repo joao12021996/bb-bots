@@ -89,15 +89,15 @@ describe("renaming", () => {
         installRenamer();
         let setText: (s: string) => void = () => undefined;
         function Screen() {
-            const [text, set] = React.useState("The Head of House nominates two houseguests. The HoH's veto is a Veto.");
+            const [text, set] = React.useState("The Head of Household nominates two houseguests. The HoH's veto is a Veto.");
             setText = set;
             return (
                 <div>
                     <p id="line">{text}</p>
-                    <button title="Head of House room">x</button>
-                    <input id="field" defaultValue="Head of House" />
+                    <button title="Head of Household room">x</button>
+                    <input id="field" defaultValue="Head of Household" />
                     <div data-bbb-raw>
-                        <span id="raw">Head of House</span>
+                        <span id="raw">Head of Household</span>
                     </div>
                 </div>
             );
@@ -106,12 +106,12 @@ describe("renaming", () => {
         const line = () => el.querySelector("#line")!.textContent;
         expect(renameCount()).toBe(0);
 
-        act(() => names$.next({ terms: { "Head of House": "Leader of the House", HoH: "LoH", Houseguest: "Player" }, custom: [{ from: "veto", to: "golden key" }] }));
+        act(() => names$.next({ terms: { "Head of Household": "Leader of the House", HoH: "LoH", Houseguest: "Player" }, custom: [{ from: "veto", to: "golden key" }] }));
         await flush();
         expect(line()).toBe("The Leader of the House nominates two players. The LoH's golden key is a Golden key.");
         expect(el.querySelector("button")!.getAttribute("title")).toBe("Leader of the House room");
-        expect((el.querySelector("#field") as HTMLInputElement).value).toBe("Head of House");
-        expect(el.querySelector("#raw")!.textContent).toBe("Head of House");
+        expect((el.querySelector("#field") as HTMLInputElement).value).toBe("Head of Household");
+        expect(el.querySelector("#raw")!.textContent).toBe("Head of Household");
         expect(renameCount()).toBe(4);
 
         // the screen changes its text: the new text is renamed too
@@ -123,14 +123,14 @@ describe("renaming", () => {
         act(() => resetNames());
         await flush();
         expect(line()).toBe("A Houseguest became HoH.");
-        expect(el.querySelector("button")!.getAttribute("title")).toBe("Head of House room");
+        expect(el.querySelector("button")!.getAttribute("title")).toBe("Head of Household room");
     });
 
     it("renames the French words when the game is in French", async () => {
         installRenamer();
         act(() => setLanguage("fr"));
         const el = mount(<p>Le Chef de la maison nomine.</p>);
-        act(() => names$.next({ terms: { "Head of House": "Boss" }, custom: [] }));
+        act(() => names$.next({ terms: { "Head of Household": "Boss" }, custom: [] }));
         await flush();
         expect(el.textContent).toBe("Le Boss nomine.");
     });
@@ -139,14 +139,14 @@ describe("renaming", () => {
         installRenamer();
         mount(<NamesDialog onClose={() => undefined} />);
         const dialog = document.querySelector(".bbb-names") as HTMLElement;
-        const input = dialog.querySelector("input[placeholder='Head of House']") as HTMLInputElement;
+        const input = dialog.querySelector("input[placeholder='Head of Household']") as HTMLInputElement;
         const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
         act(() => {
             setter.call(input, "Boss");
             input.dispatchEvent(new Event("input", { bubbles: true }));
         });
         await flush();
-        expect(names$.value.terms["Head of House"]).toBe("Boss");
-        expect(dialog.textContent).toContain("Head of House");
+        expect(names$.value.terms["Head of Household"]).toBe("Boss");
+        expect(dialog.textContent).toContain("Head of Household");
     });
 });

@@ -146,7 +146,7 @@ export function TiebreakResults(props: {
     tied: Houseguest[];
     guesses: TiebreakGuess[];
     winnerId?: number; // none: still tied, and the closest go to another question
-    sealed?: boolean; // a secret Head of House week: nobody sees who won
+    sealed?: boolean; // a secret Head of Household week: nobody sees who won
     humanIds: number[];
     onDone: () => void;
 }) {

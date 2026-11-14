@@ -82,7 +82,7 @@ describe("comp runner screens", () => {
         await act(async () => {
             ReactDOM.render(
                 <CompPlay
-                    title="Head of House Competition"
+                    title="Head of Household Competition"
                     comp={ALL_COMPS[1]}
                     participants={participants}
                     player={participants[0]}
@@ -102,7 +102,7 @@ describe("comp runner screens", () => {
         await act(async () => {
             ReactDOM.render(
                 <CompResults
-                    title="Head of House Competition"
+                    title="Head of Household Competition"
                     comp={ALL_COMPS[0]}
                     participants={participants}
                     humanIds={[participants[2].id]}

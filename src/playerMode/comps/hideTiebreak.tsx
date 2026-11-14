@@ -94,7 +94,7 @@ export function HideTiebreakResults(props: {
     tied: Houseguest[];
     hides: VetoHide[];
     winnerId?: number; // none: still tied, and they hide again
-    sealed?: boolean; // a secret Head of House week: nobody sees who won
+    sealed?: boolean; // a secret Head of Household week: nobody sees who won
     humanIds: number[];
     onDone: () => void;
 }) {

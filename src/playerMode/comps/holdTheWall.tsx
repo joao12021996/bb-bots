@@ -244,7 +244,7 @@ export const HoldTheWallComp: CompDefinition = {
     kind: "endurance",
     rules: `Endurance! You're hanging on a swaying wall. Gusts push you around and get stronger over time. Hold the lean buttons to stay in the green. The last one on the wall wins. If you last ${
         LIMIT / 60
-    } minutes, you've done all you can. In a Head of House comp, deals get made on the wall: "drop and you're safe this week".`,
+    } minutes, you've done all you can. In a Head of Household comp, deals get made on the wall: "drop and you're safe this week".`,
     maxSeconds: LIMIT,
     Component: HoldTheWall,
     simulate: simulateHoldTheWall,

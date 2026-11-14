@@ -145,7 +145,7 @@ describe("player mode screens", () => {
         const links = c.querySelectorAll(".bbb-tutorial-toc a");
         expect(links.length).toBe(sections.length);
         sections.forEach((sec) => expect(c.querySelector(`a[href="#${sec.id}"]`)).not.toBeNull());
-        expect(c.textContent).toContain("Head of House");
+        expect(c.textContent).toContain("Head of Household");
         expect(c.textContent).not.toMatch(/Big Brother|BB /);
     });
 
@@ -214,7 +214,7 @@ describe("player mode screens", () => {
         expect(controller.alliancesOf(0).length).toBe(before); // nobody started a new one
     });
 
-    it("a secret Head of House comp is played blind: nobody else's score, and no deals on the wall", () => {
+    it("a secret Head of Household comp is played blind: nobody else's score, and no deals on the wall", () => {
         const { compById } = require("../comps");
         const wall = compById("hold-the-wall");
         const play = (secret: boolean) => {
@@ -224,7 +224,7 @@ describe("player mode screens", () => {
             controller.state.step = Step.Hoh;
             controller.state.week.secretHoh = secret;
             const everyone = [0, 1, 2, 3, 4, 5, 6].map((id) => controller.player(id));
-            (controller as any).runComp("Head of House Competition", wall, everyone, () => undefined, "hoh");
+            (controller as any).runComp("Head of Household Competition", wall, everyone, () => undefined, "hoh");
             let p = prompt as unknown as Prompt;
             if (p.kind === "handoff") {
                 p.next();
@@ -550,7 +550,7 @@ describe("player mode screens", () => {
         controller.state.week.hohId = 1;
         const c = mount(<AllianceScreen controller={controller} blockName="Before nominations" />);
         expect(c.textContent).toContain("The Vault");
-        expect(c.textContent).toContain("HG1 won Head of House and wants your alliance's help");
+        expect(c.textContent).toContain("HG1 won Head of Household and wants your alliance's help");
         expect(c.textContent).toMatch(/HG1 (wants to go after|has no one in mind)/);
         // pick a target and suggest it
         const outsider = Array.from(c.querySelectorAll("button")).find((b) => b.textContent === "HG5")!;
@@ -613,7 +613,7 @@ describe("player mode screens", () => {
     it("HoH room: a player goes up to pitch a nominee, or stays downstairs", () => {
         const controller = controllerInHohRoom(2);
         const c = mount(<HohVisitScreen controller={controller} actorId={0} />);
-        expect(c.textContent).toContain("HG2 is Head of House");
+        expect(c.textContent).toContain("HG2 is Head of Household");
         click(c, "Pitch a nominee");
         act(() => Array.from(c.querySelectorAll("button")).find((b) => (b.textContent || "").startsWith("HG5"))!.click());
         expect(c.textContent).toContain("Why should HG2 nominate HG5?");
@@ -1114,7 +1114,7 @@ describe("player mode screens", () => {
         const bots = [1, 2, 3].map((id) => controller.player(id));
         const sealed = mount(
             <CompResults
-                title="Head of House Competition"
+                title="Head of Household Competition"
                 comp={FactOrFictionComp}
                 participants={bots}
                 humanIds={[0]}
@@ -1246,7 +1246,7 @@ describe("guided seasons", () => {
         expect((prompt as unknown as Prompt).kind).toBe("gameOver");
         expect(shown[0]).toBe("Welcome to the house!");
         expect(new Set(shown).size).toBe(shown.length); // never twice
-        ["Social time", "Head of House", "Nominations", "The Veto", "Eviction night", "Facing the jury"].forEach((t) => expect(shown).toContain(t));
+        ["Social time", "Head of Household", "Nominations", "The Veto", "Eviction night", "Facing the jury"].forEach((t) => expect(shown).toContain(t));
         expect(controller.state.tipsSeen!.length).toBe(shown.length);
 
         // turned off: no more tips, and it stays off

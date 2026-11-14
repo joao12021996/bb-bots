@@ -4,7 +4,7 @@
 export const SHOW_NAME = "The Houseguests";
 export const APP_NAME = "Houseguest Bots";
 
-export const HOH = "Head of House"; // abbreviated "HoH"
+export const HOH = "Head of Household"; // abbreviated "HoH"
 export const VETO = "Veto";
 export const LAST_CHANCE = "Last Chance comp"; // three nominees play it after the veto; the winner comes off the block
 
@@ -16,6 +16,6 @@ export const POWER_NAMES = {
     extraVote: "Extra Vote",
     nullifier: "Vote Nullifier",
     audience: "Audience Vote",
-    secretHoh: "Secret Head of House",
+    secretHoh: "Secret Head of Household",
     battleBack: "Battle Back",
 };

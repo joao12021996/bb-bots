@@ -3,7 +3,7 @@ import { prefSubject } from "../prefs/prefs";
 import { APP_NAME, HOH, LAST_CHANCE, POWER_NAMES, SHOW_NAME, VETO } from "../playerMode/terms";
 import { language$, t } from "./i18n";
 
-// Renaming: the player's own words for the game's terms ("Head of House" -> "Leader of the House", "HoH" -> "LoH").
+// Renaming: the player's own words for the game's terms ("Head of Household" -> "Leader of the House", "HoH" -> "LoH").
 // Works on the page itself, so it reaches every screen, including text the bots write, without each screen
 // knowing about it. What is typed into text fields is never changed, nor anything inside [data-bbb-raw].
 
@@ -20,6 +20,17 @@ export const RENAMEABLE: { group: string; terms: string[] }[] = [
 ];
 
 export const names$: BehaviorSubject<Names> = prefSubject<Names>("names", { terms: {}, custom: [] });
+
+// The game used to say "Head of House": a word saved for it carries over to "Head of Household".
+(() => {
+    const terms = (names$.value && names$.value.terms) || {};
+    const old = terms["Head of House"];
+    if (old === undefined) return;
+    const next = { ...terms };
+    delete next["Head of House"];
+    if (next[HOH] === undefined) next[HOH] = old;
+    names$.next({ ...names$.value, terms: next });
+})();
 
 export function resetNames() {
     names$.next({ terms: {}, custom: [] });

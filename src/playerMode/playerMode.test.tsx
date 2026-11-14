@@ -334,7 +334,7 @@ describe("finale montage", () => {
         expect(m.map((x: any) => x.week)).toEqual([...m.map((x: any) => x.week)].sort((a: number, b: number) => a - b));
         expect(m.map((x: any) => x.emoji)).toEqual(["👑", "🛡️", "🎯", "🎬", "💣"]);
         expect(m.find((x: any) => x.emoji === "🎯").text).toContain("by a whisker");
-        expect(montageLines(gs, history, moves, 0)[1]).toMatch(/^👑 Week 1: Won Head of House, and sent .+ packing\.$/);
+        expect(montageLines(gs, history, moves, 0)[1]).toMatch(/^👑 Week 1: Won Head of Household, and sent .+ packing\.$/);
         expect(montageLines(gs, [], [], 3)[0]).toContain("kept their head down");
     });
 });
@@ -1805,7 +1805,7 @@ describe("deals during endurance", () => {
     it("offers deals on the wall only in an endurance HoH comp", () => {
         const { play } = atTheWall(0, 1);
         expect(play.comp.id).toBe(HoldTheWallComp.id);
-        expect(play.title).toBe("Head of House Competition");
+        expect(play.title).toBe("Head of Household Competition");
         expect(play.deals).toBeDefined();
     });
 
@@ -3250,7 +3250,7 @@ describe("secret powers", () => {
         expect(getById(gs, 2).isEvicted).toBe(false);
     });
 
-    it("Secret Head of House: only the HoH knows who it is; results are sealed", () => {
+    it("Secret Head of Household: only the HoH knows who it is; results are sealed", () => {
         const { controller } = withPowers([]);
         controller.state.week.secretHoh = true;
         controller.state.week.hohId = 3;
@@ -3323,7 +3323,7 @@ describe("live feed, host and difficulty", () => {
         const last = { week: 1, hohId: 3, nomineeIds: [1, 2], povId: 4, evictedIds: [1] };
         const lines = previouslyOn(gs, last, []);
         expect(lines[0]).toContain("Previously on The Houseguests");
-        expect(lines.join(" ")).toContain("HG3 won Head of House");
+        expect(lines.join(" ")).toContain("HG3 won Head of Household");
         expect(lines.join(" ")).toContain("HG1 walked out the door");
         expect(previouslyOn(gs, last, [], "HG3").join(" ")).toContain("it was HG3");
     });
@@ -3424,7 +3424,7 @@ describe("veto and alliance rules", () => {
         expect(noms5.map((h: any) => h.id)).not.toContain(a5.id);
     });
 
-    it("the Head of House can't be an alliance's target for the rest of their week", () => {
+    it("the Head of Household can't be an alliance's target for the rest of their week", () => {
         const c = playUntil(8, (x) => x.state.step === Step.SocialAfternoon && x.state.week.hohId !== undefined);
         expect(c.state.step).toBe(Step.SocialAfternoon);
         expect(c.targetExclude()).toEqual([c.state.week.hohId]);

@@ -42,7 +42,7 @@ export function rankResults(results: CompResult[], _humanIds: number[] = []): Co
 }
 
 interface CompPlayProps {
-    title: string; // e.g. "Head of House Competition"
+    title: string; // e.g. "Head of Household Competition"
     comp: CompDefinition;
     participants: Houseguest[];
     player: Houseguest; // who is playing now
@@ -332,7 +332,7 @@ interface CompResultsProps {
     results: CompResult[];
     tiedIds?: number[]; // tied for first, with a player among them: a tiebreaker question decides the winner
     spectating?: boolean; // nobody watching is in it: reveal the standings from last place up
-    sealed?: boolean; // a secret Head of House week: nobody sees who won
+    sealed?: boolean; // a secret Head of Household week: nobody sees who won
     onDone: (winnerId: number) => void;
 }
 
@@ -342,7 +342,7 @@ export function CompResults(props: CompResultsProps) {
     return props.spectating ? <Spectate {...props} /> : <Standings {...props} />;
 }
 
-// A secret Head of House week: the results are sealed. Only a lone player who won gets to know.
+// A secret Head of Household week: the results are sealed. Only a lone player who won gets to know.
 function Sealed(props: CompResultsProps) {
     const ranked = rankResults(props.results, props.humanIds);
     const top = ranked[0];

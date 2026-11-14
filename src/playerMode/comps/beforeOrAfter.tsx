@@ -35,7 +35,7 @@ export function buildQuiz(gs: GameState, history: WeekRecord[], rand: Rand): Que
     history.forEach((w) => {
         if (w.hohId !== undefined) {
             qs.push({
-                prompt: `Who won Head of House on ${dayLabel(gs, w.week, DAY_PART.hoh)}?`,
+                prompt: `Who won Head of Household on ${dayLabel(gs, w.week, DAY_PART.hoh)}?`,
                 options: faceOptions(gs, getById(gs, w.hohId), rand),
                 answer: `${w.hohId}`,
             });

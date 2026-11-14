@@ -174,7 +174,7 @@ export function generateEvictionScene(
         ? "By a unanimous vote..."
         : `By a vote of ${listVotes(voteCounts.map((v) => `${v}`))}...`;
 
-    const compWinner = options.tieBreaker ? options.tieBreaker.text : "current Head of House";
+    const compWinner = options.tieBreaker ? options.tieBreaker.text : "current Head of Household";
     const soleVoteText = `${
         tieBreakerHg!.name
     }, as ${compWinner}, you must cast the sole vote to ${options.votingTo.toLowerCase()}.`;

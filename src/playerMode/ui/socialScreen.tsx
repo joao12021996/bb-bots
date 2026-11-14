@@ -437,7 +437,7 @@ export function SocialScreen(props: SocialScreenProps) {
             {controller.multiplayer && !session && <Subtle>{human.name}'s turn</Subtle>}
             {session && mode.kind !== "player" && <TextsBanner session={session} me={me} onOpen={(id) => setMode({ kind: "player", id })} />}
             <Subtle>
-                {controller.state.step === Step.SocialMorning ? "Social time (alliances meet once the Head of House is known)." : "Social time, then alliance time."} Bots who like you are less likely to nominate you or vote you out, and more
+                {controller.state.step === Step.SocialMorning ? "Social time (alliances meet once the Head of Household is known)." : "Social time, then alliance time."} Bots who like you are less likely to nominate you or vote you out, and more
                 likely to vote for you to win.
             </Subtle>
             <NewsList news={news} />

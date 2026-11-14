@@ -453,7 +453,7 @@ function HostSettings(props: { session: NetSession; status: NetStatus }) {
                 </div>
                 <small className="bbb-subtle">
                     {(setup.paceHours || 0) > 0
-                        ? "Real time: a break before each comp and each eviction (Head of House one day, Veto the next…). If every player votes to move on, the next part starts right away. The host's device runs the clock, so keep this tab open, or come back to it."
+                        ? "Real time: a break before each comp and each eviction (Head of Household one day, Veto the next…). If every player votes to move on, the next part starts right away. The host's device runs the clock, so keep this tab open, or come back to it."
                         : "Live: play straight through in one sitting."}
                 </small>
             </div>

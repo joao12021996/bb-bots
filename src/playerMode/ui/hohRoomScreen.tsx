@@ -295,7 +295,7 @@ export function HohVisitScreen(props: HohRoomProps) {
             <div>
                 {hohFace}
                 <Subtle>
-                    {hoh.name} is Head of House and is taking one-on-ones before nominations. Do you go up? A
+                    {hoh.name} is Head of Household and is taking one-on-ones before nominations. Do you go up? A
                     good pitch can keep you off the block. A bad one can put you on {hoh.name}'s radar.
                 </Subtle>
                 {room.promised.includes(me.id) && (

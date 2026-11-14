@@ -120,7 +120,7 @@ export function generateNomCeremonyScene(
     const weI = coHoH ? "We" : "I";
     const finalStatement = `${weI} have nominated you, ${listNames(noms.map((n) => n.name))} for eviction. `;
     const myOur = coHoH ? "our" : "my";
-    const theHoH = coHoH ? "Heads of House" : "the Head of House";
+    const theHoH = coHoH ? "Heads of House" : "the Head of Household";
     const firstText = coHoH ? `${HoH.name} has nominated...` : "My first nominee is...";
     const secondText = coHoH ? `${coHoH.name} has nominated...` : "My second nominee is...";
     const scene = new Scene({

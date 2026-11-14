@@ -47,7 +47,7 @@ export function diaryEntries(w: DiaryWeek): DiaryEntry[] {
     const hohId = rec ? rec.hohId : undefined;
     const voteCount = (id: number) => Object.values(w.votes).filter((v) => v === id).length;
     const totalVotes = Object.keys(w.votes).length;
-    // who talks: every player who was in the house this week, the Head of House, and whoever went home
+    // who talks: every player who was in the house this week, the Head of Household, and whoever went home
     const talkers = new Set<number>();
     w.playerIds.forEach((id) => {
         const hg = getById(gs, id);
