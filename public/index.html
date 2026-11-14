@@ -13,9 +13,55 @@
             rel="stylesheet"
         />
         <title>Houseguest Bots</title>
+        <!-- Ads (Ezoic, same setup as Find Donald), only on spotlegame.co.uk: not on GitHub Pages or in development.
+             Inserted in order (async = false) so the consent manager loads before the ad script. -->
+        <script>
+            window.bbbAds = /(^|\.)spotlegame\.co\.uk$/.test(location.hostname);
+            window.ezstandalone = window.ezstandalone || {};
+            ezstandalone.cmd = ezstandalone.cmd || [];
+            if (window.bbbAds) {
+                document.documentElement.classList.add("bbb-ads");
+                [
+                    ["https://cmp.gatekeeperconsent.com/min.js", true],
+                    ["https://the.gatekeeperconsent.com/cmp.min.js", true],
+                    ["https://www.ezojs.com/ezoic/sa.min.js", false],
+                    ["https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2446576727143381", false],
+                ].forEach(function (src) {
+                    var s = document.createElement("script");
+                    s.src = src[0];
+                    s.async = !src[1];
+                    if (src[1]) s.setAttribute("data-cfasync", "false");
+                    if (src[0].indexOf("adsbygoogle") >= 0) s.crossOrigin = "anonymous";
+                    document.head.appendChild(s);
+                });
+            }
+        </script>
+        <style>
+            /* Sidebar ads in the margins, left (110) and right (111), on screens wide enough for them; the game
+               keeps the middle. Fixed, so they stay put while the page scrolls. */
+            .bbb-ad-rail { display: none; }
+            @media (min-width: 1100px) {
+                html.bbb-ads .bbb-ad-rail {
+                    display: block; position: fixed; top: 12px; width: 160px; max-height: calc(100vh - 24px);
+                    overflow: hidden; z-index: 5; text-align: center;
+                }
+                html.bbb-ads #ezoic-pub-ad-placeholder-110 { left: 8px; }
+                html.bbb-ads #ezoic-pub-ad-placeholder-111 { right: 8px; }
+                html.bbb-ads #root { margin: 0 176px; }
+            }
+            @media (min-width: 1500px) {
+                html.bbb-ads .bbb-ad-rail { width: 300px; }
+                html.bbb-ads #root { margin: 0 316px; }
+            }
+        </style>
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
+        <div class="bbb-ad-rail" id="ezoic-pub-ad-placeholder-110"></div>
+        <div class="bbb-ad-rail" id="ezoic-pub-ad-placeholder-111"></div>
+        <script>
+            if (window.bbbAds) ezstandalone.cmd.push(function () { ezstandalone.showAds(110, 111); });
+        </script>
         <div id="root">
             <div style="min-height: 90vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #a9a3c7; font-family: system-ui, sans-serif">
                 <div style="font-size: 48px; animation: bbb-boot 1.4s ease-in-out infinite">👁️</div>
