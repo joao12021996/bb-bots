@@ -34,7 +34,11 @@ export const FR: { [english: string]: string } = {
         "Compose un casting, ajoute des rebondissements et regarde les bots comploter, s'affronter et s'éliminer, ou installe-toi dans la maison et essaie de tenir plus longtemps qu'eux.",
     "How to play": "Comment jouer",
     "Watch the bots": "Regarder les bots",
-    "Every houseguest is a bot. Step through the season week by week.": "Tous les colocataires sont des bots. Suis la saison semaine après semaine.",
+    "Every houseguest is a bot. Watch them socialize, scheme and compete, and see everything they do behind the scenes.":
+        "Tous les colocataires sont des bots. Regarde-les sociabiliser, comploter et s'affronter, et vois tout ce qu'ils font en coulisses.",
+    "Classic (with twists)": "Classique (avec rebondissements)",
+    "The original quick simulator: step through the season week by week, with the twists from the season editor.":
+        "Le simulateur rapide d'origine : suis la saison semaine après semaine, avec les rebondissements de l'éditeur de saison.",
     "Start Game": "Lancer la partie",
     "Deal a cast": "Tirer un casting",
     "Play as a houseguest": "Jouer un colocataire",

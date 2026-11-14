@@ -144,7 +144,8 @@ export function feelingLabel(relationship: number): { label: string; emoji: stri
 export function botSocialTime(
     gs: MutableGameState,
     humanIds: number[],
-    traits?: (id: number) => { chats: number; scheming: number }
+    traits?: (id: number) => { chats: number; scheming: number },
+    log?: (line: string) => void // watching the bots: what each one did
 ): void {
     const everyone = nonEvictedHouseguests(gs);
     const bots = everyone.filter((hg) => !humanIds.includes(hg.id));
@@ -159,6 +160,8 @@ export function botSocialTime(
             if (others.length === 0) break;
             const other = others[rng().randomInt(0, others.length - 1)];
             shiftRelationship(gs, bot.id, other.id, 0.03 * sf * (0.5 + rand()));
+            // no dice here: watching never changes how the season goes
+            if (log) log(`💬 ${bot.name} and ${other.name} ${HANGOUTS[(bot.id * 7 + other.id * 3 + gs.phase + k) % HANGOUTS.length]}.`);
         }
         // scheming: try to turn a friend against this bot's top target
         if (rand() < (social / 20) * t.scheming && bot.hitList.length > 0) {
@@ -169,11 +172,23 @@ export function botSocialTime(
             const friend = friends[0];
             if (friend && getById(gs, target) && !getById(gs, target).isEvicted) {
                 shiftRelationship(gs, friend.id, target, -0.05 * sf);
+                if (log) log(`🐍 ${bot.name} worked on ${friend.name}, trying to turn them against ${getById(gs, target).name}.`);
             }
         }
     });
     houseDrift(gs, humanIds);
 }
+
+// where bots hang out (watching the bots)
+const HANGOUTS = [
+    "hung out by the pool",
+    "talked for an hour in the kitchen",
+    "whispered on the hammock",
+    "worked out together in the backyard",
+    "caught up in the bedroom",
+    "played cards at the table",
+    "talked about life back home",
+];
 
 const CHAT_LINES = [
     "came by to chat about life back home.",

@@ -1168,6 +1168,40 @@ input[type="number"] {
     opacity: 0.5;
 }
 /* ---------- memory wall ---------- */
+.bbb-inside {
+    padding: 8px 12px 12px;
+    text-align: left;
+    font-size: 0.92rem;
+}
+.bbb-inside section + section {
+    margin-top: 10px;
+}
+.bbb-inside h4 {
+    font-weight: 700;
+    margin: 0 0 4px;
+}
+.bbb-inside p {
+    margin: 0 0 3px;
+}
+.bbb-inside-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+    gap: 6px;
+}
+.bbb-inside-hg {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.bbb-inside-hg img {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: none;
+}
 .bbb-mwall-box {
     max-width: 900px;
     margin: 0 auto 10px;

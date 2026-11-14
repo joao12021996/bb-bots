@@ -11,7 +11,7 @@ import { castFromUrl } from "../../cartoon/castCode";
 import { EditRelationshipsScreen } from "../editRelationshipsScreen/editRelationshipScreen";
 import { Tribe } from "../../model/tribe";
 import { selectPlayer } from "../playerPortrait/selectedPortrait";
-import { PlayerSetup, resumeSavedSeason } from "../../playerMode/ui/playerSetup";
+import { PlayerSetup, resumeSavedSeason, watchBots } from "../../playerMode/ui/playerSetup";
 import { CompTestMode } from "../../playerMode/ui/compTestMode";
 import { hasSave, readOnlineSave } from "../../playerMode/save/serialize";
 import { HostOnlineButton, joinCodeFromUrl, PublicGames, showJoinScreen } from "../../playerMode/ui/onlineLobby";
@@ -85,8 +85,21 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                 <div className="bbb-modes">
                     <div className="bbb-mode-card">
                         <h3>📺 {t("Watch the bots")}</h3>
-                        <p>{t("Every houseguest is a bot. Step through the season week by week.")}</p>
-                        {props.cast.length > 0 ? (
+                        <p>{t("Every houseguest is a bot. Watch them socialize, scheme and compete, and see everything they do behind the scenes.")}</p>
+                        {props.cast.length >= 4 ? (
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                <button className="button is-primary" onClick={() => watchBots()}>
+                                    {t("Start Game")}
+                                </button>
+                                <button
+                                    className="button is-light"
+                                    title={t("The original quick simulator: step through the season week by week, with the twists from the season editor.")}
+                                    onClick={() => switchSceneRelative(1)}
+                                >
+                                    {t("Classic (with twists)")}
+                                </button>
+                            </div>
+                        ) : props.cast.length > 0 ? (
                             <button className="button is-primary" onClick={() => switchSceneRelative(1)}>
                                 {t("Start Game")}
                             </button>

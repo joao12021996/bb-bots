@@ -17,6 +17,7 @@ import { HohRoomScreen, HohVisitScreen } from "./hohRoomScreen";
 import { SpeechPrompt } from "./speechPrompt";
 import { JuryQuestionPrompt, JuryReveal, OwnMovesPrompt } from "./finaleScreens";
 import { HouseWall } from "./houseWall";
+import { InsideHouse } from "./insideHouse";
 import { LiveFeed } from "./liveFeed";
 import { TiebreakPlay, TiebreakResults } from "../comps/tiebreaker";
 import { HideTiebreakPlay, HideTiebreakResults } from "../comps/hideTiebreak";
@@ -79,6 +80,7 @@ function saveWallOpen(open: boolean) {
 
 interface State {
     wallOpen?: boolean;
+    insideOpen?: boolean; // watching the bots: the Inside the house panel
     tip?: Tip | null; // guided seasons: the coach's tip for the screen that's up
     prompt: Prompt | null;
     personal: { [playerId: number]: Prompt }; // online: players' own screens
@@ -664,6 +666,14 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                             🧱 House wall {this.state.wallOpen ?? loadWallOpen() ? "▾" : "▸"}
                         </button>
                         {(this.state.wallOpen ?? loadWallOpen()) && <HouseWall controller={controller} />}
+                    </div>
+                )}
+                {controller.watching && !["handoff", "gameOver"].includes(chrome) && (
+                    <div className="bbb-mwall-box">
+                        <button type="button" className="bbb-mwall-toggle" onClick={() => this.setState({ insideOpen: !(this.state.insideOpen ?? true) })}>
+                            🔍 Inside the house {this.state.insideOpen ?? true ? "▾" : "▸"}
+                        </button>
+                        {(this.state.insideOpen ?? true) && <InsideHouse controller={controller} />}
                     </div>
                 )}
                 {session && session.localPlayerId !== null && controller.isRuleBreaker(session.localPlayerId) && (

@@ -2,6 +2,7 @@ import { GameState, getById, getSocial, Houseguest, MutableGameState, nonEvicted
 import { GoldenVeto } from "../../components/episode/veto/veto";
 import { castEvictionVote, HouseguestWithLogic } from "../../utils/ai/aiApi";
 import { rng } from "../../utils";
+import { listNames } from "../../utils/listStrings";
 import { shiftRelationship, socialFactor } from "./relationships";
 
 // Alliances: named groups of houseguests (bots and players) who agree on targets and protect each other.
@@ -604,7 +605,7 @@ export function botAcceptsInvite(gs: GameState, book: AllianceBook, bot: Housegu
 
 // Bots work the house: social bots start alliances with their friends, or bring friends into one.
 // Invitations to players are returned so the player can answer them.
-export function botAllianceTime(gs: MutableGameState, book: AllianceBook, humanIds: number[]): BotInvite[] {
+export function botAllianceTime(gs: MutableGameState, book: AllianceBook, humanIds: number[], log?: (line: string) => void): BotInvite[] {
     const invites: BotInvite[] = [];
     const everyone = nonEvictedHouseguests(gs);
     const maxSize = botAllianceCap(gs);
@@ -626,7 +627,10 @@ export function botAllianceTime(gs: MutableGameState, book: AllianceBook, humanI
                 const friend = friends.find((f) => !a.memberIds.includes(f.id));
                 if (!friend) return;
                 if (humanIds.includes(friend.id)) invites.push({ fromId: bot.id, toId: friend.id, allianceId: a.id, name: a.name });
-                else if (rand() < pAccept(gs, book, friend, a.memberIds)) addMember(gs, a, friend.id);
+                else if (rand() < pAccept(gs, book, friend, a.memberIds)) {
+                    addMember(gs, a, friend.id);
+                    if (log) log(`➕ ${bot.name} brought ${friend.name} into ${a.name}.`);
+                } else if (log) log(`🙅 ${friend.name} turned down ${bot.name}'s invitation to join ${a.name}.`);
                 return;
             }
             if (mine.length >= 2) return;
@@ -636,6 +640,9 @@ export function botAllianceTime(gs: MutableGameState, book: AllianceBook, humanI
             const humans = invitees.filter((f) => humanIds.includes(f.id));
             let alliance: Alliance | undefined;
             if (bots.length > 0) alliance = createAlliance(gs, book, [bot.id, ...bots.map((b) => b.id)], randomAllianceName(book));
+            if (log && alliance) log(`🤝 ${bot.name} started a new alliance, ${alliance.name}, with ${listNames(bots.map((b) => b.name))}.`);
+            if (log && !alliance && humans.length === 0 && invitees.length > 0)
+                log(`🙅 ${bot.name} pitched an alliance to ${listNames(invitees.map((b) => b.name))}, and got turned down.`);
             humans.forEach((h) =>
                 invites.push({
                     fromId: bot.id,

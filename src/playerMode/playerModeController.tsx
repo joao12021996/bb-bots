@@ -280,6 +280,7 @@ interface WeekProgress {
 export interface PlayerSave {
     version: 3;
     humanIds: number[]; // one per player; 2+ means pass-and-play on one device
+    watching?: boolean; // nobody playing: the viewer watches the bots, and sees everything they do
     seed: number;
     step: Step;
     gameState: GameState;
@@ -853,7 +854,7 @@ export class PlayerModeController {
     private save() {
         this.holdGrudges();
         if (this.net) this.net.saved(this.state);
-        else writeSave(this.state);
+        else if (!this.watching) writeSave(this.state);
         this.changed$.next();
     }
 
@@ -1073,6 +1074,20 @@ export class PlayerModeController {
                 </div>
             ),
         });
+    }
+
+    // ---------- watching the bots ----------
+
+    // Nobody's playing: the viewer sees everything, including what the bots do in private.
+    get watching(): boolean {
+        return !!this.state.watching;
+    }
+
+    // what the bots got up to in the current social block, shown when it ends
+    private watchLog: string[] = [];
+
+    private watchNote(...lines: string[]) {
+        if (this.watching) this.watchLog.push(...lines);
     }
 
     // ---------- the live feed ----------
@@ -1407,12 +1422,12 @@ export class PlayerModeController {
     // In a secret Head of House week, only the HoH (and nobody else) sees who it is.
     public publicHohId(viewerId?: number): number | undefined {
         const s = this.state;
-        if (!s.week.secretHoh) return s.week.hohId;
+        if (!s.week.secretHoh || this.watching) return s.week.hohId;
         return viewerId !== undefined && viewerId === s.week.hohId ? s.week.hohId : undefined;
     }
 
     private sealed(): boolean {
-        return !!this.state.week.secretHoh && this.state.step === Step.Hoh;
+        return !!this.state.week.secretHoh && this.state.step === Step.Hoh && !this.watching;
     }
 
     // Who a newly evicted juror blames for being on the block (nobody, if they can't know).
@@ -1445,6 +1460,11 @@ export class PlayerModeController {
             s.week.nomWhy![id] = why;
             if (!s.week.secretHoh) this.tell([id], `💬 Word around the house: ${this.player(hohId).name} nominated you. ${capitalize(why)}.`);
         });
+        if (this.watching)
+            this.announce(
+                "🔍 Why they're on the block",
+                nomineeIds.map((id) => `🎯 ${this.player(hohId).name} nominated ${this.player(id).name}: ${s.week.nomWhy![id]}.`)
+            );
     }
 
     private logMove(kind: "move" | "backstab", actorId: number, targetId: number | undefined, text: string, weight: number) {
@@ -2797,7 +2817,7 @@ export class PlayerModeController {
         this.mutate((gs) =>
             s.book.alliances
                 .filter((a) => !a.met && aliveMembers(gs, a).length >= 2 && this.allianceMeetsNow(a) && !this.allianceStandsDown(a))
-                .forEach((a) => holdMeeting(gs, a, s.humanIds, this.targetBlock(), this.targetExclude(), this.planBWeek))
+                .forEach((a) => this.watchMeeting(gs, a, holdMeeting(gs, a, s.humanIds, this.targetBlock(), this.targetExclude(), this.planBWeek)))
         );
         s.book.alliances.filter((a) => a.chemistry <= 0).forEach((a) => this.dissolve(a));
         s.book.alliances.forEach((a) => {
@@ -4324,6 +4344,7 @@ export class PlayerModeController {
     private dissolve(a: Alliance) {
         this.state.book.alliances = this.state.book.alliances.filter((x) => x.id !== a.id);
         this.tellAlliance(a, `💔 ${a.name} has fallen apart.`);
+        this.watchNote(`💔 ${a.name} has fallen apart.`);
     }
 
     // Called by the alliance screen when the current player is done: next player's turn.
@@ -4397,6 +4418,7 @@ export class PlayerModeController {
                 .forEach((a) => {
                     const result = holdMeeting(gs, a, s.humanIds, this.targetBlock(), this.targetExclude(), this.planBWeek);
                     this.tellAlliance(a, `🤝 ${a.name} met without you. ${result.lines[result.lines.length - 1]}`);
+                    this.watchMeeting(gs, a, result);
                 });
             s.book.alliances.filter((a) => a.chemistry <= 0).forEach((a) => this.dissolve(a));
             this.tellAll(compareNotes(gs, this.ledger, gs.phase));
@@ -4405,6 +4427,7 @@ export class PlayerModeController {
             this.tellAll(walkedInOn(gs, s.book, s.humanIds));
             botRumours(gs, s.humanIds, (id) => (this.traitsOf(id) || { scheming: 1 }).scheming).forEach((r) => {
                 if (r.known) reveal(this.ledger, r.fromId, r.aboutId, gs.phase);
+                this.watchNote(`🗯️ ${getById(gs, r.fromId).name} spread a rumour about ${getById(gs, r.aboutId).name}${r.known ? ", and got caught" : ""}.`);
                 this.tell(
                     [r.aboutId],
                     `🗯️ Someone's been spreading rumours about you${r.known ? `. Word is it was ${getById(gs, r.fromId).name}` : ""}.`
@@ -4422,20 +4445,27 @@ export class PlayerModeController {
             if (fight) {
                 const a = getById(gs, fight.aId).name;
                 const sides = sidesText(gs, fight.aId, fight.bId, fight.sides);
+                this.watchNote(`💥 ${a} and ${getById(gs, fight.bId).name} blew up at each other. ${sides}`);
                 if (this.isHuman({ id: fight.bId })) this.tell([fight.bId], `💥 ${a} blew up at you in front of everyone. ${sides}`);
                 this.askOthersToPickSides(fight.aId, fight.bId, `💥 ${a} and ${getById(gs, fight.bId).name} blew up at each other. ${sides}`);
             }
-            botSocialTime(gs, s.humanIds, (id) => {
-                const traits = this.traitsOf(id) || { chats: 1, scheming: 1 };
-                // Have-Nots don't get around the house much
-                return this.isHaveNot(id) ? { ...traits, chats: traits.chats * 0.4 } : traits;
-            });
+            botSocialTime(
+                gs,
+                s.humanIds,
+                (id) => {
+                    const traits = this.traitsOf(id) || { chats: 1, scheming: 1 };
+                    // Have-Nots don't get around the house much
+                    return this.isHaveNot(id) ? { ...traits, chats: traits.chats * 0.4 } : traits;
+                },
+                this.watching ? (line) => this.watchNote(line) : undefined
+            );
             this.wildcardSwings(gs);
             botShowmances(gs, this.showmances, s.humanIds, (id) => (this.personalities[id] === "charmer" ? 2 : 1)).forEach((sm) => {
                 this.showmances.push(sm);
+                this.watchNote(`💕 ${getById(gs, sm.a).name} and ${getById(gs, sm.b).name} are a showmance.`);
                 this.tell(s.humanIds, `💕 The house is buzzing: ${getById(gs, sm.a).name} and ${getById(gs, sm.b).name} are a showmance.`);
             });
-            botAllianceTime(gs, s.book, s.humanIds).forEach((invite) => {
+            botAllianceTime(gs, s.book, s.humanIds, this.watching ? (line) => this.watchNote(line) : undefined).forEach((invite) => {
                 s.approaches[invite.toId] = [
                     ...(s.approaches[invite.toId] || []),
                     { kind: "invite", fromId: invite.fromId, allianceId: invite.allianceId, name: invite.name },
@@ -4472,7 +4502,21 @@ export class PlayerModeController {
         s.socialStage = "social";
         s.actionsLeft = this.rules.actions;
         delete s.socialBy;
+        if (this.watching) {
+            const log = this.watchLog;
+            this.watchLog = [];
+            this.announce(`🔍 Behind the scenes: ${blockName}`, log.length > 0 ? log : ["A quiet one. Nobody made a move."]);
+        }
         this.goTo(afterSocial(s.step));
+    }
+
+    // Watching: an alliance meeting, from the inside.
+    private watchMeeting(gs: GameState, a: Alliance, result: { targetId: number | null; backupId?: number | null }) {
+        if (!this.watching) return;
+        const members = listNames(aliveMembers(gs, a).map((m) => m.name));
+        if (result.targetId === null) return this.watchNote(`🤝 ${a.name} (${members}) met, and couldn't agree on a target.`);
+        const backup = result.backupId !== undefined && result.backupId !== null ? `, with ${getById(gs, result.backupId).name} as plan B` : "";
+        this.watchNote(`🤝 ${a.name} (${members}) met and agreed to go after ${getById(gs, result.targetId).name}${backup}.`);
     }
 
     private hohComp() {
@@ -5726,6 +5770,11 @@ export class PlayerModeController {
                 .map(Number)
                 .filter((v) => !this.isHuman({ id: v }))
                 .forEach((v) => (voteWhy[v] = { t: votes[v], why: explainVote(ctx, v, votes[v], noms.map((n) => n.id)) }));
+            if (this.watching)
+                this.announce(
+                    "🔍 How the house voted",
+                    Object.keys(voteWhy).map((v) => `🗳️ ${this.player(Number(v)).name} voted to evict ${this.player(voteWhy[Number(v)].t).name}: ${voteWhy[Number(v)].why}.`)
+                );
             const tally: { [nomineeId: number]: number } = {};
             noms.forEach((n) => (tally[n.id] = Math.max(0, counted(n.id))));
             s.gameState = gs;

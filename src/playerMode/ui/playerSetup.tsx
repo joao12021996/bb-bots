@@ -39,6 +39,24 @@ export function castSource(): { cast: PlayerProfile[]; hohPlaysVeto: boolean } {
     return { cast: getCast(), hohPlaysVeto: true };
 }
 
+// Watch the bots: the whole cast plays, nobody's a player, and the viewer sees everything they do.
+// It's never saved, so it doesn't replace a season the player has going.
+export async function watchBots() {
+    const { cast, hohPlaysVeto } = castSource();
+    const setup = buildSeason(
+        cast,
+        [],
+        cast.map((_, i) => i),
+        cast$.value.options || {},
+        hohPlaysVeto
+    );
+    const save = newPlayerSave(setup.gameState, [], setup.castOptions, false);
+    save.watching = true;
+    await newEpisode(null);
+    await newEpisode(new PregameEpisode(setup.gameState));
+    launch(new PlayerModeController(save));
+}
+
 const MIN_HOUSEGUESTS = 4;
 
 
