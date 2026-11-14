@@ -37,6 +37,8 @@
             }
         </script>
         <style>
+            /* Top (120) and bottom (101) of the page, on every screen, in the page's flow. */
+            html.bbb-ads .bbb-ad-band { text-align: center; }
             /* Sidebar ads in the margins, left (110) and right (111), on screens wide enough for them; the game
                keeps the middle. Fixed, so they stay put while the page scrolls. */
             .bbb-ad-rail { display: none; }
@@ -47,21 +49,19 @@
                 }
                 html.bbb-ads #ezoic-pub-ad-placeholder-110 { left: 8px; }
                 html.bbb-ads #ezoic-pub-ad-placeholder-111 { right: 8px; }
-                html.bbb-ads #root { margin: 0 176px; }
+                html.bbb-ads #root, html.bbb-ads .bbb-ad-band { margin: 0 176px; }
             }
             @media (min-width: 1500px) {
                 html.bbb-ads .bbb-ad-rail { width: 300px; }
-                html.bbb-ads #root { margin: 0 316px; }
+                html.bbb-ads #root, html.bbb-ads .bbb-ad-band { margin: 0 316px; }
             }
         </style>
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
+        <div class="bbb-ad-band" id="ezoic-pub-ad-placeholder-120"></div>
         <div class="bbb-ad-rail" id="ezoic-pub-ad-placeholder-110"></div>
         <div class="bbb-ad-rail" id="ezoic-pub-ad-placeholder-111"></div>
-        <script>
-            if (window.bbbAds) ezstandalone.cmd.push(function () { ezstandalone.showAds(110, 111); });
-        </script>
         <div id="root">
             <div style="min-height: 90vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #a9a3c7; font-family: system-ui, sans-serif">
                 <div style="font-size: 48px; animation: bbb-boot 1.4s ease-in-out infinite">👁️</div>
@@ -72,5 +72,9 @@
                 @keyframes bbb-boot { 0%, 100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.15); opacity: 1; } }
             </style>
         </div>
+        <div class="bbb-ad-band" id="ezoic-pub-ad-placeholder-101"></div>
+        <script>
+            if (window.bbbAds) ezstandalone.cmd.push(function () { ezstandalone.showAds(120, 110, 111, 101); });
+        </script>
     </body>
 </html>
