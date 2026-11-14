@@ -8,7 +8,6 @@ import { SeasonEditorPage } from "../seasonEditor/seasonEditorPage";
 import { CastingScreen } from "../castingScreen/castingScreen";
 import { dealNewCast, loadCast } from "../../cartoon/newCast";
 import { castFromUrl } from "../../cartoon/castCode";
-import { EditRelationshipsScreen } from "../editRelationshipsScreen/editRelationshipScreen";
 import { Tribe } from "../../model/tribe";
 import { selectPlayer } from "../playerPortrait/selectedPortrait";
 import { PlayerSetup, resumeSavedSeason, watchBots } from "../../playerMode/ui/playerSetup";
@@ -65,9 +64,6 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
 
     public render() {
         const props = this.props;
-        const relationships = this.state.relationships || props.options?.relationships;
-        const initialTribes = this.state.initialTribes || props.options?.initialTribes;
-        const currentTribes = this.state.currentTribes || props.options?.currentTribes;
         return (
             <HasText>
                 <div className="bbb-hero">
@@ -194,28 +190,6 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                     </TopbarLink>
                     .
                 </p>
-                <div style={{ justifyContent: "space-between", display: "flex" }}>
-                    {props.cast.length === 0 ? (
-                        ""
-                    ) : (
-                        <button
-                            className="button is-primary"
-                            onClick={() =>
-                                pushToMainContentStream(
-                                    <EditRelationshipsScreen
-                                        profiles={props.cast}
-                                        initialTribes={initialTribes}
-                                        currentTribes={currentTribes}
-                                        relationships={relationships}
-                                    />,
-                                    Screens.EditRelationships
-                                )
-                            }
-                        >
-                            {initialTribes?.length ? t("Edit Relationships/Teams") : t("Edit Relationships")}
-                        </button>
-                    )}
-                </div>
                 <PublicGames />
             </HasText>
         );

@@ -9,7 +9,7 @@ export const FR: { [english: string]: string } = {
     "Edit Season/Twists": "Saison et rebondissements",
     "How to Play": "Comment jouer",
     "My Stats": "Mes stats",
-    "New Cast": "Nouveau casting",
+    "Home": "Accueil",
     "Back to your game": "Retour à ta partie",
     "Turn sound on": "Activer le son",
     "Turn sound off": "Couper le son",
@@ -70,8 +70,6 @@ export const FR: { [english: string]: string } = {
     ", then": ", puis",
     "add twists": "ajoute des rebondissements",
     "You can use the ⬅️ and ➡️ arrow keys to move forwards and backwards.": "Tu peux utiliser les flèches ⬅️ et ➡️ pour avancer et reculer.",
-    "Edit Relationships": "Modifier les relations",
-    "Edit Relationships/Teams": "Modifier les relations et équipes",
 
     // ---------- setting up a season ----------
     "Player mode": "Mode joueur",

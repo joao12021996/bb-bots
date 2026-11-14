@@ -108,7 +108,7 @@ export function ChooseCastLink(): JSX.Element {
                 dealNewCast();
             }}
         >
-            {t("New Cast")}
+            {t("Home")}
         </TopbarLink>
     );
 }
