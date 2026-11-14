@@ -2,6 +2,7 @@ import React from "react";
 import styled from "styled-components";
 import { selectedColor } from "./houseguestPortraitController";
 import { clampStat, MAX_STAT, MIN_STAT } from "../../model/playerProfile";
+import { PERSONALITIES, PERSONALITY_IDS } from "../../playerMode/social/personality";
 
 const EditPortrait = styled.div`
     padding: 5px;
@@ -105,7 +106,20 @@ interface SetupPortraitProps {
     social: number;
     comp: number;
     onStatChange: (stat: "social" | "comp", value: number) => void;
+    // when they're a bot in a season you play: who they are (left out: a surprise, as usual)
+    personality?: string;
+    onPersonalityChange?: (personality: string | undefined) => void;
 }
+
+const PersonalitySelect = styled.select`
+    width: 100%;
+    font-size: 0.72rem;
+    margin-top: 3px;
+    border: 1px solid #6d6d6d;
+    border-radius: 3px;
+    background: white;
+    color: black;
+`;
 
 interface SetupPortraitState {
     name: string;
@@ -157,6 +171,26 @@ export class SetupPortrait extends React.Component<SetupPortraitProps, SetupPort
                         value={this.props.comp}
                         onChange={(n) => this.props.onStatChange("comp", n)}
                     />
+                    {this.props.onPersonalityChange && (
+                        <PersonalitySelect
+                            aria-label={`Personality of ${this.state.name}`}
+                            title={
+                                this.props.personality && (PERSONALITIES as any)[this.props.personality]
+                                    ? (PERSONALITIES as any)[this.props.personality].blurb
+                                    : "As a bot in a season you play: a personality picked for them, kept secret until the end"
+                            }
+                            value={this.props.personality || ""}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => this.props.onPersonalityChange!(event.target.value || undefined)}
+                        >
+                            <option value="">🎲 Surprise</option>
+                            {PERSONALITY_IDS.map((id) => (
+                                <option key={id} value={id}>
+                                    {PERSONALITIES[id].emoji} {PERSONALITIES[id].label}
+                                </option>
+                            ))}
+                        </PersonalitySelect>
+                    )}
                 </div>
             </EditPortrait>
         );

@@ -64,6 +64,10 @@ export function RulesEditor(props: {
                             🎬 {t("Big weeks: three nominees, and a {lastChance} after the {veto} (off: always two nominees)", { lastChance: t(LAST_CHANCE), veto: t(VETO) })}
                         </span>
                     </label>
+                    <label className="bbb-toggle">
+                        <input type="checkbox" checked={rules.doubleEviction} onChange={(e) => set({ doubleEviction: e.target.checked })} />
+                        <span>⚡ {t("A Double Eviction night, once a season (houses of 10 or more)")}</span>
+                    </label>
                     <div>
                         <b>{t("Comps that can come up")}</b>
                         <div className="bbb-rules-checks">
@@ -105,6 +109,7 @@ export function rulesSummary(rules: SeasonRules): string[] {
     const out: string[] = [];
     if (!rules.lastChance) out.push("always two nominees");
     if (!rules.together) out.push("social time one player at a time");
+    if (!rules.doubleEviction) out.push("no Double Eviction");
     if (rules.actions !== DEFAULT_RULES.actions) out.push(`${rules.actions} actions per block`);
     if (rules.kinds.length < COMP_KINDS.length) out.push(`only ${COMP_KINDS.filter((k) => rules.kinds.includes(k.kind)).map((k) => k.label.split(" ")[1].toLowerCase()).join(", ")} comps`);
     if (rules.formats.length < SPECIAL_FORMATS.length) out.push("fewer special comps");

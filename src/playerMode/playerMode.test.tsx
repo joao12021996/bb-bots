@@ -58,6 +58,7 @@ import { ALL_COMPS, WEEKLY_COMPS } from "./comps";
 import { opponentCorrectAfter } from "./comps/compUi";
 import { rankResults } from "./comps/compRunner";
 import { answer, cast, newGame, Strategy } from "./testing";
+import { DEFAULT_RULES } from "./rules";
 
 function playSeason(n: number, humanIds: number[], strategy: Strategy, humansWin: boolean | "random", extras: Parameters<typeof newPlayerSave>[4] = {}) {
     const controller = new PlayerModeController(newPlayerSave(newGame(n), humanIds, undefined, undefined, extras));
@@ -222,12 +223,14 @@ describe("player mode season", () => {
         for (const ids of [[0], [3, 7]]) {
             const { controller } = playSeason(16, ids, "random", "random");
             const used = controller.state.usedComps;
-            // HoH + veto every week, a Blockbuster in weeks with 7+ houseguests, and three finale parts
-            const blockbusters = 16 - 7 + 1;
+            // HoH + veto every week, a Blockbuster in weeks with 7+ houseguests (but not on the Double Eviction
+            // night), and three finale parts
+            const blockbusters = 16 - 7 + 1 - 1;
             expect(used.length).toBe(2 * (16 - 3) + blockbusters + 3);
             // Block Breakers come from the small pool of quick comps, so those can come round again sooner
             const quick = new Set(require("./comps").QUICK_COMPS.map((c: any) => c.id));
-            const firstRound = used.slice(0, WEEKLY_COMPS.length - 2).filter((id) => !quick.has(id));
+            // (the three parts of the final HoH aren't picked from the rotation: the first is always Hold the Wall)
+            const firstRound = used.slice(0, Math.min(WEEKLY_COMPS.length - 2, used.length - 3)).filter((id) => !quick.has(id));
             expect(new Set(firstRound).size).toBe(firstRound.length);
         }
     });
@@ -236,7 +239,8 @@ describe("player mode season", () => {
         const counts: [number, number][] = [];
         const scenes = new Set<string>();
         for (let id = 0; id < 10; id++) {
-            const r = playSeason(10, [id], "random", true);
+            // (no Double Eviction: that night is always two nominees, whatever the house's size)
+            const r = playSeason(10, [id], "random", true, { rules: { ...DEFAULT_RULES, doubleEviction: false } });
             counts.push(...r.nomCounts);
             r.scenes.forEach((t) => scenes.add(t));
         }

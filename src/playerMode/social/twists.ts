@@ -10,6 +10,19 @@ export function haveNotCount(houseSize: number): number {
     return 0;
 }
 
+// ---------- Double Eviction ----------
+
+// Houses this big get one. Smaller ones are over too soon to lose two in a night.
+export const DOUBLE_EVICTION_MIN_CAST = 10;
+
+// The Double Eviction happens once: right after the eviction that leaves this many in the house, a whole week is
+// played in one night (Head of Household, nominations, veto, vote), with no time to talk in between. It falls a
+// little past the middle of the season, with enough of a house left for the second eviction to be a real vote.
+export function doubleEvictionAt(castSize: number): number {
+    if (castSize < DOUBLE_EVICTION_MIN_CAST) return 0;
+    return castSize >= 14 ? 9 : castSize >= 12 ? 8 : 7;
+}
+
 // ---------- the Battle Back ----------
 
 // Who can fight their way back in: everyone who's been evicted.

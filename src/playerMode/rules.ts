@@ -43,6 +43,7 @@ export interface SeasonRules {
     kinds: CompKind[]; // which kinds of weekly comp can come up
     formats: SpecialFormat[]; // which special comp formats can come up
     together: boolean; // online: everyone's social time at once (off: players take turns)
+    doubleEviction: boolean; // once a season, a second eviction the same night (big enough houses only)
 }
 
 export const DEFAULT_RULES: SeasonRules = {
@@ -51,6 +52,7 @@ export const DEFAULT_RULES: SeasonRules = {
     kinds: COMP_KINDS.map((k) => k.kind),
     formats: SPECIAL_FORMATS.map((f) => f.id),
     together: true,
+    doubleEviction: true,
 };
 
 export const MIN_ACTIONS = 1;
@@ -64,6 +66,7 @@ export function withDefaults(rules?: Partial<SeasonRules>): SeasonRules {
         kinds: r.kinds.length > 0 ? r.kinds : DEFAULT_RULES.kinds,
         formats: r.formats,
         together: r.together !== false,
+        doubleEviction: r.doubleEviction !== false,
     };
 }
 

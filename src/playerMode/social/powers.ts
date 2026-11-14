@@ -131,9 +131,9 @@ export function audienceScore(
     rand: Rand
 ): number {
     const drama =
-        personality === "villain" || personality === "wildcard" || personality === "clown"
+        personality === "villain" || personality === "wildcard" || personality === "clown" || personality === "gossip"
             ? 0.6
-            : personality === "superfan" || personality === "charmer"
+            : personality === "superfan" || personality === "charmer" || personality === "rookie"
             ? 0.4
             : 0;
     return 0.4 * compWins(hg, history) + 0.12 * getSocial(hg) + drama + (inShowmance ? 0.5 : 0) + rand() * 0.8;

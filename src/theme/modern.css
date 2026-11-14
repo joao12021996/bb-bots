@@ -3627,3 +3627,57 @@ table td {
         justify-content: flex-end;
     }
 }
+
+/* ---------- colour-blind mode: a comic cover's colours, written on it ---------- */
+.bbb-comic-colours {
+    position: absolute;
+    left: 2px;
+    bottom: 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    z-index: 3;
+    pointer-events: none;
+}
+.bbb-comic-colours span {
+    background: rgba(255, 255, 255, 0.92);
+    color: #111;
+    font-size: 0.55rem;
+    font-weight: 800;
+    line-height: 1.15;
+    padding: 0 3px;
+    border-radius: 2px;
+    text-transform: uppercase;
+}
+
+/* ---------- "why you went home": an evicted player's exit interview ---------- */
+.bbb-exit {
+    max-width: 640px;
+    margin: 0 auto;
+    text-align: left;
+}
+.bbb-exit h3 {
+    font-weight: 800;
+    font-size: 1.3rem;
+    text-align: center;
+}
+.bbb-exit-headline {
+    text-align: center;
+    font-weight: 700;
+    margin: 6px 0 14px;
+}
+.bbb-exit-part {
+    background: var(--bbb-card-2);
+    border: 1px solid var(--bbb-border);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+}
+.bbb-exit-part p {
+    margin-top: 4px;
+}
+.bbb-exit-lied {
+    color: var(--bbb-rose-text);
+    font-weight: 700;
+}

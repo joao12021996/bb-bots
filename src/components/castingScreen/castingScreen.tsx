@@ -75,6 +75,16 @@ export class CastingScreen extends React.Component<CastingScreenProps, CastingSc
         };
     }
 
+    // Who they are as a bot in a season you play (undefined: a surprise).
+    private setPersonality(i: number) {
+        return (personality: string | undefined) => {
+            const newState = { ...this.state };
+            if (personality) newState.players[i].personality = personality;
+            else delete newState.players[i].personality;
+            this.setState(newState);
+        };
+    }
+
     private setStat(i: number) {
         return (stat: "social" | "comp", value: number) => {
             const newState = { ...this.state };
@@ -103,6 +113,8 @@ export class CastingScreen extends React.Component<CastingScreenProps, CastingSc
                     social={getSocial(player)}
                     comp={getComp(player)}
                     onStatChange={this.setStat(i)}
+                    personality={player.personality}
+                    onPersonalityChange={this.setPersonality(i)}
                     selected={this.state.selectedPlayers.has(player.castingScreenId || -1)}
                     key={(++i).toString()}
                 />

@@ -18,7 +18,11 @@ export type PersonalityId =
     | "charmer"
     | "paranoid"
     | "sweetheart"
-    | "clown";
+    | "clown"
+    | "rookie"
+    | "gossip"
+    | "hunter"
+    | "diplomat";
 
 export interface PersonalityInfo {
     id: PersonalityId;
@@ -190,6 +194,62 @@ export const PERSONALITIES: { [id in PersonalityId]: PersonalityInfo } = {
         chats: 1.5,
         tells: ["Turns everything into a joke.", "Gets the whole house laughing.", "Changes the subject when the talk gets serious."],
     },
+    rookie: {
+        id: "rookie",
+        label: "Rookie",
+        emoji: "🐣",
+        blurb: "New to all this. Wears every feeling on their face, tells the truth about their vote, and keeps their word.",
+        fake: 0,
+        lies: 0.3,
+        honor: 0.2,
+        compBoost: -0.03,
+        throws: 0.2,
+        scheming: 0.4,
+        chats: 1,
+        tells: ["You always know exactly how they feel about you.", "Asks how things usually work in here.", "Looks shocked every time somebody lies."],
+    },
+    gossip: {
+        id: "gossip",
+        label: "Gossip",
+        emoji: "🗣️",
+        blurb: "Knows everything about everyone and can't keep any of it in. Chat with them and you'll hear who's working with whom.",
+        fake: 0.4,
+        lies: 1.3,
+        honor: -0.1,
+        compBoost: -0.02,
+        throws: 1,
+        scheming: 1.6,
+        chats: 1.7,
+        tells: ["Starts every other sentence with 'don't tell anyone, but'.", "Always knows what was said in rooms they weren't in.", "Has talked to everyone in the house before breakfast."],
+    },
+    hunter: {
+        id: "hunter",
+        label: "Floater Hunter",
+        emoji: "🏹",
+        blurb: "Can't stand people coasting. As Head of Household, goes after whoever has won nothing and never seen the block.",
+        fake: -0.1,
+        lies: 0.7,
+        honor: 0.1,
+        compBoost: 0.06,
+        throws: 0.2,
+        scheming: 1.1,
+        chats: 0.8,
+        tells: ["Keeps count of who's won what.", "Grumbles about people 'getting a free ride'.", "Respects anyone who's fought their way off the block."],
+    },
+    diplomat: {
+        id: "diplomat",
+        label: "Diplomat",
+        emoji: "🕊️",
+        blurb: "Already playing for the jury. Never makes an enemy it doesn't have to: its targets are the people the house has already turned on.",
+        fake: 0.5,
+        lies: 0.8,
+        honor: 0.1,
+        compBoost: 0,
+        throws: 1.3,
+        scheming: 0.8,
+        chats: 1.3,
+        tells: ["Has a kind word for everyone on their way out.", "Never the first to say a name.", "Smooths things over after every fight."],
+    },
 };
 
 export const PERSONALITY_IDS = Object.keys(PERSONALITIES) as PersonalityId[];
@@ -226,6 +286,10 @@ export function assignPersonalities(bots: Houseguest[], seed: number): { [id: nu
             paranoid: 3,
             sweetheart: 3 + social * 0.15,
             clown: 3,
+            rookie: 2.5,
+            gossip: 2 + social * 0.2,
+            hunter: 1.5 + comp * 0.25,
+            diplomat: 2 + social * 0.2,
         };
         const weights = PERSONALITY_IDS.map((p) => base[p] / (1 + 2 * (used[p] || 0)));
         let roll = rand() * weights.reduce((a, b) => a + b, 0);
@@ -367,6 +431,42 @@ const LINES: { [p in PersonalityId]: { [s in Situation]: string[] } } = {
         voteAnswer: ["{name}. No joke.", "Drumroll... {name}."],
         hohVisit: ["Can I have the snacks in here? Asking for a friend. Also, congrats.", "Nice! Do I bow now?"],
         flirt: ["made a terrible pun about it, but stuck around."],
+    },
+    rookie: {
+        chat: ["asked you, quietly, whether they're doing this right.", "told you their whole life story, and exactly who they like in here."],
+        pitch: ["I don't really know how this works, but hear me out.", "Is it okay to say this? I'm saying it."],
+        final2: ["Is it too early to say final two? I'd really like that."],
+        votePlea: ["I don't know how to campaign. I just really want to stay."],
+        voteAnswer: ["{name}. Was I not supposed to tell you?", "I'm voting for {name}. That's allowed, right?"],
+        hohVisit: ["Wow, this room is huge. Um, congratulations!", "I've never been up here. Am I safe? Can I ask that?"],
+        flirt: ["had no idea what to do with that, and smiled for an hour."],
+    },
+    gossip: {
+        chat: ["sat down and, without being asked, told you what everyone in the house said today.", "started with 'don't tell anyone, but', and didn't stop for twenty minutes."],
+        pitch: ["You didn't hear this from me.", "I shouldn't say, but I'm going to."],
+        final2: ["Final two? Yes. I won't tell a soul. Well. Hardly anyone."],
+        votePlea: ["Keep me and you'll know everything that's said in this house. Everything."],
+        voteAnswer: ["{name}. And you won't believe who else is.", "{name}, but you didn't hear it from me."],
+        hohVisit: ["Okay, sit down, I have so much to tell you.", "Congrats! Now, do you want to know what they're saying downstairs?"],
+        flirt: ["flirted back, and by dinner the whole house knew about it."],
+    },
+    hunter: {
+        chat: ["went through, one by one, who in this house has actually won anything.", "wanted to know what you've done in this game so far."],
+        pitch: ["They've done nothing all season.", "Name one thing they've won. I'll wait."],
+        final2: ["You play. I respect that. Final two, and we earn it."],
+        votePlea: ["I've fought for every week I've had in here. Keep someone who plays."],
+        voteAnswer: ["{name}. They've coasted long enough.", "{name}. Free rides end sometime."],
+        hohVisit: ["You won it, you earned it. Use it on someone who hasn't.", "Good win. Now send home somebody who's been hiding."],
+        flirt: ["said they don't have time for a showmance, and didn't leave."],
+    },
+    diplomat: {
+        chat: ["asked after everyone you care about in the house, by name.", "said something generous about every single person in the house, you included."],
+        pitch: ["I take no pleasure in this.", "It's nothing personal, and I'd tell them so myself."],
+        final2: ["I'd be honoured to sit beside you at the end. Final two?"],
+        votePlea: ["Whatever you decide, there'll be no hard feelings from me. I'd like to stay."],
+        voteAnswer: ["{name}, with regret.", "{name}. I'll tell them myself, kindly."],
+        hohVisit: ["Congratulations. However this week goes, I'll understand.", "Well deserved. I hope the house makes it easy for you."],
+        flirt: ["took it graciously, the way they take everything."],
     },
 };
 
