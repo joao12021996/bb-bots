@@ -177,6 +177,19 @@ input[type="number"] {
     padding: 6px 12px;
 }
 
+/* ---------- footer ---------- */
+.bbb-footer {
+    text-align: center;
+    padding: 16px 0 8px;
+    font-size: 0.9rem;
+}
+.bbb-footer a {
+    color: var(--bbb-muted);
+}
+.bbb-footer a:hover {
+    color: var(--bbb-text);
+}
+
 /* ---------- sidebar ---------- */
 .bbb-sidebar br {
     display: none;

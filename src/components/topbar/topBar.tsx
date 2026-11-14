@@ -162,6 +162,13 @@ function useSubject<T>(subject: BehaviorSubject<T>): T {
     return value;
 }
 
+export const CONTACT_EMAIL = "spotlegame@gmail.com";
+
+// "Contact us": opens an email to us.
+export function ContactLink(): JSX.Element {
+    return <a href={`mailto:${CONTACT_EMAIL}`}>✉️ {t("Contact us")}</a>;
+}
+
 // ⚙️ Settings: sound, motion, light or dark, and (see i18n) the language. Remembered on this device.
 export function SettingsMenu(): JSX.Element {
     const [open, setOpen] = React.useState(false);
@@ -227,6 +234,9 @@ export function SettingsMenu(): JSX.Element {
                         ✏️ {t("Rename things")}
                         {renamed > 0 && <span className="bbb-subtle">&nbsp;({renamed})</span>}
                     </button>
+                    <small className="bbb-subtle">
+                        <ContactLink />: {CONTACT_EMAIL}
+                    </small>
                     <button type="button" className="button is-small is-light" onClick={() => setOpen(false)}>
                         {t("Close")}
                     </button>

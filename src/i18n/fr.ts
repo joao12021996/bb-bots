@@ -11,6 +11,7 @@ export const FR: { [english: string]: string } = {
     "My Stats": "Mes stats",
     "Home": "Accueil",
     "Other games": "Autres jeux",
+    "Contact us": "Nous contacter",
     "The incognito daily word puzzle": "Le jeu de mots quotidien incognito",
     "Spotle with six-letter words": "Spotle avec des mots de six lettres",
     "Spot Donald Trump in the White House crowd, against the clock": "Trouve Donald Trump dans la foule de la Maison-Blanche, contre la montre",

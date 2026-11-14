@@ -1,7 +1,7 @@
 import "./bulma.scss";
 import React from "react";
 import { Sidebar } from "../sidebar/sidebar";
-import { Topbar } from "../topbar/topBar";
+import { ContactLink, Topbar } from "../topbar/topBar";
 import { MainContentArea } from "./mainContentArea";
 import { MainPageController } from "./mainPageController";
 
@@ -42,6 +42,9 @@ export class MainPage extends React.Component<MainPageProps, MainPageState> {
                         <MainContentArea />
                     </div>
                 </div>
+                <footer className="bbb-footer" style={hideOnFullscreen}>
+                    <ContactLink />
+                </footer>
             </div>
         );
     }
