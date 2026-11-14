@@ -3,7 +3,7 @@ import { nonEvictedHouseguests } from "../../model";
 import { PlayerModeController, Step } from "../playerModeController";
 import { sessionFor } from "../net/netSession";
 import { TextsBanner } from "./playerChat";
-import { Alliance, aliveMembers, botBackup, botSuggestion, chemistryLabel, meetingSplit, positionsOf } from "../social/alliances";
+import { Alliance, aliveMembers, botBackup, botSuggestion, chemistryLabel, getAlliance, meetingSplit, positionsOf } from "../social/alliances";
 import { BigButton, Face, Grid, Panel, Subtle, Title, whenDone } from "./common";
 
 interface AllianceScreenProps {
@@ -11,7 +11,7 @@ interface AllianceScreenProps {
     blockName: string;
 }
 
-type Tab = "target" | "backstab";
+type Tab = "target" | "backstab" | "merge";
 
 // The alliance didn't agree: talk it out. Argue for a target (maybe win people over), or go along with it.
 function TalkItOut(props: { controller: PlayerModeController; alliance: Alliance; onDone: (lines: string[]) => void }) {
@@ -71,6 +71,7 @@ function AllianceCard(props: { controller: PlayerModeController; alliance: Allia
     const [panel, setPanel] = React.useState<Tab>("target");
     const [leakTo, setLeakTo] = React.useState<number | null>(null);
     const [gone, setGone] = React.useState(false);
+    const [mergeResult, setMergeResult] = React.useState<string[] | null>(null);
 
     const members = aliveMembers(gs, a);
     const outsiders = nonEvictedHouseguests(gs).filter((hg) => !a.memberIds.includes(hg.id));
@@ -96,6 +97,18 @@ function AllianceCard(props: { controller: PlayerModeController; alliance: Allia
                 : botBackup(gs, a, m.id, pick, block, exclude);
             return { m, pick: pick === undefined ? undefined : pick, plan };
         });
+
+    // merged into another alliance (on request, or because the members ended up the same)
+    if (!gone && !getAlliance(controller.book, a.id)) {
+        return (
+            <div className="bbb-card-box">
+                <div className="bbb-card-title">🔗 {a.name}</div>
+                <p>{a.name} is part of another of your alliances now.</p>
+            </div>
+        );
+    }
+    // the player's other alliances, which they could ask to merge with this one
+    const mergeable = controller.book.alliances.filter((o) => o.id !== a.id && o.memberIds.includes(me.id) && a.memberIds.includes(me.id));
 
     if (gone) {
         return (
@@ -164,7 +177,37 @@ function AllianceCard(props: { controller: PlayerModeController; alliance: Allia
                 <button type="button" className={`button is-small ${panel === "backstab" ? "is-danger" : "is-light"}`} onClick={() => setPanel("backstab")}>
                     🐍 Backstab
                 </button>
+                {mergeable.length > 0 && (
+                    <button type="button" className={`button is-small ${panel === "merge" ? "is-info" : "is-light"}`} onClick={() => setPanel("merge")}>
+                        🔗 Merge
+                    </button>
+                )}
             </div>
+            {panel === "merge" && (
+                <div>
+                    <Subtle>
+                        Bring one of your other alliances into {a.name}: everyone in both becomes one alliance. Bots who'd be getting new
+                        allies have to agree, and one no sinks it.
+                    </Subtle>
+                    {mergeResult && mergeResult.map((line, i) => <p key={i}>{line}</p>)}
+                    {mergeable.map((o) => (
+                        <button
+                            key={o.id}
+                            type="button"
+                            className="button is-info is-small"
+                            style={{ margin: 4 }}
+                            onClick={() =>
+                                whenDone(controller.mergeAlliances(a.id, o.id), (out) => {
+                                    if (out) setMergeResult([out.text]);
+                                    props.onChange();
+                                })
+                            }
+                        >
+                            🔗 Merge {o.name} into {a.name}
+                        </button>
+                    ))}
+                </div>
+            )}
             {panel === "target" &&
                 (result ? (
                     <div className="bbb-log">

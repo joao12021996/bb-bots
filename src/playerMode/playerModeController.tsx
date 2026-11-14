@@ -78,6 +78,8 @@ import { discussTarget, meetingSplit, fallBackToPlanB,
     MoveOutcome,
     proposeAlliance,
     pruneAlliances,
+    mergeTwins,
+    proposeMerge,
 } from "./social/alliances";
 import {
     answerVisitor,
@@ -247,6 +249,7 @@ interface WeekProgress {
     pawnAsk?: { ids: number[]; next: Step }; // a player HoH gives a speech about these new nominees, then on to `next`
     vetoCases?: { [playerId: number]: boolean }; // players who made their case to a bot veto holder: did it work
     vetoAsks?: { [playerId: number]: number }; // players who asked a bot veto holder to save someone else, and won them over
+    mergeTries?: string[]; // pairs of alliances ("id:id") a player has asked to merge this week
     backdoor?: number; // a player HoH's backdoor plan: nominate pawns, and put this houseguest up once the veto's used
     spoke?: number[]; // nominees who have given their eviction-night speech
     wallDeals?: { hohId: number; toId: number }[]; // endurance deals: if `hohId` wins HoH, they owe `toId` safety
@@ -867,6 +870,7 @@ export class PlayerModeController {
 
     private save() {
         this.holdGrudges();
+        this.mergeTwinAlliances();
         if (this.net) this.net.saved(this.state);
         else if (!this.watching) writeSave(this.state);
         this.changed$.next();
@@ -4362,6 +4366,40 @@ export class PlayerModeController {
         const out = this.mutate((gs) => leakAlliance(gs, this.book, a, actor.id, outsiderId));
         if (!a.memberIds.includes(actor.id)) this.tell(members, out[out.length - 1].text);
         out.forEach((o) => this.state.socialLog.push(`${o.good ? "👍" : "👎"} ${o.text}`));
+        this.save();
+        return out;
+    }
+
+    // Alliances that end up with exactly the same members become one (the strongest keeps its name).
+    private mergeTwinAlliances() {
+        mergeTwins(this.state.gameState, this.state.book).forEach(({ into, merged }) => {
+            const text = `🔗 ${merged.name} and ${into.name} have the same members now, so they're one alliance: ${into.name}.`;
+            this.tellAlliance(into, text);
+            this.watchNote(text);
+        });
+    }
+
+    // Called by the alliance screen: merge one of the player's alliances into another of theirs. The bots who'd
+    // be getting new allies have to agree. Once per pair a week.
+    public mergeAlliances(intoId: number, otherId: number): MoveOutcome | null {
+        const s = this.state;
+        const into = getAlliance(this.book, intoId);
+        const other = getAlliance(this.book, otherId);
+        const actor = this.socialActor;
+        if (!into || !other || into.id === other.id || !into.memberIds.includes(actor.id) || !other.memberIds.includes(actor.id)) return null;
+        const key = [into.id, other.id].sort((a, b) => a - b).join(":");
+        if ((s.week.mergeTries || []).includes(key)) return { text: `You already tried to merge ${into.name} and ${other.name} this week.`, good: false };
+        s.week.mergeTries = [...(s.week.mergeTries || []), key];
+        this.reseed(`merge:${key}`);
+        const otherName = other.name;
+        const out = this.mutate((gs) => proposeMerge(gs, this.book, actor.id, into, other, s.humanIds));
+        this.tellAlliance(
+            into,
+            out.good ? `🔗 ${actor.name} merged ${otherName} into ${into.name}.` : `🔗 ${actor.name} wanted to merge ${otherName} and ${into.name}. It didn't happen.`,
+            actor.id
+        );
+        if (out.good) this.watchNote(`🔗 ${otherName} merged into ${into.name}.`);
+        s.socialLog.push(`${out.good ? "👍" : "👎"} ${out.text}`);
         this.save();
         return out;
     }

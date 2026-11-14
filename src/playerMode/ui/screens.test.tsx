@@ -401,6 +401,43 @@ describe("player mode screens", () => {
         expect(controller.player(1).relationships[0]).toBeCloseTo(again - NOMINATION_HIT, 5);
     });
 
+    it("alliances with the same members merge right away; a player can ask to merge two of theirs", () => {
+        const controller = controllerAtSocial();
+        const s = controller.state;
+        const { createAlliance, addMember, getAlliance } = require("../social/alliances");
+        const gs = new MutableGameState(controller.gameState);
+        const a = createAlliance(gs, s.book, [0, 1], "Alpha");
+        const b = createAlliance(gs, s.book, [0, 2], "Bravo");
+        controller.state.gameState = new GameState(gs);
+        // HG2 joins Alpha and HG1 joins Bravo: same three people, so they're one alliance now
+        addMember(gs, a, 2);
+        addMember(gs, b, 1);
+        controller.state.gameState = new GameState(gs);
+        (controller as any).save();
+        expect([getAlliance(s.book, a.id), getAlliance(s.book, b.id)].filter(Boolean).length).toBe(1);
+        // asking to merge two different alliances: the bots who'd get new allies decide
+        const g2 = new MutableGameState(controller.gameState);
+        const c = createAlliance(g2, s.book, [0, 3], "Charlie");
+        const d = createAlliance(g2, s.book, [0, 4], "Delta");
+        controller.state.gameState = new GameState(g2);
+        const out = controller.mergeAlliances(c.id, d.id)!;
+        if (out.good) {
+            expect(getAlliance(s.book, d.id)).toBeUndefined();
+            expect([...getAlliance(s.book, c.id).memberIds].sort()).toEqual([0, 3, 4]);
+        } else {
+            expect(getAlliance(s.book, d.id)).toBeDefined();
+            expect(out.text).toContain("want to merge");
+        }
+        // merged: Delta's gone, nothing left to merge; turned down: once a week per pair
+        if (out.good) expect(controller.mergeAlliances(c.id, d.id)).toBeNull();
+        else expect(controller.mergeAlliances(c.id, d.id)!.text).toContain("already tried");
+        // only alliances the player is in
+        const g3 = new MutableGameState(controller.gameState);
+        const e = createAlliance(g3, s.book, [5, 6], "Echo");
+        controller.state.gameState = new GameState(g3);
+        expect(controller.mergeAlliances(c.id, e.id)).toBeNull();
+    });
+
     it("online, social time can be everyone at once or one player at a time", () => {
         expect(withDefaults({}).together).toBe(true);
         expect(withDefaults({ together: false }).together).toBe(false);

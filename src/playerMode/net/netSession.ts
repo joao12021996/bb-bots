@@ -43,6 +43,7 @@ export const NETWORKED_METHODS = [
     "renameAlliance",
     "leave",
     "leak",
+    "mergeAlliances",
     "endAlliance",
     "hohVisit",
     "hohAnswer",

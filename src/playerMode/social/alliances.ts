@@ -174,19 +174,42 @@ export function addMember(gs: MutableGameState, alliance: Alliance, id: number) 
     alliance.memberIds.push(id);
 }
 
-// Drops evicted members and alliances that are down to one person. Returns the names of disbanded alliances.
-export function pruneAlliances(gs: GameState, book: AllianceBook): Alliance[] {
-    const gone: Alliance[] = [];
-    book.alliances.forEach((a) => (a.memberIds = a.memberIds.filter((id) => getById(gs, id) && !getById(gs, id).isEvicted)));
-    // alliances whose members are now the same merge into the strongest one
+// Two alliances become one: `into` takes in `other`'s members and keeps its name and plans; chemistry lands in
+// between. Newcomers warm up to each other a little.
+export function mergeAlliances(gs: MutableGameState, book: AllianceBook, into: Alliance, other: Alliance): Alliance {
+    if (into.id === other.id) return into;
+    other.memberIds.forEach((id) => addMember(gs, into, id));
+    into.chemistry = clamp((into.chemistry + other.chemistry) / 2, 0, 1);
+    book.alliances = book.alliances.filter((a) => a.id !== other.id);
+    return into;
+}
+
+// Alliances with exactly the same (living) members are one alliance: each merges into the strongest of its twins.
+export function mergeTwins(gs: GameState, book: AllianceBook): { into: Alliance; merged: Alliance }[] {
+    const out: { into: Alliance; merged: Alliance }[] = [];
+    const alive = (a: Alliance) => a.memberIds.filter((id) => getById(gs, id) && !getById(gs, id).isEvicted);
     const seen = new Map<string, Alliance>();
     [...book.alliances]
         .sort((x, y) => y.chemistry - x.chemistry)
         .forEach((a) => {
-            const key = [...a.memberIds].sort((x, y) => x - y).join(",");
-            if (seen.has(key)) a.memberIds = [];
-            else seen.set(key, a);
+            const members = alive(a);
+            if (members.length < 2) return;
+            const key = [...members].sort((x, y) => x - y).join(",");
+            const into = seen.get(key);
+            if (!into) return void seen.set(key, a);
+            into.chemistry = clamp((into.chemistry + a.chemistry) / 2, 0, 1);
+            out.push({ into, merged: a });
         });
+    const mergedIds = out.map((m) => m.merged.id);
+    book.alliances = book.alliances.filter((a) => !mergedIds.includes(a.id));
+    return out;
+}
+
+// Drops evicted members and alliances that are down to one person. Returns the names of disbanded alliances.
+// (Alliances left with the same members are merged first: see mergeTwins.)
+export function pruneAlliances(gs: GameState, book: AllianceBook): Alliance[] {
+    const gone: Alliance[] = [];
+    book.alliances.forEach((a) => (a.memberIds = a.memberIds.filter((id) => getById(gs, id) && !getById(gs, id).isEvicted)));
     book.alliances = book.alliances.filter((a) => {
         const keep = a.memberIds.length >= 2 && a.chemistry > 0;
         if (!keep) gone.push(a);
@@ -711,6 +734,30 @@ export function leakAlliance(gs: MutableGameState, book: AllianceBook, a: Allian
         out.push({ text: `Nobody in ${a.name} suspects a thing… for now.`, good: true });
     }
     return out;
+}
+
+// A player asks to merge two of their alliances into `into`. Every bot that would get new allies has to agree;
+// any one of them saying no sinks it (and they think a bit less of the player for asking).
+export function proposeMerge(gs: MutableGameState, book: AllianceBook, humanId: number, into: Alliance, other: Alliance, humanIds: number[]): MoveOutcome {
+    const human = getById(gs, humanId);
+    const union = Array.from(new Set([...into.memberIds, ...other.memberIds]));
+    const refusers = union
+        .filter((id) => id !== humanId && !humanIds.includes(id))
+        .filter((id) => {
+            const newcomers = union.filter((m) => m !== id && !(into.memberIds.includes(id) ? into.memberIds : other.memberIds).includes(m));
+            return newcomers.length > 0 && !botAcceptsInvite(gs, book, getById(gs, id), newcomers, getSocial(human));
+        });
+    if (refusers.length > 0) {
+        refusers.forEach((id) => shiftRelationship(gs, humanId, id, -0.03));
+        const names = refusers.map((id) => getById(gs, id).name);
+        return {
+            text: `${names.join(" and ")} ${names.length === 1 ? "doesn't" : "don't"} want to merge ${into.name} and ${other.name}.`,
+            good: false,
+        };
+    }
+    const name = other.name;
+    mergeAlliances(gs, book, into, other);
+    return { text: `${name} merged into ${into.name}. It's ${into.memberIds.length} strong now.`, good: true };
 }
 
 // A player walks away from an alliance. No hard feelings? Some.
