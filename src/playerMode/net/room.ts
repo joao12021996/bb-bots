@@ -65,6 +65,8 @@ export function joinLink(code: string): string {
 // REACT_APP_RELAY_URL overrides it, e.g. ws://localhost:8787 when running the relay locally.
 const RELAY_URL = process.env.REACT_APP_RELAY_URL || "wss://api.spotlegame.co.uk/bb-relay";
 const CONNECT_TIMEOUT_MS = 10000;
+// a listed room says so again this often: the relay drops listings that go quiet (the host's gone)
+const LISTING_REFRESH_MS = 30000;
 
 // this device's id for the whole page load (kept across reconnects)
 const selfId = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
@@ -133,6 +135,9 @@ export function openRoom(code: string): Promise<NetRoom> {
     let retry = 0;
     let retryTimer: any = null;
     let listing: PublicGameInfo | null = null; // sent again after a reconnect
+    const refresh = setInterval(() => {
+        if (listing && ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ op: "list", info: listing }));
+    }, LISTING_REFRESH_MS);
 
     const peerJoined = (id: string) => {
         if (id === selfId || peers.has(id)) return;
@@ -161,6 +166,7 @@ export function openRoom(code: string): Promise<NetRoom> {
         peers: () => Array.from(peers),
         leave: () => {
             left = true;
+            clearInterval(refresh);
             clearTimeout(retryTimer);
             if (ws) ws.close();
         },
@@ -206,6 +212,7 @@ export function openRoom(code: string): Promise<NetRoom> {
                 ws = null;
                 if (!opened) {
                     left = true;
+                    clearInterval(refresh);
                     reject(new Error("Online: couldn't reach the relay"));
                     return;
                 }

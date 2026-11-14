@@ -7,6 +7,8 @@
 // Public games: a peer in a room can list it ({op:"list", info}, or info null to take it down); the listing goes
 // when that peer leaves. Anyone, joined or not, can ask for the listed rooms whose names start with a prefix:
 // {op:"rooms", prefix}  ->  {op:"rooms", rooms: [{room, info}]}
+// A listing must be sent again at least every LISTING_TTL_MS or it's dropped: a host whose tab is still connected
+// but who has gone away (the game stops re-sending it) doesn't stay on the list.
 
 const { WebSocketServer } = require("ws");
 
@@ -18,10 +20,11 @@ const MAX_PEERS = 32;
 const HEARTBEAT_MS = 30000;
 const MAX_LISTING = 2048; // bytes of JSON a listing's info can take
 const MAX_LISTED = 100; // listings sent back for one query
+const LISTING_TTL_MS = 90000; // clients re-send every 30s
 
 // room name -> Map(peer id -> socket)
 const rooms = new Map();
-// room name -> {by: peer id that listed it, info}
+// room name -> {by: peer id that listed it, info, at: when it was last sent}
 const listings = new Map();
 
 const wss = new WebSocketServer({ host: HOST, port: PORT, maxPayload: MAX_MESSAGE });
@@ -96,11 +99,18 @@ function list(ws, info) {
     if (typeof info !== "object" || Array.isArray(info) || JSON.stringify(info).length > MAX_LISTING) {
         return sendTo(ws, { op: "error", reason: "bad listing" });
     }
-    listings.set(ws.roomName, { by: ws.peerId, info });
+    listings.set(ws.roomName, { by: ws.peerId, info, at: Date.now() });
+}
+
+// takes down listings their host stopped sending
+function dropStaleListings() {
+    const now = Date.now();
+    for (const [room, listing] of listings) if (now - listing.at > LISTING_TTL_MS) listings.delete(room);
 }
 
 function sendRooms(ws, prefix) {
     if (typeof prefix !== "string" || !prefix || prefix.length > 64) return sendTo(ws, { op: "error", reason: "bad prefix" });
+    dropStaleListings();
     const out = [];
     for (const [room, listing] of listings) {
         if (out.length >= MAX_LISTED) break;
@@ -132,6 +142,7 @@ wss.on("connection", (ws) => {
 
 // drops connections that died without closing, so the room hears they left
 const heartbeat = setInterval(() => {
+    dropStaleListings();
     wss.clients.forEach((ws) => {
         if (!ws.isAlive) {
             removePeer(ws);

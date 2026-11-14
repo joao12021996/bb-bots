@@ -5,6 +5,7 @@ import { actorOf, migrateSave, PlayerModeController, PlayerSave, Prompt, Step } 
 import { clearOnlineSave, deserialize, serialize, writeOnlineSave } from "../save/serialize";
 import { seedRng } from "../seeding";
 import { NetRoom, PublicGameInfo } from "./room";
+import { present$ } from "./presence";
 import { canJoin, CastCard, houseOf, LobbySeat, LobbySetup, normalizeSetup } from "./lobby";
 
 // Online play without a server.
@@ -323,6 +324,8 @@ export class NetSession {
     private chatSeq = 0;
     private juryChatSent = new Set<number>();
     private listed = "null"; // the public listing last sent to the relay (JSON)
+    private lobbyShown = true; // the lobby is on the host's screen (false once they've gone elsewhere)
+    private presence: { unsubscribe(): void } | null = null;
 
     private constructor(private room: NetRoom, public readonly code: string, private opts: SessionOptions, isHost: boolean) {
         this.isHost = isHost;
@@ -332,6 +335,8 @@ export class NetSession {
         room.onMessage((type, data, from) => this.onMessage(type, data, from));
         room.onPeerJoin((id) => this.onPeerJoin(id));
         room.onPeerLeave((id) => this.onPeerLeave(id));
+        // a host who's gone away comes off the front page until they're back
+        if (isHost) this.presence = present$.subscribe(() => this.updateListing());
     }
 
     // Hosts a new season: players join the room and pick who they are, then the host starts it.
@@ -423,12 +428,19 @@ export class NetSession {
         this.updateListing();
     }
 
+    // The lobby screen came up or went away (the host went back to the start screen, say).
+    public setLobbyShown(shown: boolean) {
+        this.lobbyShown = shown;
+        this.updateListing();
+    }
+
     // A public lobby is listed on the front page while it waits for players; private ones never are, and a
     // season that's started comes off it.
+    // A host who left the lobby, or isn't at their device, isn't listed either.
     private updateListing() {
         const setup = this.setup;
         let info: PublicGameInfo | null = null;
-        if (this.isHost && setup && setup.isPublic && !this.started) {
+        if (this.isHost && setup && setup.isPublic && !this.started && this.lobbyShown && present$.value) {
             const host = setup.seats.find((s) => s.peerId === this.room.selfId);
             const size = houseOf(setup, this.cast).length;
             info = {
@@ -555,6 +567,7 @@ export class NetSession {
         clearInterval(this.idleBeat);
         clearTimeout(this.pauseTimer);
         continueWaiting$.next(null);
+        if (this.presence) this.presence.unsubscribe();
         if (this.controller) this.controller.net = null;
         this.room.leave();
         if (active === this) active = null;

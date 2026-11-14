@@ -192,6 +192,11 @@ async function photoURLFromBlob(url: string): Promise<string> {
 
 export function OnlineLobby(props: { session: NetSession }) {
     const status = useStatus(props.session);
+    // a public house is only listed while its lobby is on the host's screen
+    React.useEffect(() => {
+        props.session.setLobbyShown(true);
+        return () => props.session.setLobbyShown(false);
+    }, [props.session]);
     if (status.setup) return <LobbyRoom session={props.session} status={status} />;
     return <SeatPicker session={props.session} status={status} />;
 }

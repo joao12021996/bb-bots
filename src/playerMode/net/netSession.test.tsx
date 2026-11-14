@@ -3,6 +3,7 @@ import { actorOf, newPlayerSave, PlayerModeController, Prompt, Step } from "../p
 import { answer, newGame } from "../testing";
 import { NetSession, SessionOptions, stateHash } from "./netSession";
 import { FakeHub } from "./room";
+import { present$ } from "./presence";
 import { buildOnlineSeason, defaultSetup, houseOf } from "./lobby";
 import { cast as testCast } from "../testing";
 import { SeasonRules, withDefaults } from "../rules";
@@ -706,6 +707,32 @@ describe("online play", () => {
         const { save, claims } = buildOnlineSeason(host.status$.value.setup!, cast, {}, true);
         host.startSeason(save, claims);
         hub.flush();
+        expect(hostRoom.listing).toBeNull();
+    });
+
+    it("a public lobby comes off the list while its host is away or has left the lobby screen", () => {
+        const hub = new FakeHub();
+        const cast = testCast(8);
+        const cards = cast.map((hg) => ({ name: hg.name, imageURL: hg.imageURL }));
+        const hostRoom = hub.join("h") as any;
+        const host = NetSession.hostLobby(hostRoom, "TEST", { ...defaultSetup(cast.length), size: 6 }, cards, opts);
+        hub.flush();
+        expect(hostRoom.listing).not.toBeNull();
+
+        present$.next(false);
+        expect(hostRoom.listing).toBeNull();
+        present$.next(true);
+        expect(hostRoom.listing).not.toBeNull();
+
+        host.setLobbyShown(false);
+        expect(hostRoom.listing).toBeNull();
+        host.setLobbyShown(true);
+        expect(hostRoom.listing).not.toBeNull();
+
+        // a session that's been left doesn't listen any more
+        host.leave();
+        present$.next(false);
+        present$.next(true);
         expect(hostRoom.listing).toBeNull();
     });
 
