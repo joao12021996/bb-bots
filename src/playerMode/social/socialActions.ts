@@ -191,16 +191,8 @@ const HANGOUTS = [
     "talked about life back home",
 ];
 
-const CHAT_LINES = [
-    "came by to chat about life back home.",
-    "pulled you aside to say they've got your back.",
-    "brought you a snack and hung out for a while.",
-    "wanted to vent about the house, and you listened.",
-    "spent the afternoon by the pool with you.",
-];
-
-// Bots come to the players: friendly ones chat, schemers pitch targets, and some ask the player to join (or
-// start) an alliance. Chats take effect right away; pitches and invitations wait for the player's answer.
+// Bots come to the players: friendly ones hang out (quietly: there's nothing to answer), schemers pitch targets,
+// and some ask the player to join (or start) an alliance. Pitches and invitations wait for the player's answer.
 export function botApproaches(gs: MutableGameState, book: AllianceBook, humanId: number, humanIds: number[]): Approach[] {
     const allies = alliesOf(book, humanId);
     const out: Approach[] = [];
@@ -224,8 +216,8 @@ export function botApproaches(gs: MutableGameState, book: AllianceBook, humanId:
             });
             return;
         }
+        // just hanging out: it warms them up a little, but there's nothing to answer, so the player isn't shown it
         shiftRelationship(gs, humanId, bot.id, 0.03 * socialFactor(bot) * (0.5 + rand()));
-        out.push({ kind: "chat", fromId: bot.id, text: `${bot.name} ${CHAT_LINES[rng().randomInt(0, CHAT_LINES.length - 1)]}` });
     });
     return out;
 }

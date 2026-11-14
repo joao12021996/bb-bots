@@ -278,7 +278,10 @@ describe("house rules and difficulty", () => {
     });
 
     it("without big weeks there are always two nominees and no Block Breaker", () => {
-        const { nomCounts, scenes } = playSeason(10, [0], "random", true, { rules: withDefaults({ lastChance: false }) });
+        // the player wins every comp they can, but a Knockout can still send them home first: try a few seeds
+        let run = playSeason(10, [0], "random", true, { rules: withDefaults({ lastChance: false }) });
+        for (let id = 1; run.nomCounts.length === 0 && id < 5; id++) run = playSeason(10, [id], "random", true, { rules: withDefaults({ lastChance: false }) });
+        const { nomCounts, scenes } = run;
         expect(nomCounts.length).toBeGreaterThan(0);
         nomCounts.forEach(([, count]) => expect(count).toBe(2));
         expect(scenes.has("Block Breaker")).toBe(false);
