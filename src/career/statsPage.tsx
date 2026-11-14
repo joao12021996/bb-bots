@@ -1,5 +1,5 @@
 import React from "react";
-import { ACHIEVEMENTS, loadCareer, ordinal, resetCareer, totals } from "./career";
+import { ACHIEVEMENTS, catchUpAchievements, loadCareer, ordinal, resetCareer, totals } from "./career";
 import { SeasonCard, placementText } from "./seasonCard";
 import { ALL_COMPS } from "../playerMode/comps";
 import { bestScore, clearPref } from "../prefs/prefs";
@@ -8,7 +8,10 @@ import { HasText } from "../components/layout/text";
 // My Stats: everything this device remembers about your seasons.
 export function StatsPage() {
     const [version, setVersion] = React.useState(0);
-    const career = React.useMemo(() => loadCareer(), [version]); // eslint-disable-line react-hooks/exhaustive-deps
+    const career = React.useMemo(() => {
+        catchUpAchievements();
+        return loadCareer();
+    }, [version]); // eslint-disable-line react-hooks/exhaustive-deps
     const t = totals(career);
     const [open, setOpen] = React.useState<string | null>(null);
     const bests = ALL_COMPS.filter((c) => bestScore(c.id) !== undefined);
@@ -43,6 +46,7 @@ export function StatsPage() {
                     <div className="bbb-ach-grid">
                         {ACHIEVEMENTS.map((a) => {
                             const got = career.unlocked[a.id];
+                            const [have, need] = !got && a.progress ? a.progress(career) : [0, 0];
                             return (
                                 <div key={a.id} className={"bbb-ach" + (got ? " is-unlocked" : "")}>
                                     <span className="bbb-ach-emoji" aria-hidden="true">
@@ -52,6 +56,16 @@ export function StatsPage() {
                                         <b>{a.title}</b>
                                         <div className="bbb-subtle">{a.how}</div>
                                         {got && <small className="bbb-subtle">Unlocked {new Date(got.when).toLocaleDateString()}</small>}
+                                        {need > 0 && (
+                                            <div className="bbb-ach-progress" role="progressbar" aria-valuemin={0} aria-valuemax={need} aria-valuenow={Math.min(have, need)}>
+                                                <div className="bbb-ach-bar">
+                                                    <div style={{ width: `${Math.min(100, Math.round((have / need) * 100))}%` }} />
+                                                </div>
+                                                <small className="bbb-subtle">
+                                                    {Math.min(have, need)} / {need}
+                                                </small>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             );

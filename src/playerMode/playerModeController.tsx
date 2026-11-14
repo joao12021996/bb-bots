@@ -6503,6 +6503,7 @@ export class PlayerModeController {
             online: !!this.net,
             players: s.humanIds.length,
             highlight: best ? best.text : undefined,
+            jurySize: gs.finalJurySize(),
         };
     }
 
