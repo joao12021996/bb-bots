@@ -166,6 +166,7 @@ import {
 import { generateBlockbusterScene } from "./blockbusterScene";
 import { getComp, getSocial, PlayerProfile } from "../model";
 import { clearSave, writeSave } from "./save/serialize";
+import { count, counterName, countOnce } from "../analytics/analytics";
 import { seedRng } from "./seeding";
 import {
     apparentRelationship,
@@ -1869,6 +1870,7 @@ export class PlayerModeController {
     }
 
     private noteComp(comp: CompDefinition) {
+        countOnce(`${this.state.seed}:${this.state.usedComps.length}`, counterName("comp", comp.id));
         this.state.usedComps = [...this.state.usedComps, comp.id];
     }
 
@@ -2702,6 +2704,17 @@ export class PlayerModeController {
         return { name: this.player(id).name, threat, reputation: rep, alliances, warm, cold, unknown, tips: tips.slice(0, 2) };
     }
 
+    // Anonymous play counts (see analytics.ts): a season started, and how far seasons get.
+    private countWeek(finale: boolean) {
+        const s = this.state;
+        const season = String(s.seed);
+        const mode = this.watching ? "watch" : this.net ? "online" : s.humanIds.length > 1 ? "pass" : "solo";
+        if (s.history.length === 0) {
+            countOnce(season, "start", counterName("start", mode), counterName("start:difficulty", this.difficulty), counterName("start:cast", s.gameState.houseguests.length));
+        }
+        countOnce(season, finale ? "week:finale" : counterName("week", Math.min(s.history.length + 1, 20)));
+    }
+
     private weekStart() {
         const s = this.state;
         const remaining = s.gameState.remainingPlayers;
@@ -2721,6 +2734,7 @@ export class PlayerModeController {
         pruneAlliances(s.gameState, s.book).forEach((a) => this.tellAlliance(a, `💔 ${a.name} is no more.`));
         const title = finale ? "Finale" : `Day ${weekStartDay(s.gameState, s.gameState.phase)}`;
         s.step = finale ? Step.SocialFinale1 : Step.SocialMorning;
+        this.countWeek(finale);
         // "Previously on…": last week, and last week's secret Head of Household, revealed
         const last = s.history[s.history.length - 1];
         const lastSecret = !!last && this.powers.slots.some((sl) => sl.id === "secretHoh" && sl.week === last.week);
@@ -6533,6 +6547,7 @@ export class PlayerModeController {
         ) : (
             table
         );
+        countOnce(String(this.state.seed), "end", counterName("end", this.watching ? "watch" : this.net ? "online" : "played"));
         this.recordHalls();
         // the players on this device: their season goes in their career, and may unlock achievements
         const cards = this.devicePlayers()

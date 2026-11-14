@@ -36,6 +36,18 @@ Set the environment variables in the systemd unit (`Environment=ALLOWED_ORIGINS=
 `curl https://api.spotlegame.co.uk/bb-relay/health` answers with the number of connections, rooms, players and
 listings, and how many connections were refused or dropped since it started.
 
+## Play counts
+
+The game posts anonymous counter names (`week:3`, `comp:maze-runner`, `leave:step:veto`) to `/bb-relay/count`,
+and the relay adds one to each for the day. It keeps nothing else: no addresses, no ids. Read them with
+
+```sh
+curl "https://api.spotlegame.co.uk/bb-relay/counts?days=30"
+```
+
+- `DATA_DIR`: where `counts.json` is kept (the setup script uses `/var/lib/bb-relay`). Not set: memory only.
+- `STATS_TOKEN`: if set, reading needs `?token=...`.
+
 ## Droplet setup: one command
 
 On the droplet that already runs CoSpotle, as root:

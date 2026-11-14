@@ -15,7 +15,14 @@
 //   - connections, rooms opened and listings are capped per address
 //   - every connection has a budget of messages and of bytes; one that keeps going over it is dropped
 // GET /health (or /bb-relay/health) answers with how busy the relay is.
+//
+// Play counts: the game posts lists of counter names ("week:3", "comp:maze-runner") to /bb-relay/count, and the
+// relay adds one to each for the day. That's all it keeps: no addresses, no ids, nothing linking one count to
+// another. GET /bb-relay/counts?days=30 reads them back (with ?token=... if STATS_TOKEN is set). They're kept in
+// DATA_DIR/counts.json when DATA_DIR is set, and in memory only otherwise.
 
+const fs = require("fs");
+const path = require("path");
 const http = require("http");
 const { WebSocketServer } = require("ws");
 
@@ -41,6 +48,15 @@ const DEFAULTS = {
     byteBurst: 8 * 1024 * 1024, // a few snapshots in a row
     maxStrikes: 3, // times over the budget before the connection is dropped
     maxType: 32, // length of a message's type
+    // play counts
+    dataDir: process.env.DATA_DIR || "",
+    statsToken: process.env.STATS_TOKEN || "",
+    maxCountBody: 8 * 1024,
+    maxCountKeys: 200, // counters in one post
+    maxCountersPerDay: 3000, // different counters in a day (made-up names can't fill the disk)
+    countPostsPerMinute: 30, // per address
+    countDaysKept: 400,
+    countSaveMs: 60000,
     // Which websites may connect. Comma-separated hostnames; ".example.com" also allows every subdomain.
     // A connection with no Origin at all (wscat, a health check) is let in: the per-address limits still apply.
     allowedOrigins: (process.env.ALLOWED_ORIGINS || ".spotlegame.co.uk,.github.io,localhost,127.0.0.1")
@@ -236,6 +252,100 @@ function createRelay(options = {}) {
         return true;
     }
 
+    // ---------- play counts ----------
+    const COUNTER = /^[a-z0-9:_-]{1,48}$/;
+    const countsFile = o.dataDir ? path.join(o.dataDir, "counts.json") : "";
+    // day ("2026-11-14") -> counter -> how many
+    let counts = {};
+    let countsDirty = false;
+    if (countsFile) {
+        try {
+            const loaded = JSON.parse(fs.readFileSync(countsFile, "utf8"));
+            if (loaded && typeof loaded === "object" && !Array.isArray(loaded)) counts = loaded;
+        } catch (e) {
+            // none yet
+        }
+    }
+    // address -> posts in the current minute
+    let countPosts = new Map();
+    const today = () => new Date().toISOString().slice(0, 10);
+
+    function addCounts(keys) {
+        if (!Array.isArray(keys)) return 0;
+        const day = today();
+        const bucket = counts[day] || (counts[day] = {});
+        let size = Object.keys(bucket).length;
+        let added = 0;
+        keys.slice(0, o.maxCountKeys).forEach((k) => {
+            if (typeof k !== "string" || !COUNTER.test(k)) return;
+            if (!(k in bucket)) {
+                if (size >= o.maxCountersPerDay) return;
+                size++;
+                bucket[k] = 0;
+            }
+            bucket[k]++;
+            added++;
+        });
+        if (added) countsDirty = true;
+        return added;
+    }
+
+    function saveCounts() {
+        const days = Object.keys(counts).sort();
+        days.slice(0, Math.max(0, days.length - o.countDaysKept)).forEach((d) => delete counts[d]);
+        if (!countsFile || !countsDirty) return;
+        countsDirty = false;
+        try {
+            fs.mkdirSync(o.dataDir, { recursive: true });
+            fs.writeFileSync(countsFile + ".tmp", JSON.stringify(counts));
+            fs.renameSync(countsFile + ".tmp", countsFile);
+        } catch (e) {
+            console.error("Could not save the play counts", e.message);
+        }
+    }
+
+    function readCounts(days) {
+        const out = {};
+        Object.keys(counts)
+            .sort()
+            .slice(-Math.max(1, Math.min(o.countDaysKept, days || 30)))
+            .forEach((d) => (out[d] = counts[d]));
+        return out;
+    }
+
+    function handleCount(req, res) {
+        const origin = req.headers.origin;
+        const cors = origin && originAllowed(origin, o.allowedOrigins) ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {};
+        const done = (code) => {
+            res.writeHead(code, cors);
+            res.end();
+        };
+        if (!originAllowed(origin, o.allowedOrigins)) return done(403);
+        const ip = addressOf(req);
+        if ((countPosts.get(ip) || 0) >= o.countPostsPerMinute) return done(429);
+        count(countPosts, ip, 1);
+        let body = "";
+        let tooBig = false;
+        req.on("data", (chunk) => {
+            if (tooBig) return;
+            body += chunk;
+            if (body.length > o.maxCountBody) {
+                tooBig = true;
+                done(413);
+                req.destroy();
+            }
+        });
+        req.on("end", () => {
+            if (tooBig) return;
+            try {
+                addCounts(JSON.parse(body).k);
+            } catch (e) {
+                return done(400);
+            }
+            done(204);
+        });
+    }
+
     function health() {
         let peers = 0;
         rooms.forEach((room) => (peers += room.size));
@@ -255,10 +365,20 @@ function createRelay(options = {}) {
     }
 
     const server = http.createServer((req, res) => {
-        const path = (req.url || "").split("?")[0];
-        if (req.method === "GET" && (path === "/health" || path === "/bb-relay/health")) {
+        const route = (req.url || "").split("?")[0];
+        if (req.method === "GET" && (route === "/health" || route === "/bb-relay/health")) {
             res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
             return res.end(JSON.stringify(health()));
+        }
+        if (req.method === "POST" && (route === "/count" || route === "/bb-relay/count")) return handleCount(req, res);
+        if (req.method === "GET" && (route === "/counts" || route === "/bb-relay/counts")) {
+            const query = new URLSearchParams((req.url || "").split("?")[1] || "");
+            if (o.statsToken && query.get("token") !== o.statsToken) {
+                res.writeHead(403, { "Content-Type": "text/plain" });
+                return res.end("Forbidden");
+            }
+            res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+            return res.end(JSON.stringify(readCounts(Number(query.get("days")))));
         }
         res.writeHead(426, { "Content-Type": "text/plain" });
         res.end("This is a WebSocket relay.");
@@ -329,9 +449,15 @@ function createRelay(options = {}) {
         });
     }, o.heartbeatMs);
 
+    const countsTimer = setInterval(saveCounts, o.countSaveMs);
+    const countPostsTimer = setInterval(() => (countPosts = new Map()), 60000);
+
     return {
         server,
         health,
+        addCounts,
+        readCounts,
+        saveCounts,
         listen: () =>
             new Promise((resolve) => {
                 server.listen(o.port, o.host, () => resolve(server.address().port));
@@ -339,6 +465,9 @@ function createRelay(options = {}) {
         close: () =>
             new Promise((resolve) => {
                 clearInterval(heartbeat);
+                clearInterval(countsTimer);
+                clearInterval(countPostsTimer);
+                saveCounts();
                 wss.clients.forEach((ws) => ws.terminate());
                 wss.close(() => server.close(() => resolve()));
             }),

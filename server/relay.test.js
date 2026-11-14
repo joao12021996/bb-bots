@@ -259,3 +259,60 @@ test("health says how busy the relay is", async () => {
     assert.equal(body.connections, 1);
     await relay.close();
 });
+
+function post(port, body, headers = {}) {
+    return new Promise((resolve, reject) => {
+        const req = http.request({ host: "127.0.0.1", port, path: "/bb-relay/count", method: "POST", headers: { "Content-Type": "text/plain", ...headers } }, (res) => {
+            res.resume();
+            res.on("end", () => resolve(res.statusCode));
+        });
+        req.on("error", reject);
+        req.end(body);
+    });
+}
+
+function get(port, path) {
+    return new Promise((resolve, reject) => {
+        http.get(`http://127.0.0.1:${port}${path}`, (res) => {
+            let text = "";
+            res.on("data", (c) => (text += c));
+            res.on("end", () => resolve({ status: res.statusCode, text }));
+        }).on("error", reject);
+    });
+}
+
+test("play counts: added up by day, and nothing else is kept", async () => {
+    const { relay, port } = await start();
+    assert.equal(await post(port, JSON.stringify({ k: ["visit", "week:3", "week:3", "Not A Counter", 7, "x".repeat(60)] })), 204);
+    assert.equal(await post(port, "not json"), 400);
+    assert.equal(await post(port, JSON.stringify({ k: ["visit"] }), { Origin: "https://evil.example" }), 403);
+    const { status, text } = await get(port, "/bb-relay/counts?days=7");
+    assert.equal(status, 200);
+    const days = JSON.parse(text);
+    const day = Object.keys(days)[0];
+    assert.deepEqual(days[day], { visit: 1, "week:3": 2 });
+    await relay.close();
+});
+
+test("play counts: one address can't flood them, and made-up names can't pile up", async () => {
+    const { relay, port } = await start({ countPostsPerMinute: 2, maxCountersPerDay: 3 });
+    assert.equal(await post(port, JSON.stringify({ k: ["a", "b", "c", "d", "e", "a"] })), 204);
+    assert.equal(await post(port, JSON.stringify({ k: ["a"] })), 204);
+    assert.equal(await post(port, JSON.stringify({ k: ["a"] })), 429);
+    const day = Object.values(relay.readCounts(1))[0];
+    assert.deepEqual(day, { a: 3, b: 1, c: 1 });
+    await relay.close();
+});
+
+test("play counts: kept on disk between restarts, and behind a token when one is set", async () => {
+    const dir = require("fs").mkdtempSync(require("path").join(require("os").tmpdir(), "bb-relay-"));
+    const first = await start({ dataDir: dir });
+    first.relay.addCounts(["visit", "visit"]);
+    await first.relay.close();
+    const second = await start({ dataDir: dir, statsToken: "secret" });
+    assert.deepEqual(Object.values(second.relay.readCounts(1))[0], { visit: 2 });
+    assert.equal((await get(second.port, "/bb-relay/counts")).status, 403);
+    assert.equal((await get(second.port, "/bb-relay/counts?token=secret")).status, 200);
+    await second.relay.close();
+    require("fs").rmSync(dir, { recursive: true, force: true });
+});

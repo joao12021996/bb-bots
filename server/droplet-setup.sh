@@ -39,6 +39,8 @@ After=network.target
 WorkingDirectory=$APP_DIR
 ExecStart=/usr/bin/node relay.js
 Environment=PORT=8787
+Environment=DATA_DIR=/var/lib/bb-relay
+StateDirectory=bb-relay
 Restart=always
 DynamicUser=yes
 

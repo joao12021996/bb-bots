@@ -9,6 +9,7 @@ import { dealNewCast } from "../../cartoon/newCast";
 import { SeasonEditorPage } from "../seasonEditor/seasonEditorPage";
 import { BehaviorSubject, Subscription } from "rxjs";
 import { TutorialPage } from "../tutorial/tutorialPage";
+import { PrivacyPage } from "../tutorial/privacyPage";
 import { StatsPage } from "../../career/statsPage";
 import { muted$, play } from "../../sound/sound";
 import { reduceMotion$ } from "../../prefs/motion";
@@ -17,6 +18,7 @@ import { Lang, language$, LANGUAGES, setLanguage, t } from "../../i18n/i18n";
 import { names$, renameCount } from "../../i18n/rename";
 import { NamesDialog } from "./namesDialog";
 import { OtherGamesMenu } from "./otherGames";
+import { shareCounts$ } from "../../analytics/analytics";
 
 export enum Screens {
     Deck = 1,
@@ -26,6 +28,7 @@ export enum Screens {
     EditRelationships = 5,
     Tutorial = 6,
     Stats = 7,
+    Privacy = 8,
 }
 
 // for topbar minty colors
@@ -164,6 +167,28 @@ function useSubject<T>(subject: BehaviorSubject<T>): T {
 
 export const CONTACT_EMAIL = "spotlegame@gmail.com";
 
+// What the game keeps and what leaves the device.
+export function PrivacyLink(props: { onOpen?: () => void }): JSX.Element {
+    return (
+        <a
+            {...keyboardPress({})}
+            onClick={() => {
+                props.onOpen && props.onOpen();
+                pushToMainContentStream(<PrivacyPage />, Screens.Privacy);
+            }}
+            onKeyDown={(e: React.KeyboardEvent<HTMLElement>) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                props.onOpen && props.onOpen();
+                pushToMainContentStream(<PrivacyPage />, Screens.Privacy);
+            }}
+            style={{ cursor: "pointer" }}
+        >
+            🔒 {t("Privacy")}
+        </a>
+    );
+}
+
 // "Contact us": opens an email to us.
 export function ContactLink(): JSX.Element {
     return <a href={`mailto:${CONTACT_EMAIL}`}>✉️ {t("Contact us")}</a>;
@@ -176,6 +201,7 @@ export function SettingsMenu(): JSX.Element {
     const calm = useSubject(reduceMotion$);
     const themeChoice = useSubject(themeChoice$);
     const lang = useSubject(language$);
+    const shareCounts = useSubject(shareCounts$);
     const renamed = renameCount(useSubject(names$));
     const [renaming, setRenaming] = React.useState(false);
     // changing language redraws the page, which would restart a comp in progress
@@ -194,6 +220,10 @@ export function SettingsMenu(): JSX.Element {
                     <label className="bbb-toggle">
                         <input type="checkbox" checked={calm} onChange={(e) => reduceMotion$.next(e.target.checked)} />
                         <span>🧘 {t("Reduce motion (no sliding, spinning or pulsing)")}</span>
+                    </label>
+                    <label className="bbb-toggle" title={t("Counts like 'week 3 reached' or 'this comp was played', with nothing about you or your device. They show us where people stop playing.")}>
+                        <input type="checkbox" checked={shareCounts} onChange={(e) => shareCounts$.next(e.target.checked)} />
+                        <span>📊 {t("Share anonymous play counts")}</span>
                     </label>
                     <div className="bbb-settings-language">
                         <span>🌗 {t("Theme")}</span>
@@ -236,6 +266,9 @@ export function SettingsMenu(): JSX.Element {
                     </button>
                     <small className="bbb-subtle">
                         <ContactLink />: {CONTACT_EMAIL}
+                    </small>
+                    <small className="bbb-subtle">
+                        <PrivacyLink onOpen={() => setOpen(false)} />
                     </small>
                     <button type="button" className="button is-small is-light" onClick={() => setOpen(false)}>
                         {t("Close")}

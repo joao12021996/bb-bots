@@ -12,7 +12,19 @@ import { Lang, language$ } from "./i18n/i18n";
 import { ErrorBoundary } from "./components/layout/errorBoundary";
 import { resumeSavedSeason } from "./playerMode/ui/playerSetup";
 import { dealNewCast } from "./cartoon/newCast";
-import { playerModeScreen$ } from "./subjects/subjects";
+import { compsInPlay$, playerModeScreen$ } from "./subjects/subjects";
+import { counterName, countWhereLeft, installCounts } from "./analytics/analytics";
+import { getActiveController } from "./playerMode/playerModeController";
+
+// Where the player was when the page closed: which week, which step, and which comp if one was on.
+function whereLeft(): string[] {
+    const controller = playerModeScreen$.value ? getActiveController() : null;
+    if (!controller) return ["leave:home"];
+    const s = controller.state;
+    const out = [counterName("leave:week", Math.min(s.gameState.phase, 20)), counterName("leave:step", s.step)];
+    if (compsInPlay$.value > 0 && s.usedComps.length > 0) out.push(counterName("leave:comp", s.usedComps[s.usedComps.length - 1]));
+    return out;
+}
 
 function goHome() {
     playerModeScreen$.next(null);
@@ -31,6 +43,8 @@ class App extends React.Component<{}, { theme: ColorTheme; lang: Lang }> {
     }
 
     componentDidMount() {
+        installCounts();
+        countWhereLeft(whereLeft);
         this.sub = language$.subscribe((lang) => lang !== this.state.lang && this.setState({ lang }));
         this.schemeSub = scheme$.subscribe((scheme) => this.setState({ theme: scheme === "light" ? lightTheme : darkTheme }));
     }

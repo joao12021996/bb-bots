@@ -1,6 +1,7 @@
 import React from "react";
 import { hasSave, readOnlineSave } from "../../playerMode/save/serialize";
 import { t } from "../../i18n/i18n";
+import { count, flushCounts } from "../../analytics/analytics";
 
 // Catches a crash anywhere on the page. Without it, one broken screen leaves the whole page blank; with it, the
 // player gets a way back: the season is saved after every step, so it resumes from the last one.
@@ -26,6 +27,8 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
     public componentDidCatch(error: Error, info: React.ErrorInfo) {
         console.error("The page crashed", error, info && info.componentStack);
+        count("crash");
+        flushCounts();
     }
 
     // Switches to a working screen first, then draws the page again: the other way round, the broken screen would
