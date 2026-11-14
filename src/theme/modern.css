@@ -291,6 +291,27 @@ input[type="number"] {
     background: linear-gradient(160deg, rgba(139, 92, 246, 0.28), rgba(236, 72, 153, 0.16)), var(--bbb-card-2);
     border-color: rgba(167, 139, 250, 0.45);
 }
+.bbb-public-games {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--bbb-border);
+}
+.bbb-public-game {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: var(--bbb-radius);
+    background: var(--bbb-card-2);
+}
+.bbb-public-game > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
 .bbb-steps {
     color: var(--bbb-muted);
     font-size: 0.9rem;

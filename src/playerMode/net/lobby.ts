@@ -29,6 +29,7 @@ export interface LobbySetup {
     paceHours?: number; // real time: hours between comps (left out or 0: no waiting, play straight through)
     turnSeconds?: number; // seconds a player has for each decision before a bot makes it (left out or 0: no limit)
     wantPlayers?: number; // how many players the host is waiting for (bots take any spots still empty at the start)
+    isPublic?: boolean; // listed on the front page for anyone to join (left out: private, invite only)
     seats: LobbySeat[]; // the players, in the order they joined
     botOrder: number[]; // cast indexes, in the order bots are picked
 }

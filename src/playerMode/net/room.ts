@@ -10,6 +10,23 @@ export interface NetRoom {
     onPeerLeave(handler: (peerId: string) => void): void;
     peers(): string[];
     leave(): void;
+    // lists this room on the front page for anyone to join (null: takes it down). The listing goes when we leave.
+    advertise(info: PublicGameInfo | null): void;
+}
+
+// What a public game shows on the front page.
+export interface PublicGameInfo {
+    host: string; // the host's name in the house, or "" when they haven't joined it
+    players: number;
+    size: number; // houseguests, players and bots together
+    want: number; // players the host is waiting for
+    difficulty: string;
+    paceHours: number;
+    turnSeconds: number;
+}
+
+export interface PublicGame extends PublicGameInfo {
+    code: string;
 }
 
 // bumped when devices on different versions can't play together, so they never meet in a room
@@ -52,8 +69,61 @@ const CONNECT_TIMEOUT_MS = 10000;
 // this device's id for the whole page load (kept across reconnects)
 const selfId = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
 
+const ROOM_PREFIX = `${APP_ID}:room-`;
+
+// The public games open right now, from the relay. Rejects if it can't be reached.
+export function listPublicGames(): Promise<PublicGame[]> {
+    return new Promise((resolve, reject) => {
+        const socket = new WebSocket(RELAY_URL);
+        let done = false;
+        const finish = (result: PublicGame[] | null) => {
+            if (done) return;
+            done = true;
+            clearTimeout(timeout);
+            socket.close();
+            if (result) resolve(result);
+            else reject(new Error("Online: couldn't list public games"));
+        };
+        const timeout = setTimeout(() => finish(null), CONNECT_TIMEOUT_MS);
+        socket.onopen = () => socket.send(JSON.stringify({ op: "rooms", prefix: ROOM_PREFIX }));
+        socket.onmessage = (event) => {
+            let msg: any;
+            try {
+                msg = JSON.parse(event.data);
+            } catch (e) {
+                return;
+            }
+            if (msg.op === "rooms" && Array.isArray(msg.rooms)) finish(parsePublicGames(msg.rooms));
+            else if (msg.op === "error") finish(null);
+        };
+        socket.onerror = () => finish(null);
+        socket.onclose = () => finish(null);
+    });
+}
+
+// The relay passes listings on as they came: keep only well-formed ones.
+export function parsePublicGames(rooms: { room: string; info: any }[]): PublicGame[] {
+    const num = (n: any, fallback = 0) => (typeof n === "number" && isFinite(n) ? n : fallback);
+    return rooms
+        .filter((r) => r && typeof r.room === "string" && r.room.startsWith(ROOM_PREFIX) && r.info && typeof r.info === "object")
+        .map((r) => {
+            const info = r.info;
+            return {
+                code: cleanRoomCode(r.room.slice(ROOM_PREFIX.length)),
+                host: typeof info.host === "string" ? info.host.slice(0, 24) : "",
+                players: num(info.players),
+                size: num(info.size),
+                want: num(info.want),
+                difficulty: typeof info.difficulty === "string" ? info.difficulty : "normal",
+                paceHours: num(info.paceHours),
+                turnSeconds: num(info.turnSeconds),
+            };
+        })
+        .filter((g) => g.code.length === 6);
+}
+
 export function openRoom(code: string): Promise<NetRoom> {
-    const roomName = `${APP_ID}:room-${code}`;
+    const roomName = `${ROOM_PREFIX}${code}`;
     const handlers: ((type: string, data: any, from: string) => void)[] = [];
     const joinHandlers: ((id: string) => void)[] = [];
     const leaveHandlers: ((id: string) => void)[] = [];
@@ -62,6 +132,7 @@ export function openRoom(code: string): Promise<NetRoom> {
     let left = false;
     let retry = 0;
     let retryTimer: any = null;
+    let listing: PublicGameInfo | null = null; // sent again after a reconnect
 
     const peerJoined = (id: string) => {
         if (id === selfId || peers.has(id)) return;
@@ -93,6 +164,10 @@ export function openRoom(code: string): Promise<NetRoom> {
             clearTimeout(retryTimer);
             if (ws) ws.close();
         },
+        advertise: (info) => {
+            listing = info;
+            if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ op: "list", info }));
+        },
     };
 
     return new Promise<NetRoom>((resolve, reject) => {
@@ -113,6 +188,7 @@ export function openRoom(code: string): Promise<NetRoom> {
                 if (msg.op === "welcome") {
                     clearTimeout(timeout);
                     retry = 0;
+                    if (listing) socket.send(JSON.stringify({ op: "list", info: listing }));
                     if (!opened) {
                         opened = true;
                         resolve(room);
@@ -236,6 +312,11 @@ class FakeRoom implements NetRoom {
     }
     leave() {
         this.hub.drop(this.selfId);
+        this.listing = null;
+    }
+    public listing: PublicGameInfo | null = null;
+    advertise(info: PublicGameInfo | null) {
+        this.listing = info;
     }
     receive(type: string, data: any, from: string) {
         this.handlers.forEach((h) => h(type, data, from));

@@ -4,8 +4,8 @@ import { getById } from "../../model";
 import { actorOf, migrateSave, PlayerModeController, PlayerSave, Prompt, Step } from "../playerModeController";
 import { clearOnlineSave, deserialize, serialize, writeOnlineSave } from "../save/serialize";
 import { seedRng } from "../seeding";
-import { NetRoom } from "./room";
-import { canJoin, CastCard, LobbySeat, LobbySetup, normalizeSetup } from "./lobby";
+import { NetRoom, PublicGameInfo } from "./room";
+import { canJoin, CastCard, houseOf, LobbySeat, LobbySetup, normalizeSetup } from "./lobby";
 
 // Online play without a server.
 //
@@ -322,6 +322,7 @@ export class NetSession {
     private allChat: ChatMessage[] = [];
     private chatSeq = 0;
     private juryChatSent = new Set<number>();
+    private listed = "null"; // the public listing last sent to the relay (JSON)
 
     private constructor(private room: NetRoom, public readonly code: string, private opts: SessionOptions, isHost: boolean) {
         this.isHost = isHost;
@@ -419,6 +420,31 @@ export class NetSession {
             this.checkAway();
             this.checkIdle();
         }
+        this.updateListing();
+    }
+
+    // A public lobby is listed on the front page while it waits for players; private ones never are, and a
+    // season that's started comes off it.
+    private updateListing() {
+        const setup = this.setup;
+        let info: PublicGameInfo | null = null;
+        if (this.isHost && setup && setup.isPublic && !this.started) {
+            const host = setup.seats.find((s) => s.peerId === this.room.selfId);
+            const size = houseOf(setup, this.cast).length;
+            info = {
+                host: host ? host.name : "",
+                players: setup.seats.length,
+                size,
+                want: Math.min(size, Math.max(setup.seats.length, setup.wantPlayers || 0)),
+                difficulty: setup.difficulty,
+                paceHours: setup.paceHours || 0,
+                turnSeconds: setup.turnSeconds || 0,
+            };
+        }
+        const json = JSON.stringify(info);
+        if (json === this.listed) return;
+        this.listed = json;
+        this.room.advertise(info);
     }
 
     // ---------- lobby ----------

@@ -49,6 +49,8 @@ export const FR: { [english: string]: string } = {
         "Chacun sur son téléphone ou son ordinateur, où qu'il soit. Crée une partie et partage le code : la maison commence pleine de bots, et chaque ami qui arrive prend la place de l'un d'eux.",
     "Join or rejoin a game": "Rejoindre ou retrouver une partie",
     "Join a game": "Rejoindre une partie",
+    "Public games": "Parties publiques",
+    "No public games right now. Host one and set it to Public!": "Aucune partie publique pour l'instant. Crée-en une et rends-la publique !",
     "Couldn't open a room. Check your internet connection and try again.": "Impossible d'ouvrir un salon. Vérifie ta connexion internet et réessaie.",
     "Opening a room…": "Ouverture du salon…",
     "Host a game": "Créer une partie",

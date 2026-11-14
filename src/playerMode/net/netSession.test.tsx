@@ -676,6 +676,40 @@ describe("online play", () => {
         expect(prompt(a).kind).toBe("gameOver");
     });
 
+    it("a lobby is private unless the host makes it public, and comes off the list when the season starts", () => {
+        const hub = new FakeHub();
+        const cast = testCast(8);
+        const cards = cast.map((hg) => ({ name: hg.name, imageURL: hg.imageURL }));
+        const hostRoom = hub.join("h") as any;
+        const host = NetSession.hostLobby(hostRoom, "TEST", { ...defaultSetup(cast.length), size: 6 }, cards, opts);
+        const aRoom = hub.join("a") as any;
+        const a = NetSession.join(aRoom, "TEST", opts);
+        hub.flush();
+        expect(hostRoom.listing).toBeNull();
+
+        host.updateSetup({ isPublic: true });
+        host.takeSeat({ name: "Host", imageURL: "", castIndex: null });
+        hub.flush();
+        expect(hostRoom.listing).toMatchObject({ host: "Host", players: 1, size: 6 });
+        // only the host lists it
+        expect(aRoom.listing).toBeNull();
+        a.takeSeat({ name: "Ana", imageURL: "", castIndex: null });
+        hub.flush();
+        expect(hostRoom.listing.players).toBe(2);
+
+        host.updateSetup({ isPublic: false });
+        hub.flush();
+        expect(hostRoom.listing).toBeNull();
+        host.updateSetup({ isPublic: true });
+        hub.flush();
+        expect(hostRoom.listing).not.toBeNull();
+
+        const { save, claims } = buildOnlineSeason(host.status$.value.setup!, cast, {}, true);
+        host.startSeason(save, claims);
+        hub.flush();
+        expect(hostRoom.listing).toBeNull();
+    });
+
     it("the house grows when more people join than there are bots", () => {
         const hub = new FakeHub();
         const cast = testCast(4);
