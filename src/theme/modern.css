@@ -282,13 +282,6 @@ input[type="number"] {
     border-radius: var(--bbb-radius);
     background: var(--bbb-card-2);
 }
-.bbb-other-game {
-    color: var(--bbb-text) !important;
-    text-decoration: none;
-}
-.bbb-other-game:hover {
-    background: rgba(var(--bbb-ink), 0.06);
-}
 .bbb-public-game > span {
     display: flex;
     flex-direction: column;
@@ -2672,6 +2665,44 @@ input[type="number"] {
 .bbb-settings {
     position: relative;
     display: inline-block;
+}
+/* Other games: a nav link that opens a small panel under it, from the left */
+.bbb-nav > .bbb-other-games {
+    padding: 0;
+}
+.bbb-nav-button {
+    background: none;
+    border: 0;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+.bbb-nav-button:hover,
+.bbb-nav-button[aria-expanded="true"] {
+    background: rgba(var(--bbb-ink), 0.06);
+    color: var(--bbb-text);
+}
+.bbb-other-games-panel {
+    left: 0;
+    right: auto;
+    width: min(280px, 86vw);
+    gap: 2px;
+    padding: 6px;
+}
+.bbb-other-game {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 10px;
+    border-radius: 8px;
+    color: var(--bbb-text) !important;
+    text-decoration: none;
+    font-weight: 400;
+}
+.bbb-other-game:hover,
+.bbb-other-game:focus-visible {
+    background: rgba(var(--bbb-ink), 0.06);
 }
 .bbb-settings-panel {
     position: absolute;

@@ -15,7 +15,6 @@ import { CompTestMode } from "../../playerMode/ui/compTestMode";
 import { hasSave, readOnlineSave } from "../../playerMode/save/serialize";
 import { HostOnlineButton, joinCodeFromUrl, PublicGames, showJoinScreen } from "../../playerMode/ui/onlineLobby";
 import { t } from "../../i18n/i18n";
-import { OtherGames } from "./otherGames";
 
 // An invite link (?join=CODE) opens the join screen, once.
 let inviteHandled = false;
@@ -192,7 +191,6 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                     .
                 </p>
                 <PublicGames />
-                <OtherGames />
             </HasText>
         );
     }

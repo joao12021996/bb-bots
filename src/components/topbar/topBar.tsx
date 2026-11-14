@@ -16,6 +16,7 @@ import { ThemeChoice, themeChoice$ } from "../../prefs/colorScheme";
 import { Lang, language$, LANGUAGES, setLanguage, t } from "../../i18n/i18n";
 import { names$, renameCount } from "../../i18n/rename";
 import { NamesDialog } from "./namesDialog";
+import { OtherGamesMenu } from "./otherGames";
 
 export enum Screens {
     Deck = 1,
@@ -257,6 +258,7 @@ export class Topbar extends React.Component<{ style?: any }, { tab: Screens }> {
                 <nav className="bbb-nav">
                     <ChooseCastLink />
                     <StatsLink />
+                    <OtherGamesMenu />
                     <BackToGameLink tab={this.state.tab} />
                 </nav>
                 <nav className="bbb-nav">
