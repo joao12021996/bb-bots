@@ -35,10 +35,12 @@ export class MainPage extends React.Component<MainPageProps, MainPageState> {
         return (
             <div style={wrapperStyle}>
                 <Topbar style={hideOnFullscreen} />
-                {/* draws nothing: it only keeps track of the episodes and scene navigation */}
-                <Sidebar />
-                <div style={{ overflowX: "hidden", padding: "0.75rem" }}>
-                    <MainContentArea />
+                <div className="columns">
+                    <Sidebar hidden={fullscreen} />
+
+                    <div className="column" style={{ overflowX: "hidden" }}>
+                        <MainContentArea />
+                    </div>
                 </div>
             </div>
         );
