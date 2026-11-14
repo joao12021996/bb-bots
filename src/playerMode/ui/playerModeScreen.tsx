@@ -647,10 +647,10 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         // a comp's on (playing, waiting on the others, the results): no house wall
         const inComp =
             COMP_SCREENS.includes(prompt.kind) || (prompt.kind === "waiting" && !!prompt.comp);
-        // a Have-Not's week is grey, part of the punishment (but not their comps: some are played by colour)
+        // a Have-Not's week is grey, part of the punishment, comps and all, until the next HoH comp
         const viewer = session ? session.localPlayerId : controller.state.humanIds.length === 1 ? controller.state.humanIds[0] : actor;
         const haveNot =
-            viewer !== null && !inComp && controller.state.humanIds.includes(viewer) && controller.isHaveNot(viewer) && !controller.player(viewer).isEvicted;
+            viewer !== null && controller.state.humanIds.includes(viewer) && controller.isHaveNot(viewer) && !controller.player(viewer).isEvicted;
         return (
             <div className={`bbb-player-mode${haveNot ? " bbb-have-not" : ""}`}>
                 {session && <OnlineBar session={session} controller={controller} />}

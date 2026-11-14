@@ -272,7 +272,7 @@ interface WeekProgress {
     locks?: { [key: string]: any };
     evictionIntro?: boolean;
     finaleIntro?: boolean;
-    haveNots?: number[]; // the worst scorers in this week's HoH comp: one social action per block until the eviction
+    haveNots?: number[]; // the worst scorers in this week's HoH comp: one social action per block, and grey, until the next one
     nomWhy?: { [nomineeId: number]: string }; // why a bot HoH nominated who they did
 }
 
@@ -4563,8 +4563,8 @@ export class PlayerModeController {
 
     // ---------- Have-Nots ----------
 
-    // The worst scorers in the HoH comp are this week's Have-Nots. Until the eviction, they get one social action
-    // per block, and a human Have-Not's screen goes grey (not their comps).
+    // The worst scorers in the HoH comp are this week's Have-Nots. Until the next HoH comp (the week's end), they get
+    // one social action per block, and a human Have-Not's screen goes grey, comps included.
     private pickHaveNots(worstFirst: number[]) {
         const s = this.state;
         const ids = worstFirst.slice(0, haveNotCount(nonEvictedHouseguests(s.gameState).length));
@@ -4572,10 +4572,10 @@ export class PlayerModeController {
         if (ids.length === 0) return;
         const names = listNames(ids.map((id) => this.player(id).name));
         this.feedPush(`🥫 ${names} ${ids.length === 1 ? "is" : "are"} this week's Have-Not${ids.length === 1 ? "" : "s"}.`);
-        this.tell(ids, "🥫 You scored among the worst in the HoH comp, so you're a Have-Not this week: one social action per block, and the house in greyscale, until the eviction.");
+        this.tell(ids, "🥫 You scored among the worst in the HoH comp, so you're a Have-Not this week: one social action per block, and the house in greyscale (comps too), until the next HoH comp.");
         this.announce("🥫 The Have-Nots", [
             `The worst scores in the ${HOH} competition: ${names}.`,
-            `Until the eviction, they only have the energy for one social action at a time, and the house is in greyscale for them (comps stay in colour).`,
+            `Until the next ${HOH} comp, they only have the energy for one social action at a time, and the house is in greyscale for them, comps included.`,
         ]);
     }
 
