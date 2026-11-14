@@ -1,75 +1,83 @@
-## Houseguest Bots: A Reality Competition Simulator ##
+# Houseguest Bots
 
---> https://spaulmark.github.io/bb-bots/ <--
+A reality TV strategy game that runs in your browser. Move into a house full of cartoon houseguests, make
+alliances, win competitions, survive the vote, and convince the jury you played the best game.
 
-Houseguest Bots is a simulator for a social strategy game in a house full of cartoon houseguests.
+**Play it: <https://spotlegame.co.uk/houseguests/>**
 
-Deal a cast of cartoon houseguests (or upload your own), then add twists and watch as everyone votes each other out until one winner remains! You can contact me on github or at `.prof.plum`.
+![Houseguest Bots: reality TV, simulated](public/share.png)
 
-<p align="center">
-    <img width="" src="https://spaulmark.github.io/src/bb-bots.png" alt="Preview Image">
-</p>
+## Ways to play
 
----
+- **Play as a houseguest.** Solo against bots, or pass-and-play with friends on one device.
+- **Play online.** Everyone on their own phone or computer. Host a game, share the code or the invite link, and
+  each friend who joins takes a bot's place. Games can be public (listed on the start screen) or private.
+- **Watch the bots.** Every houseguest is a bot; you see everything they do behind the scenes.
+- **Classic simulator.** The original quick simulator: step through a season week by week, with the twists from
+  the season editor (double and triple evictions, teams, split house and more).
 
-## A Cast of Cartoon Houseguests ##
+## What's in a season
 
-Every season starts with a cast of made-up cartoon houseguests, drawn on the spot: skin, face shape, hair, eyes,
-brows, nose, mouth, glasses, facial hair, hats, extras and outfits all vary, so no two look alike. Press **New Cast**
-for a different house. Players design their own avatar the same way, feature by feature, or use a photo.
+- **A week in the house**: Head of Household comp, nominations, the Veto, campaigning, speeches and a live vote.
+  Bigger houses get a third nominee and a Block Breaker comp.
+- **A social game**: chat, pitch a target, make final-two deals, start alliances, spread rumours, flirt, snoop on
+  meetings, or call a house meeting. Bots remember promises you kept and broke, and so does the jury.
+- **Bots with personalities**: masterminds, comp beasts, floaters, loyal soldiers, villains and more. They keep
+  their personality secret; you work it out from how they behave.
+- **About 40 competitions** played on your phone or computer: memory, reflex, puzzle, quiz, endurance and luck.
+  Bots play the same comp you do.
+- **Twists**: secret powers, a secret Head of Household, Have-Nots, the audience picking a nominee, and a Battle
+  Back for evicted houseguests.
+- **A finale**: a three-part final Head of Household, speeches, jury questions, and a vote that depends on how
+  you treated people on the way.
+- **A career**: stats, achievements, best comp scores, and a Hall of Winners and Hall of Losers whose houseguests
+  can be cast again.
 
----
+Difficulty runs from Casual to Cutthroat, and the house rules (number of social actions, kinds of comps, big
+weeks) can be changed before a season starts. The game is in English and French.
 
-## Upload your own Characters ##
+## Your cast
 
+Every season starts with a cast of made-up cartoon houseguests, drawn on the spot, so no two look alike. Deal a
+new cast, design your own avatar feature by feature, or upload your own pictures. A cast can be shared with a
+link or a code.
 
-![Screenshot from 2022-04-03 16-24-51](https://user-images.githubusercontent.com/48075143/161447161-b9344258-2348-4dfa-bd78-d0fcebbd6c67.png)
+## Running it locally
 
-You can also upload your own images by dragging and dropping them into the screen, or selecting them from your filesystem. If their names don't turn out right, you can edit them using the pencil button. 
-
----
-
-## Edit a Cast of Characters ##
-
-![random1](https://user-images.githubusercontent.com/48075143/161447573-8c3a1f56-0a45-4640-9505-477ce9a8d81d.png)
-
-**Including characters:** to include a character, click on them to select them. Once you've selected all the characters you want in your simulation, enter the number of players you want in your simulation in the box next to the random button, then click random. **Characters that are selected will never be removed by the random button.**
-
-**Excluding characters:** to delete a character, double click the X on the top of their card. You can also delete characters in bulk by clicking on them and then pressing delete selected. 
-
----
-
-## Understanding Relationships ##
-
-![legend](https://cmsweb.utsc.utoronto.ca/c46blog-f20/wp-content/uploads/2020/11/legend-768x458.png)
-
-Popularity is the average of a player’s relationships, and dictates the background colour of the card. # of people targeting me indicates the number of players that would nominate this player as an initial nomination if they won HoH. 
-
-![image](https://user-images.githubusercontent.com/48075143/161447992-9cfc7699-5a42-415b-a8dc-f2b452ef5f66.png)
-
-Pawn/Queen relationships occur when one player (the pawn) likes another player (the queen), but the queen does not care about the pawn. This is a one-sided relationship.
-
----
-
-## Understanding Alliances: or "What do the arrows mean?" ##
-
-![image](https://user-images.githubusercontent.com/48075143/161448070-e995dafc-d1cb-44c1-8eef-4241b949db49.png)
-
-The arrows show you the overlap between alliances, like a venn diagram. Nemuno is friends with Cirno, and Merlin is friends with Cirno, but Merlin is not nessecarily friends with Nemuno. You can also think of this like the core of an alliance, and its affiliates.
-
----
-
-## Understanding Endgame Winrate ##
-
-![image](https://user-images.githubusercontent.com/48075143/161448238-7cfac826-d4a2-4749-a6f7-e91d73228355.png)
-
-Jurors typically prefer to vote for their friends, so people with a lot of friends on jury will have an advantage if they make it to the final 2. You can click on players to see what their chances are against each opponent in an F2. If you haven't clicked on anyone, it displays the average chance they have of winning if they made it to the end.
-
----
-
-## Running Locally (for developers) ## 
-```
+```sh
 npm install
-npm start
+npm start          # http://localhost:3000
 ```
-(you might get some issues with node-sass, because i have never in my life not had issues with node-sass. my only advice is just do stuff until it works)
+
+Tests (the full suite takes about three minutes, so run the part you changed):
+
+```sh
+CI=true npx react-scripts test --watchAll=false src/career
+npx tsc --noEmit
+```
+
+Online play goes through a small WebSocket relay. To run your own, see [server/README.md](server/README.md).
+
+## Where things are
+
+| Folder | What's in it |
+| --- | --- |
+| `src/playerMode` | Playing a season: the controller, the week's steps, saving |
+| `src/playerMode/comps` | Every competition, and how bots play them |
+| `src/playerMode/social` | Alliances, promises, personalities, the jury, powers and twists |
+| `src/playerMode/net` | Online play |
+| `src/playerMode/ui` | The screens of player mode |
+| `src/components`, `src/model`, `src/utils` | The classic simulator and what both modes share |
+| `src/cartoon` | Drawing the cartoon houseguests |
+| `src/career` | Stats, achievements and the halls |
+| `server` | The online relay |
+
+## Contact
+
+Questions, bugs and ideas: <spotlegame@gmail.com>.
+
+## Credits
+
+Houseguest Bots began as [bb-bots](https://github.com/spaulmark/bb-bots) by Spencer Paulmark, a simulator for a
+social strategy game, and still includes it as the classic mode. Released under the MIT licence; see
+[LICENSE](LICENSE).
