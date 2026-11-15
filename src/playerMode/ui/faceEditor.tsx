@@ -1,5 +1,12 @@
 import React from "react";
-import { CartoonLook, cartoonURL, LOOK_PARTS, lookFromURL, lookOf, randomLook } from "../../cartoon/cartoon";
+import { CartoonLook, cartoonURL, LOOK_PARTS, lookFromURL, lookOf, randomLook, unlockFor, UNLOCKS } from "../../cartoon/cartoon";
+import { ACHIEVEMENTS, loadCareer } from "../../career/career";
+
+// The options there are to earn, and whether this device's player has earned them.
+function useUnlocked(): (achievement: string) => boolean {
+    const [unlocked] = React.useState(() => loadCareer().unlocked);
+    return (achievement: string) => !!unlocked[achievement];
+}
 
 export interface Look {
     name: string;
@@ -10,10 +17,22 @@ export interface Look {
 // shuffle for a random start. Or use your own photo.
 export function AvatarBuilder(props: { look: CartoonLook; onChange: (look: CartoonLook) => void }) {
     const { look } = props;
+    const has = useUnlocked();
+    const open = (key: keyof CartoonLook, index: number) => {
+        const needs = unlockFor(key, index);
+        return !needs || has(needs);
+    };
+    // on to the next option the player can wear (the ones still to earn are skipped)
     const step = (key: keyof CartoonLook, by: number) => {
         const count = LOOK_PARTS.find((p) => p.key === key)!.options.length;
-        props.onChange({ ...look, [key]: (look[key] + by + count) % count });
+        let next = look[key];
+        for (let i = 0; i < count; i++) {
+            next = (next + by + count) % count;
+            if (open(key, next)) break;
+        }
+        props.onChange({ ...look, [key]: next });
     };
+    const toEarn = UNLOCKS.filter((u) => !has(u.achievement));
     return (
         <div className="bbb-avatar-parts">
             {LOOK_PARTS.map((part) => (
@@ -28,6 +47,26 @@ export function AvatarBuilder(props: { look: CartoonLook; onChange: (look: Carto
                     </button>
                 </div>
             ))}
+            {UNLOCKS.length > 0 && (
+                <div className="bbb-avatar-unlocks">
+                    {toEarn.length === 0 ? (
+                        <small className="bbb-subtle">🎁 You've earned every hat and extra there is.</small>
+                    ) : (
+                        <>
+                            <small className="bbb-subtle">🔒 {toEarn.length} more to earn:</small>
+                            {toEarn.map((u) => {
+                                const part = LOOK_PARTS.find((p) => p.key === u.part)!;
+                                const a = ACHIEVEMENTS.find((x) => x.id === u.achievement);
+                                return (
+                                    <small key={`${u.part}-${u.index}`} className="bbb-subtle" title={a ? a.how : undefined}>
+                                        <b>{part.options[u.index]}</b>: {a ? `${a.emoji} ${a.title} (${a.how.replace(/\.$/, "")})` : u.achievement}
+                                    </small>
+                                );
+                            })}
+                        </>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

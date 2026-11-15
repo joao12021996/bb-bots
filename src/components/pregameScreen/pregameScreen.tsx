@@ -13,7 +13,7 @@ import { selectPlayer } from "../playerPortrait/selectedPortrait";
 import { PlayerSetup, resumeSavedSeason, startDaily, watchBots } from "../../playerMode/ui/playerSetup";
 import { CompTestMode } from "../../playerMode/ui/compTestMode";
 import { hasSave, readOnlineSave } from "../../playerMode/save/serialize";
-import { HostOnlineButton, joinCodeFromUrl, PublicGames, showJoinScreen } from "../../playerMode/ui/onlineLobby";
+import { HostOnlineButton, joinCodeFromUrl, PublicGames, QuickPlayButton, RejoinBanner, showJoinScreen } from "../../playerMode/ui/onlineLobby";
 import { t } from "../../i18n/i18n";
 import { SavedSeasons } from "../../playerMode/ui/savedSeasons";
 import { DailyCard } from "../../playerMode/ui/dailyCard";
@@ -80,6 +80,7 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                         📖 {t("How to play")}
                     </button>
                 </div>
+                <RejoinBanner />
                 <DailyCard onPlay={(name) => startDaily(name)} onResume={(id) => resumeSavedSeason(id)} />
                 <div className="bbb-modes">
                     <div className="bbb-mode-card">
@@ -161,6 +162,7 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
                                     {t("Deal a cast first")}
                                 </button>
                             )}
+                            <QuickPlayButton />
                             <button className="button is-light" onClick={() => showJoinScreen()}>
                                 {readOnlineSave() ? t("Join or rejoin a game") : t("Join a game")}
                             </button>

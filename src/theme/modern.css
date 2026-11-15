@@ -3719,3 +3719,95 @@ table td {
     line-height: 1.5;
     overflow-x: auto;
 }
+
+/* ---------- online: removing a player, reactions, the rejoin banner ---------- */
+.bbb-kick {
+    margin-left: 6px;
+    border: 0;
+    background: transparent;
+    color: var(--bbb-rose-text);
+    cursor: pointer;
+    font-size: 0.8em;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+.bbb-kick:hover,
+.bbb-kick:focus-visible {
+    background: rgba(225, 29, 72, 0.15);
+}
+.bbb-reaction {
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 1.25em;
+    animation: bbb-reaction-pop 0.35s ease-out;
+}
+@keyframes bbb-reaction-pop {
+    from {
+        transform: scale(0.2) translateY(6px);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+.bbb-reduce-motion .bbb-reaction {
+    animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+    .bbb-reaction {
+        animation: none;
+    }
+}
+.bbb-react-bar {
+    display: inline-flex;
+    gap: 2px;
+    flex-wrap: wrap;
+}
+.bbb-react-bar button {
+    border: 0;
+    background: transparent;
+    font-size: 1.15rem;
+    line-height: 1;
+    padding: 4px 5px;
+    border-radius: 8px;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.bbb-react-bar button:hover,
+.bbb-react-bar button:focus-visible {
+    background: var(--bbb-card-2);
+}
+.bbb-rejoin {
+    max-width: 760px;
+    margin: 0 auto 14px;
+    padding: 10px 14px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    border-radius: 12px;
+    border: 1px solid var(--bbb-info);
+    background: rgba(2, 132, 199, 0.12);
+    text-align: left;
+}
+.bbb-rejoin-buttons {
+    display: flex;
+    gap: 6px;
+}
+
+/* ---------- avatar options to earn ---------- */
+.bbb-avatar-unlocks {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 8px;
+    text-align: left;
+}
+.bbb-ach-gift {
+    display: block;
+    color: var(--bbb-gold-text);
+    font-weight: 600;
+}

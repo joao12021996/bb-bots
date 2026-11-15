@@ -4,6 +4,7 @@ import { SeasonCard, placementText } from "./seasonCard";
 import { ALL_COMPS } from "../playerMode/comps";
 import { bestScore, clearPref } from "../prefs/prefs";
 import { HasText } from "../components/layout/text";
+import { LOOK_PARTS, UNLOCKS } from "../cartoon/cartoon";
 import { describeBackup, downloadText, makeBackup, parseBackup, pickTextFile, restoreBackup } from "../prefs/backup";
 
 // My Stats: everything this device remembers about your seasons.
@@ -87,6 +88,11 @@ export function StatsPage() {
                                     <div>
                                         <b>{a.title}</b>
                                         <div className="bbb-subtle">{a.how}</div>
+                                        {UNLOCKS.filter((u) => u.achievement === a.id).map((u) => (
+                                            <small key={`${u.part}-${u.index}`} className="bbb-ach-gift">
+                                                🎁 {got ? "Unlocked" : "Unlocks"}: {LOOK_PARTS.find((p) => p.key === u.part)!.options[u.index]} ({u.part === "hat" ? "a hat" : "an extra"} for your avatar)
+                                            </small>
+                                        ))}
                                         {got && <small className="bbb-subtle">Unlocked {new Date(got.when).toLocaleDateString()}</small>}
                                         {need > 0 && (
                                             <div className="bbb-ach-progress" role="progressbar" aria-valuemin={0} aria-valuemax={need} aria-valuenow={Math.min(have, need)}>

@@ -1,4 +1,5 @@
-import { BehaviorSubject } from "rxjs";
+import { BehaviorSubject, Subject } from "rxjs";
+import { cleanChat, cleanName } from "./filter";
 import { continueWaiting$ } from "../../subjects/subjects";
 import { getById } from "../../model";
 import { actorOf, migrateSave, PlayerModeController, PlayerSave, Prompt, Step } from "../playerModeController";
@@ -75,6 +76,16 @@ export interface Slot {
     name: string;
     imageURL: string;
 }
+
+// A reaction to what's on screen: an emoji next to a player's name for a moment. Not part of the season: it isn't
+// saved, ordered or replayed.
+export const REACTIONS = ["😂", "😱", "👏", "😡", "😢", "🐍", "🔥", "👀"];
+export interface Reaction {
+    playerId: number;
+    emoji: string;
+    at: number;
+}
+const REACTION_GAP_MS = 700; // one device can't flood everyone's screen
 
 export interface NetStatus {
     code: string;
@@ -261,6 +272,13 @@ export class NetSession {
     public controller: PlayerModeController | null = null;
     public resyncs = 0; // times this device found itself out of sync with the host
     public readonly chat$ = new BehaviorSubject<ChatMessage[]>([]); // the messages this device's player may read
+    public readonly reactions$ = new Subject<Reaction>(); // reactions as they come in, this device's included
+    private lastReactionAt = 0;
+    private reactedAt: { [peerId: string]: number } = {};
+    // the host: devices it removed from the game, and the names they went by (they can't take a seat again)
+    private banned = new Set<string>();
+    private bannedNames = new Set<string>();
+    public removed = false; // this device was removed by the host
 
     private isHost: boolean;
     private hostId: string | null;
@@ -445,7 +463,7 @@ export class NetSession {
             const host = setup.seats.find((s) => s.peerId === this.room.selfId);
             const size = houseOf(setup, this.cast).length;
             info = {
-                host: host ? host.name : "",
+                host: host ? cleanName(host.name, "") : "",
                 players: setup.seats.length,
                 size,
                 want: Math.min(size, Math.max(setup.seats.length, setup.wantPlayers || 0)),
@@ -500,11 +518,65 @@ export class NetSession {
         else if (this.hostId) this.room.send("unseat", {}, this.hostId);
     }
 
+    // ---------- removing a player (the host) ----------
+
+    private isBanned(peerId: string, name?: string): boolean {
+        return this.banned.has(peerId) || (!!name && this.bannedNames.has(name.trim().toLowerCase()));
+    }
+
+    // The host removes someone: from the lobby (their spot goes back to a bot), or from a season under way (a bot
+    // plays for them from here on). They can't take a seat in this game again.
+    public kick(target: { peerId: string } | { playerId: number }) {
+        if (!this.isHost) return;
+        let peerId: string | undefined;
+        let name: string | undefined;
+        if ("peerId" in target) {
+            peerId = target.peerId;
+            const seat = this.setup && this.setup.seats.find((s) => s.peerId === peerId);
+            name = seat ? seat.name : undefined;
+        } else {
+            peerId = this.claims[target.playerId];
+            const slot = this.slots.find((s) => s.id === target.playerId);
+            name = slot ? slot.name : undefined;
+            if (target.playerId === this.localPlayerId) return;
+            delete this.claims[target.playerId];
+        }
+        if (!peerId || peerId === this.room.selfId) return;
+        this.banned.add(peerId);
+        if (name) this.bannedNames.add(name.trim().toLowerCase());
+        this.room.send("kicked", {}, peerId);
+        if (this.setup && !this.started) this.unseatPeer(peerId);
+        this.broadcastLobby();
+    }
+
+    // ---------- reactions ----------
+
+    public react(emoji: string) {
+        const playerId = this.localPlayerId;
+        const now = Date.now();
+        if (playerId === null || !REACTIONS.includes(emoji) || now - this.lastReactionAt < REACTION_GAP_MS) return;
+        this.lastReactionAt = now;
+        this.room.send("react", { p: playerId, e: emoji });
+        this.reactions$.next({ playerId, emoji, at: now });
+    }
+
+    private receiveReaction(data: any, from: string) {
+        if (!data || !REACTIONS.includes(data.e) || this.claims[Number(data.p)] !== from) return;
+        const now = Date.now();
+        if (now - (this.reactedAt[from] || 0) < REACTION_GAP_MS / 2) return;
+        this.reactedAt[from] = now;
+        this.reactions$.next({ playerId: Number(data.p), emoji: data.e, at: now });
+    }
+
     private seatPeer(peerId: string, seat: Omit<LobbySeat, "peerId">) {
         if (!this.setup || this.started) return;
+        if (this.isBanned(peerId, String(seat.name || ""))) {
+            this.room.send("kicked", {}, peerId);
+            return;
+        }
         const others = { ...this.setup, seats: this.setup.seats.filter((s) => s.peerId !== peerId) };
         const clean = {
-            name: String(seat.name || "").trim().slice(0, 24) || "Player",
+            name: cleanName(String(seat.name || "")),
             imageURL: String(seat.imageURL || ""),
             castIndex: typeof seat.castIndex === "number" && seat.castIndex >= 0 && seat.castIndex < this.cast.length ? seat.castIndex : null,
         };
@@ -576,6 +648,10 @@ export class NetSession {
 
     private grantClaim(playerId: number, peerId: string) {
         if (!this.slots.some((s) => s.id === playerId)) return;
+        if (this.banned.has(peerId)) {
+            this.room.send("kicked", {}, peerId);
+            return;
+        }
         const holder = this.claims[playerId];
         if (holder && holder !== peerId && this.connected(holder)) return; // taken
         // one seat per device
@@ -708,6 +784,17 @@ export class NetSession {
                 return this.sendSnapshot(from);
             case "chatSend":
                 return this.receiveChat(data as ChatMessage, from);
+            case "react":
+                return this.receiveReaction(data, from);
+            case "kicked":
+                if (from === this.hostId) {
+                    this.removed = true;
+                    this.wantPlayerId = null;
+                    this.notice = "The host removed you from this game.";
+                    clearOnlineSave();
+                    this.emit();
+                }
+                return;
             case "pause":
                 if (this.isHost && data) this.onPause(data.playerId, data.action, from);
                 return;
@@ -1472,7 +1559,8 @@ export class NetSession {
         const to = m.to === "jury" ? "jury" : Number(m.to);
         const sender = Number(m.from);
         if (this.claims[sender] !== from || !this.mayChat(sender, to)) return;
-        const message: ChatMessage = { id: String(m.id).slice(0, 80), from: sender, to, text: m.text.trim().slice(0, CHAT_MAX_LENGTH), at: Date.now() };
+        // (a public game's chat is between strangers: the crudest words are starred out)
+        const message: ChatMessage = { id: String(m.id).slice(0, 80), from: sender, to, text: cleanChat(m.text.trim().slice(0, CHAT_MAX_LENGTH)), at: Date.now() };
         if (!message.text || this.allChat.some((x) => x.id === message.id)) return;
         // texting is playing: it keeps a player's clock from running out
         this.lastMove[sender] = Date.now();

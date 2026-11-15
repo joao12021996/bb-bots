@@ -4,13 +4,13 @@ import { getById, PlayerProfile } from "../../model";
 import { cast$, pushToMainContentStream } from "../../subjects/subjects";
 import { Screens } from "../../components/topbar/topBar";
 import { actorOf, PlayerModeController, PlayerSave, Prompt } from "../playerModeController";
-import { NetSession, NetStatus, SessionOptions, setActiveSession } from "../net/netSession";
+import { NetSession, NetStatus, SessionOptions, setActiveSession, REACTIONS } from "../net/netSession";
 import { cleanRoomCode, joinLink, listPublicGames, newRoomCode, openRoom, parseInvite, PublicGame } from "../net/room";
 import { buildOnlineSeason, defaultSetup, houseOf, lobbyJury, maxHouse, minHouse } from "../net/lobby";
 import { DifficultyPicker, RulesEditor, rulesSummary } from "./rulesEditor";
 import { difficultyLabel, withDefaults } from "../rules";
 import { HOH, VETO } from "../terms";
-import { inlineBlobImages, readOnlineSave } from "../save/serialize";
+import { inlineBlobImages, readOnlineSave, clearOnlineSave } from "../save/serialize";
 import { BigButton, Face, Grid, Loading, Panel, Subtle, Title } from "./common";
 import { cartoonFor } from "../../cartoon/cartoon";
 import { FaceEditor } from "./faceEditor";
@@ -348,7 +348,23 @@ function LobbyRoom(props: { session: NetSession; status: NetStatus }) {
                                 spot.seat.peerId === status.selfId ? (
                                     <b>🎮 You</b>
                                 ) : (
-                                    <span>{connected(spot.seat.peerId) ? "🎮 player" : "⚪ away"}</span>
+                                    <span>
+                                        {connected(spot.seat.peerId) ? "🎮 player" : "⚪ away"}
+                                        {status.isHost && (
+                                            <button
+                                                type="button"
+                                                className="bbb-kick"
+                                                title={`Remove ${spot.seat.name} from this game`}
+                                                aria-label={`Remove ${spot.seat.name} from this game`}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (sure(`Remove ${spot.seat.name} from this game? They won't be able to join it again.`)) session.kick({ peerId: spot.seat.peerId });
+                                                }}
+                                            >
+                                                ✖
+                                            </button>
+                                        )}
+                                    </span>
                                 )
                             }
                         />
@@ -717,9 +733,47 @@ export function PublicGames() {
 // ---------- in the game ----------
 
 // The strip at the top of an online game: the room code and who's connected.
+function sure(message: string): boolean {
+    try {
+        return window.confirm(message);
+    } catch (e) {
+        return true; // no dialogs (tests)
+    }
+}
+
+// The reactions that just came in, by player: each shows for a few seconds.
+function useReactions(session: NetSession): { [playerId: number]: string } {
+    const [shown, setShown] = React.useState<{ [playerId: number]: { emoji: string; at: number } }>({});
+    React.useEffect(() => {
+        const timers: any[] = [];
+        const sub = session.reactions$.subscribe((r) => {
+            setShown((s) => ({ ...s, [r.playerId]: { emoji: r.emoji, at: r.at } }));
+            timers.push(
+                setTimeout(
+                    () =>
+                        setShown((s) => {
+                            if (!s[r.playerId] || s[r.playerId].at !== r.at) return s;
+                            const { [r.playerId]: _gone, ...rest } = s;
+                            return rest;
+                        }),
+                    3500
+                )
+            );
+        });
+        return () => {
+            sub.unsubscribe();
+            timers.forEach(clearTimeout);
+        };
+    }, [session]);
+    const out: { [playerId: number]: string } = {};
+    Object.keys(shown).forEach((id) => (out[Number(id)] = shown[Number(id)].emoji));
+    return out;
+}
+
 export function OnlineBar(props: { session: NetSession; controller: PlayerModeController }) {
     const status = useStatus(props.session);
     const me = status.localPlayerId;
+    const reactions = useReactions(props.session);
     return (
         <div className="bbb-online-bar">
             <span>
@@ -742,12 +796,100 @@ export function OnlineBar(props: { session: NetSession; controller: PlayerModeCo
                             <img src={getById(props.controller.gameState, slot.id).imageURL} alt="" />
                             {slot.id === me ? "You" : slot.name}
                             {bot && " 🤖"}
+                            {reactions[slot.id] && (
+                                <span className="bbb-reaction" aria-label={`${slot.name} reacted ${reactions[slot.id]}`}>
+                                    {reactions[slot.id]}
+                                </span>
+                            )}
+                            {status.isHost && slot.id !== me && status.claims[slot.id] && (
+                                <button
+                                    type="button"
+                                    className="bbb-kick"
+                                    title={`Remove ${slot.name}: a bot plays for them from here on`}
+                                    aria-label={`Remove ${slot.name} from this game`}
+                                    onClick={() => {
+                                        if (sure(`Remove ${slot.name} from this game? A bot plays for them from here on, and they can't come back.`)) props.session.kick({ playerId: slot.id });
+                                    }}
+                                >
+                                    ✖
+                                </button>
+                            )}
                         </span>
                     );
                 })}
             </span>
             {status.notice && <span className="bbb-online-notice">{status.notice}</span>}
+            {me !== null && (
+                <span className="bbb-react-bar" role="group" aria-label="React">
+                    {REACTIONS.map((emoji) => (
+                        <button key={emoji} type="button" aria-label={`React ${emoji}`} onClick={() => props.session.react(emoji)}>
+                            {emoji}
+                        </button>
+                    ))}
+                </span>
+            )}
         </div>
+    );
+}
+
+// The start screen: the online game this device was in, if it may still be going.
+export function RejoinBanner(): JSX.Element | null {
+    const saved = readOnlineSave();
+    const [gone, setGone] = React.useState(false);
+    if (!saved || gone) return null;
+    return (
+        <div className="bbb-rejoin" role="status">
+            <span>
+                🌐 {t("You were in an online game ({code}). If it's still going, your seat is waiting.", { code: saved.code })}
+            </span>
+            <span className="bbb-rejoin-buttons">
+                <button type="button" className="button is-warning is-small" onClick={() => showJoinScreen(saved.code, true)}>
+                    ▶ {t("Rejoin")}
+                </button>
+                <button
+                    type="button"
+                    className="button is-light is-small"
+                    onClick={() => {
+                        clearOnlineSave();
+                        setGone(true);
+                    }}
+                >
+                    {t("Forget it")}
+                </button>
+            </span>
+        </div>
+    );
+}
+
+// Which public game to drop into: the one closest to starting (the most players waiting), a fuller house first.
+export function pickQuickGame(games: PublicGame[]): PublicGame | null {
+    const open = games.filter((g) => g.players < g.size);
+    if (open.length === 0) return null;
+    return [...open].sort((a, b) => b.players - a.players || b.size - a.size || a.code.localeCompare(b.code))[0];
+}
+
+// "Quick play": straight into a public game that's waiting, without picking one.
+export function QuickPlayButton(): JSX.Element {
+    const [state, setState] = React.useState<"idle" | "looking" | "none" | "failed">("idle");
+    const go = async () => {
+        setState("looking");
+        try {
+            const game = pickQuickGame(await listPublicGames());
+            if (!game) return setState("none");
+            setState("idle");
+            showJoinScreen(game.code, true);
+        } catch (e) {
+            setState("failed");
+        }
+    };
+    return (
+        <>
+            <button type="button" className="button is-warning" disabled={state === "looking"} onClick={go}>
+                ⚡ {state === "looking" ? t("Looking for a game…") : t("Quick play")}
+            </button>
+            {state === "none" && <small className="bbb-subtle">{t("No games waiting right now. Host one and anyone can join!")}</small>}
+            {state === "failed" && <small className="bbb-subtle">{t("Couldn't reach the game server. Try again in a moment.")}</small>}
+        </>
     );
 }
 

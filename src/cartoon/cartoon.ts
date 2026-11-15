@@ -45,13 +45,45 @@ export const LOOK_PARTS: { key: keyof CartoonLook; label: string; options: strin
     { key: "mouth", label: "Mouth", options: ["Smile", "Grin", "Smirk", "Oh!", "Straight", "Laugh"] },
     { key: "glasses", label: "Glasses", options: ["None", "Round", "Square", "Shades", "Cat-eye", "Half-rim"] },
     { key: "facialHair", label: "Facial hair", options: ["None", "Stubble", "Mustache", "Beard", "Goatee", "Handlebar"] },
-    { key: "extra", label: "Extras", options: ["None", "Freckles", "Blush", "Earrings", "Beauty mark"] },
-    { key: "hat", label: "Hat", options: ["None", "Cap", "Beanie", "Headband", "Bow"] },
+    { key: "extra", label: "Extras", options: ["None", "Freckles", "Blush", "Earrings", "Beauty mark", "Scar", "Gold star"] },
+    { key: "hat", label: "Hat", options: ["None", "Cap", "Beanie", "Headband", "Bow", "Crown", "Top hat", "Halo", "Horns", "Party hat"] },
     { key: "shirt", label: "Shirt", options: ["Red", "Orange", "Yellow", "Green", "Teal", "Blue", "Indigo", "Purple", "Pink", "Black", "White", "Gray"] },
     { key: "bg", label: "Background", options: ["Sky", "Mint", "Peach", "Lilac", "Lemon", "Rose", "Aqua", "Sand", "Lime", "Coral", "Slate", "Night"] },
 ];
 
 const KEYS = LOOK_PARTS.map((p) => p.key);
+
+// Things to earn: these options (the last ones of their row) are for players who've unlocked the achievement
+// that goes with them (see career.ts). Bots and dealt casts never wear them, so one in a house means something.
+export const UNLOCKS: { part: keyof CartoonLook; index: number; achievement: string }[] = [
+    { part: "hat", index: 5, achievement: "first-win" }, // Crown
+    { part: "hat", index: 6, achievement: "veteran" }, // Top hat
+    { part: "hat", index: 7, achievement: "honest" }, // Halo
+    { part: "hat", index: 8, achievement: "backstab" }, // Horns
+    { part: "hat", index: 9, achievement: "online" }, // Party hat
+    { part: "extra", index: 5, achievement: "survivor" }, // Scar
+    { part: "extra", index: 6, achievement: "unanimous" }, // Gold star
+];
+
+// The achievement an option needs (undefined: it's free).
+export function unlockFor(part: keyof CartoonLook, index: number): string | undefined {
+    const found = UNLOCKS.find((u) => u.part === part && u.index === index);
+    return found ? found.achievement : undefined;
+}
+
+// How many of a row's options anyone can wear (the ones to earn come after them).
+function freeCount(part: { key: keyof CartoonLook; options: string[] }): number {
+    return part.options.length - UNLOCKS.filter((u) => u.part === part.key).length;
+}
+
+// A look with anything not `allowed` taken off: what a player who hasn't earned an option gets instead.
+export function withoutLocked(look: CartoonLook, allowed: (achievement: string) => boolean): CartoonLook {
+    const out = { ...look };
+    UNLOCKS.forEach((u) => {
+        if (out[u.part] === u.index && !allowed(u.achievement)) out[u.part] = 0;
+    });
+    return out;
+}
 
 const SKINS = ["#ffe3cf", "#fcd5b5", "#f3c39b", "#e8ad7e", "#d4955f", "#c08350", "#9c6640", "#7d4f30", "#5f3a22", "#432716"];
 const HAIR = ["#1c1a1f", "#3b2416", "#6b3f22", "#8e3b1f", "#c95b2a", "#e8c26a", "#f3ead2", "#9ca3af", "#eceff3", "#3b82f6", "#ec4899", "#8b5cf6", "#10b981", "#0d9488"];
@@ -67,9 +99,11 @@ export function randomLook(rand: () => number): CartoonLook {
     const look = {} as CartoonLook;
     LOOK_PARTS.forEach((part) => {
         const none = NONE_CHANCE[part.key];
+        // (never the options there are to earn)
+        const count = freeCount(part);
         if (none !== undefined && rand() < none) look[part.key] = 0;
-        else if (none !== undefined) look[part.key] = 1 + Math.floor(rand() * (part.options.length - 1));
-        else look[part.key] = Math.floor(rand() * part.options.length);
+        else if (none !== undefined) look[part.key] = 1 + Math.floor(rand() * (count - 1));
+        else look[part.key] = Math.floor(rand() * count);
     });
     return look;
 }
@@ -411,6 +445,12 @@ function extra(style: number): string {
             return `<circle cx="27" cy="62" r="2.4" fill="#facc15" stroke="${INK}" stroke-width="0.8"/><circle cx="73" cy="62" r="2.4" fill="#facc15" stroke="${INK}" stroke-width="0.8"/>`;
         case 4:
             return `<circle cx="60" cy="64" r="1.1" fill="${INK}"/>`;
+        case 5:
+            // a scar: been on the block and lived
+            return `<path d="M61 43 L65.5 58 M59.5 47 L65 45.5 M61 52 L66.5 50.5" stroke="#9f1239" stroke-width="1.2" stroke-linecap="round" fill="none"/>`;
+        case 6:
+            // a gold star on the cheek
+            return `<path d="M37 56.5 L38.4 59.6 L41.8 60 L39.3 62.3 L40 65.6 L37 63.9 L34 65.6 L34.7 62.3 L32.2 60 L35.6 59.6 Z" fill="#facc15" stroke="${INK}" stroke-width="0.8" stroke-linejoin="round"/>`;
         default:
             return "";
     }
@@ -427,6 +467,27 @@ function hat(style: number, c: string): string {
             return `<path d="M27 35 Q50 26 73 35 L73 40 Q50 31 27 40 Z" ${s}/>`;
         case 4:
             return `<path d="M60 22 L68 16 L70 26 Z M60 22 L54 14 L52 24 Z" ${s}/><circle cx="61" cy="21.5" r="2.4" ${s}/>`;
+        case 5: {
+            // a crown
+            const gold = `fill="#facc15" stroke="${INK}" stroke-width="1.5" stroke-linejoin="round"`;
+            return `<path d="M29 31 L29 13 L39.5 22 L50 9 L60.5 22 L71 13 L71 31 Z" ${gold}/><rect x="29" y="27" width="42" height="6" rx="1.5" ${gold}/><circle cx="50" cy="30" r="1.8" fill="#dc2626"/><circle cx="38" cy="30" r="1.4" fill="#2563eb"/><circle cx="62" cy="30" r="1.4" fill="#2563eb"/>`;
+        }
+        case 6: {
+            // a top hat
+            const felt = `fill="#1f2937" stroke="${INK}" stroke-width="1.5" stroke-linejoin="round"`;
+            return `<rect x="33" y="3" width="34" height="27" rx="2" ${felt}/><rect x="33" y="21" width="34" height="5.5" fill="#b91c1c" stroke="${INK}" stroke-width="1"/><rect x="23" y="28" width="54" height="6" rx="3" ${felt}/>`;
+        }
+        case 7:
+            // a halo
+            return `<ellipse cx="50" cy="9" rx="17" ry="4.6" fill="none" stroke="${INK}" stroke-width="4.6"/><ellipse cx="50" cy="9" rx="17" ry="4.6" fill="none" stroke="#fde047" stroke-width="2.6"/>`;
+        case 8: {
+            // horns
+            const horn = `fill="#dc2626" stroke="${INK}" stroke-width="1.4" stroke-linejoin="round"`;
+            return `<path d="M30 27 Q22 15 27 5 Q36 11 40 23 Z" ${horn}/><path d="M70 27 Q78 15 73 5 Q64 11 60 23 Z" ${horn}/>`;
+        }
+        case 9:
+            // a party hat
+            return `<path d="M36 31 L52 3 L66 29 Z" ${s}/><path d="M43.5 18 L58.5 15.5 M39.5 25 L63 22" stroke="#fff" stroke-width="2" opacity="0.8"/><circle cx="52" cy="3.5" r="3.2" fill="#facc15" stroke="${INK}" stroke-width="1.2"/>`;
         default:
             return "";
     }
