@@ -1,0 +1,747 @@
+/* Around the house: the memory wall, the host and the feed, the pause after an answer, the finale, what you know
+   about a houseguest, and why you went home. */
+
+/* ---------- memory wall ---------- */
+.bbb-inside {
+    padding: 8px 12px 12px;
+    text-align: left;
+    font-size: 0.92rem;
+}
+.bbb-inside section + section {
+    margin-top: 10px;
+}
+.bbb-inside h4 {
+    font-weight: 700;
+    margin: 0 0 4px;
+}
+.bbb-inside p {
+    margin: 0 0 3px;
+}
+.bbb-inside-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+    gap: 6px;
+}
+.bbb-inside-hg {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.bbb-inside-hg img {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: none;
+}
+.bbb-mwall-box {
+    max-width: 900px;
+    margin: 0 auto 10px;
+    text-align: center;
+}
+.bbb-mwall-toggle {
+    background: none;
+    border: none;
+    color: var(--bbb-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 4px 8px;
+}
+.bbb-mwall {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 4px 4px;
+}
+.bbb-mwall-tile {
+    width: 64px;
+    font-size: 0.68rem;
+    line-height: 1.15;
+}
+.bbb-mwall-photo {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    margin: 6px auto 2px;
+}
+.bbb-mwall-photo img {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 10px;
+    border: 2px solid var(--bbb-border);
+    background: var(--bbb-card-2);
+    transition: filter 1.4s ease, opacity 1.4s ease, border-color 0.6s ease;
+}
+.bbb-mwall-tile.is-player .bbb-mwall-photo img {
+    border-color: rgba(167, 139, 250, 0.8);
+}
+.bbb-mwall-tile.is-out .bbb-mwall-photo img {
+    filter: grayscale(1) brightness(0.55);
+    opacity: 0.8;
+}
+.bbb-mwall-tile.is-jury .bbb-mwall-photo img {
+    filter: grayscale(1) sepia(0.5) brightness(0.65);
+}
+.bbb-mwall-name {
+    font-weight: 700;
+    word-break: break-word;
+}
+.bbb-mwall-tile.is-out .bbb-mwall-name {
+    color: var(--bbb-muted);
+    font-weight: 400;
+}
+.bbb-mwall-sub {
+    color: var(--bbb-muted);
+    font-size: 0.62rem;
+}
+.bbb-mwall-badge {
+    position: absolute;
+    line-height: 1;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
+    animation: bbb-badge-in 500ms ease-out;
+}
+.bbb-mwall-badge.is-crown {
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.15rem;
+}
+.bbb-mwall-badge.is-necklace {
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1rem;
+}
+.bbb-mwall-badge.is-key {
+    bottom: -4px;
+    right: -6px;
+    font-size: 0.95rem;
+}
+@keyframes bbb-badge-in {
+    from {
+        opacity: 0;
+        margin-top: -6px;
+    }
+    to {
+        opacity: 1;
+        margin-top: 0;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .bbb-mwall-photo img,
+    .bbb-mwall-badge {
+        transition: none;
+        animation: none;
+    }
+}
+
+/* ---------- season settings ---------- */
+.bbb-setting {
+    max-width: 620px;
+    margin: 12px auto;
+    text-align: left;
+}
+.bbb-segmented {
+    display: inline-flex;
+    margin: 6px 0 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--bbb-border);
+    overflow: hidden;
+}
+.bbb-segmented button {
+    background: transparent;
+    border: none;
+    color: var(--bbb-text);
+    font: inherit;
+    padding: 6px 14px;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.bbb-segmented button.is-active {
+    background: linear-gradient(90deg, var(--bbb-accent), var(--bbb-accent-2));
+    color: white;
+    font-weight: 700;
+}
+.bbb-setting .bbb-toggle {
+    max-width: none;
+}
+
+/* ---------- the host, the feed, the awards ---------- */
+.bbb-host {
+    max-width: 620px;
+    margin: 6px auto 14px;
+    padding: 12px 16px;
+    border-radius: var(--bbb-radius);
+    background: linear-gradient(160deg, rgba(139, 92, 246, 0.16), rgba(236, 72, 153, 0.08)), var(--bbb-card-2);
+    border: 1px solid var(--bbb-border);
+    text-align: left;
+}
+.bbb-host p {
+    margin: 4px 0;
+}
+.bbb-feed {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 720px;
+    margin: 0 auto 8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--bbb-border);
+    font-size: 0.85rem;
+    overflow: hidden;
+}
+.bbb-feed-live {
+    flex: none;
+    color: var(--bbb-rose-text);
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+.bbb-feed-day {
+    flex: none;
+    color: var(--bbb-muted);
+}
+.bbb-feed-text {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    animation: bbb-badge-in 500ms ease-out;
+}
+.bbb-power {
+    border-color: rgba(251, 191, 36, 0.5);
+}
+.bbb-awards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+    margin: 8px 0;
+    text-align: left;
+}
+.bbb-award {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(var(--bbb-ink), 0.04);
+    border: 1px solid var(--bbb-border);
+}
+.bbb-award-emoji {
+    font-size: 1.6rem;
+    line-height: 1;
+}
+.bbb-stats {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+.bbb-stats th,
+.bbb-stats td {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--bbb-border);
+    text-align: center;
+}
+.bbb-stats td:nth-child(2) {
+    text-align: left;
+}
+.bbb-stats tr.is-player td {
+    background: rgba(139, 92, 246, 0.15);
+}
+
+/* ---------- the pause after each answer ---------- */
+.bbb-reveal {
+    max-width: 560px;
+    margin: 8px auto;
+}
+.bbb-answers {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 10px 0;
+    text-align: left;
+}
+.bbb-answer {
+    display: grid;
+    grid-template-columns: 36px minmax(70px, auto) 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border-radius: 12px;
+    background: rgba(var(--bbb-ink), 0.04);
+    border: 1px solid var(--bbb-border);
+    animation: bbb-badge-in 300ms ease-out;
+}
+.bbb-answer img {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    object-fit: cover;
+}
+.bbb-answer.is-right {
+    border-color: rgba(52, 211, 153, 0.5);
+}
+.bbb-answer.is-wrong {
+    border-color: rgba(248, 113, 113, 0.45);
+}
+.bbb-answer.is-you {
+    background: rgba(139, 92, 246, 0.15);
+}
+.bbb-answer-text {
+    color: var(--bbb-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* House Comics: the table (two rows), the slots, and the real covers sliding in */
+/* two rows when the screen allows it (the covers shrink to fit: --comic-zoom), or wrapped onto more */
+.bbb-comics-pool,
+.bbb-comic-slots {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px;
+    margin: 10px 0;
+}
+.bbb-comics-pool.is-two-rows,
+.bbb-comic-slots.is-two-rows {
+    display: grid;
+    grid-template-columns: repeat(var(--comic-columns), auto);
+}
+.bbb-comics-pool .bbb-comic,
+.bbb-comic-slot .bbb-comic {
+    zoom: var(--comic-zoom, 0.6);
+}
+/* the gold number: which slot a cover goes in */
+.bbb-comic-num {
+    display: inline-block;
+    min-width: 2.2em;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--bbb-gold);
+    color: #111;
+    font-weight: 900;
+    font-size: 0.95rem;
+    text-align: center;
+    line-height: 1.4;
+}
+.bbb-comic-strip-item .bbb-comic-num {
+    font-size: 1.4rem;
+    margin-bottom: 4px;
+}
+.bbb-comic-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-weight: 700;
+    color: var(--bbb-muted);
+}
+.bbb-comic-empty {
+    width: calc(156px * var(--comic-zoom, 0.6));
+    height: calc(240px * var(--comic-zoom, 0.6));
+    border: 2px dashed var(--bbb-muted);
+    border-radius: 6px;
+    opacity: 0.6;
+}
+.bbb-comic-wrong {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 2.4rem;
+    color: #ef4444;
+    animation: bbb-comic-shake 0.4s;
+}
+.bbb-comic-wrong span {
+    font-size: 1rem;
+    font-weight: 700;
+}
+@keyframes bbb-comic-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
+}
+.bbb-comics-review {
+    position: relative;
+    overflow: hidden;
+    margin: 12px 0;
+    min-height: 520px;
+}
+.bbb-comic-review-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.bbb-comic-strip {
+    position: absolute;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: max-content;
+    animation-name: bbb-comic-pass;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+}
+.bbb-comic-strip-row {
+    display: flex;
+    gap: 14px;
+}
+.bbb-comic-strip-item {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+.bbb-comic-strip-item .bbb-comic {
+    zoom: 0.8;
+}
+.bbb-comics-pool > .is-held .bbb-comic {
+    outline: 4px solid var(--bbb-gold);
+    outline-offset: 2px;
+    transform: translateY(-6px);
+}
+.bbb-comics-pool > .is-stack {
+    position: relative;
+}
+/* a pile, solitaire style: each cover underneath shows its top edge above the next */
+.bbb-comic-pile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.bbb-comic-peek {
+    height: calc(36px * var(--comic-zoom, 0.6));
+    overflow: hidden;
+    pointer-events: none;
+}
+.bbb-comic-stack-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    z-index: 2;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--bbb-gold);
+    color: #111;
+    font-weight: 900;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.bbb-comics-pool > .is-under,
+.bbb-comics-pool > .is-used {
+    width: calc(156px * var(--comic-zoom, 0.6));
+}
+.bbb-comic-slot.is-target .bbb-comic-empty {
+    border-color: var(--bbb-gold);
+    opacity: 1;
+    cursor: pointer;
+}
+.bbb-comic-empty {
+    background: transparent;
+    padding: 0;
+}
+/* dragging covers: the table still scrolls sideways; a cover in a slot is all yours */
+.bbb-comics-pool .bbb-comic {
+    touch-action: pan-x;
+}
+.bbb-comic-drag .bbb-comic {
+    touch-action: none;
+}
+.bbb-comics-pool > .is-dragging,
+.bbb-comic-drag.is-dragging {
+    opacity: 0.3;
+}
+.bbb-comic-slot.is-over .bbb-comic-empty,
+.bbb-comic-slot.is-over .bbb-comic,
+.bbb-comics-pool > .is-over .bbb-comic {
+    outline: 4px solid var(--bbb-gold);
+    outline-offset: 2px;
+}
+.bbb-comics-pool.is-over {
+    background: rgba(250, 204, 21, 0.08);
+    border-radius: 8px;
+}
+.bbb-comic-ghost {
+    position: fixed;
+    z-index: 1000;
+    pointer-events: none;
+    transform: translate(-50%, -50%) rotate(-4deg);
+    filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.5));
+}
+.bbb-comic-ghost .bbb-comic {
+    zoom: 0.6;
+}
+.bbb-comic-held {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 8px 0;
+    font-weight: 600;
+}
+.bbb-comic-compare {
+    border: 2px solid var(--bbb-gold);
+    border-radius: 10px;
+    padding: 8px;
+    margin: 8px 0;
+}
+.bbb-comic-choice {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+/* in from the right edge of the box (straight away, however wide the screen), across, and out on the left */
+@keyframes bbb-comic-pass {
+    from { left: 100%; transform: translateX(0); }
+    to { left: 0; transform: translateX(-100%); }
+}
+.bbb-comic-real .bbb-comic {
+    outline: 3px solid var(--bbb-gold);
+    outline-offset: 3px;
+}
+
+/* ---------- finale ---------- */
+.bbb-move {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 6px 0;
+    cursor: pointer;
+}
+.bbb-move input {
+    margin-top: 4px;
+}
+.bbb-asker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+.bbb-asker img {
+    width: 72px;
+    height: 72px;
+    border-radius: 12px;
+    object-fit: cover;
+}
+.bbb-reveal-board {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin: 12px 0;
+}
+.bbb-reveal-finalist {
+    width: 150px;
+    padding: 10px;
+    border-radius: var(--bbb-radius);
+    background: var(--bbb-card-2);
+    border: 2px solid var(--bbb-border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    transition: border-color 0.6s ease, box-shadow 0.6s ease;
+}
+.bbb-reveal-finalist img {
+    width: 96px;
+    height: 96px;
+    border-radius: 12px;
+    object-fit: cover;
+}
+.bbb-reveal-finalist.is-winner {
+    border-color: var(--bbb-gold);
+    box-shadow: 0 0 24px rgba(251, 191, 36, 0.45);
+}
+.bbb-reveal-keys {
+    min-height: 1.4rem;
+    font-size: 1.1rem;
+}
+.bbb-reveal-count {
+    font-size: 2rem;
+    font-weight: 800;
+}
+.bbb-skills-reveal {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+}
+.bbb-skills-reveal > div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 96px;
+    font-size: 0.8rem;
+}
+.bbb-skills-reveal img {
+    width: 56px;
+    height: 56px;
+    border-radius: 10px;
+    object-fit: cover;
+}
+
+/* ---------- what you know about a houseguest ---------- */
+.bbb-mwall-tile {
+    cursor: pointer;
+}
+.bbb-profile-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+.bbb-profile {
+    position: relative;
+    width: min(440px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    padding: 16px 18px;
+    border-radius: var(--bbb-radius);
+    background: var(--bbb-card-2, #1f1b2e);
+    border: 1px solid var(--bbb-border);
+    color: var(--bbb-text);
+    text-align: left;
+}
+.bbb-profile h4 {
+    margin: 12px 0 4px;
+    font-weight: 700;
+    color: var(--bbb-muted);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.bbb-profile p {
+    margin: 2px 0;
+}
+.bbb-profile-head {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+.bbb-profile-head img {
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+    object-fit: cover;
+}
+.bbb-profile-close {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    background: none;
+    border: none;
+    color: var(--bbb-text);
+    font-size: 1.1rem;
+    cursor: pointer;
+}
+
+/* ---------- the Veto winner's moment ---------- */
+.bbb-veto-winner {
+    text-align: center;
+    padding: 12px 8px 4px;
+}
+.bbb-veto-winner-label {
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--bbb-gold-text);
+}
+.bbb-veto-winner-photo {
+    position: relative;
+    display: inline-block;
+    margin: 14px auto 6px;
+    animation: bbb-badge-in 600ms ease-out;
+}
+.bbb-veto-winner-photo img {
+    width: 140px;
+    height: 140px;
+    object-fit: cover;
+    border-radius: 18px;
+    border: 3px solid #fbbf24;
+    box-shadow: 0 0 24px rgba(251, 191, 36, 0.45);
+}
+.bbb-veto-winner-medal {
+    position: absolute;
+    bottom: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 2rem;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
+}
+.bbb-veto-winner-name {
+    font-size: 1.6rem;
+    font-weight: 800;
+    margin: 14px 0 6px;
+}
+.bbb-veto-winner-others {
+    opacity: 0.7;
+    font-size: 0.9rem;
+}
+@media (prefers-reduced-motion: reduce) {
+    .bbb-veto-winner-photo {
+        animation: none;
+    }
+}
+
+/* ---------- talking out a split alliance ---------- */
+.bbb-talk {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px dashed var(--bbb-border);
+    background: rgba(251, 191, 36, 0.06);
+    text-align: left;
+}
+
+/* ---------- "why you went home": an evicted player's exit interview ---------- */
+.bbb-exit {
+    max-width: 640px;
+    margin: 0 auto;
+    text-align: left;
+}
+.bbb-exit h3 {
+    font-weight: 800;
+    font-size: 1.3rem;
+    text-align: center;
+}
+.bbb-exit-headline {
+    text-align: center;
+    font-weight: 700;
+    margin: 6px 0 14px;
+}
+.bbb-exit-part {
+    background: var(--bbb-card-2);
+    border: 1px solid var(--bbb-border);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+}
+.bbb-exit-part p {
+    margin-top: 4px;
+}
+.bbb-exit-lied {
+    color: var(--bbb-rose-text);
+    font-weight: 700;
+}

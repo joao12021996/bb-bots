@@ -1,0 +1,45 @@
+/* ==========================================================================
+   Light theme: the same tokens, retuned for a light page. Comp boards and the comic-style panels keep their
+   own colors.
+   ========================================================================== */
+:root[data-theme="light"] {
+    color-scheme: light;
+    --bbb-ink: 40, 28, 90;
+    --bbb-bg: #f6f4fd;
+    --bbb-card: #ffffff;
+    --bbb-card-2: #f1eefb;
+    --bbb-border: rgba(40, 28, 90, 0.12);
+    --bbb-text: #1d1838;
+    --bbb-muted: #5d5780;
+    --bbb-accent: #7c3aed;
+    --bbb-accent-2: #db2777;
+    --bbb-lilac: #6d28d9;
+    --bbb-lilac-2: #5b21b6;
+    --bbb-gold-text: #a16207;
+    --bbb-rose-text: #be123c;
+    --bbb-pink-text: #be185d;
+    --bbb-sky-text: #0369a1;
+    --bbb-indigo-text: #4338ca;
+    --bbb-green-text: #047857;
+    --bbb-success: #059669;
+    --bbb-danger: #e11d48;
+    --bbb-info: #0284c7;
+    --bbb-shadow: 0 6px 18px rgba(40, 28, 90, 0.1);
+}
+:root[data-theme="light"] body {
+    background: radial-gradient(1200px 600px at 10% -10%, rgba(139, 92, 246, 0.12), transparent 60%),
+        radial-gradient(900px 500px at 110% 10%, rgba(236, 72, 153, 0.08), transparent 60%), var(--bbb-bg) !important;
+}
+:root[data-theme="light"] .box {
+    box-shadow: var(--bbb-shadow) !important;
+}
+:root[data-theme="light"] a:hover {
+    color: var(--bbb-accent);
+}
+:root[data-theme="light"] ::selection {
+    background: rgba(124, 58, 237, 0.25);
+    color: inherit;
+}
+:root[data-theme="light"] .bbb-settings-panel {
+    box-shadow: 0 12px 30px rgba(40, 28, 90, 0.18);
+}

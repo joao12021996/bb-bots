@@ -31,7 +31,7 @@ import { generateVotingTable } from "../components/votingTable/votingTable";
 import { newEpisode, playerModeScreen$, pushToMainContentStream, secretRelationships$, selectedPlayer$ } from "../subjects/subjects";
 import { Screens } from "../components/topbar/topBar";
 import { WeekRecord } from "./history";
-import { Difficulty, SeasonRules, withDefaults } from "./rules";
+import { Difficulty, SeasonRules, withDefaults, difficultyLabel } from "./rules";
 import { PledgeKind, setSuspicion, settleVetoPledges } from "./social/promises";
 import { capitalize, explainNomination, explainVote, ReasonContext } from "./social/reasons";
 import { CompDefinition, EnduranceDeals, Opponent } from "./comps/compTypes";
@@ -118,6 +118,8 @@ import {
 import { FeedLine, houseFeed, madeUp, Rivalry } from "./social/feed";
 import { exitReport } from "./social/exit";
 import { recordDaily } from "../career/daily";
+import { SharedSeason } from "../career/seasonShare";
+import { ShareSeasonLink } from "../career/seasonShareButton";
 import { DailyCard } from "./ui/dailyCard";
 import { endgameOpen, makeYourCase, offerFinal3, Pact, pactBroken, pactOf } from "./social/endgame";
 import { evictionIntro, finaleIntro, previouslyOn } from "./social/narration";
@@ -171,7 +173,7 @@ import {
 import { generateBlockbusterScene } from "./blockbusterScene";
 import { getComp, getSocial, PlayerProfile } from "../model";
 import { clearSave, writeSave } from "./save/serialize";
-import { count, counterName, countOnce } from "../analytics/analytics";
+import { counterName, countOnce } from "../analytics/analytics";
 import { seedRng } from "./seeding";
 import {
     apparentRelationship,
@@ -6860,6 +6862,35 @@ export class PlayerModeController {
         return this.state.humanIds;
     }
 
+    // The season as a story anyone can watch back from a link (see seasonShare.ts): who won what, who went up, the
+    // votes, the jury. Everything in it was shown on screen by the end of the season.
+    public sharedSeason(): SharedSeason {
+        const s = this.state;
+        const gs = s.gameState;
+        const log = gs.log[gs.phase] && gs.log[gs.phase][0];
+        const winner = log ? log.winner : undefined;
+        const rows = seasonStats(gs, s.history, winner);
+        const finalVotes = (this.juryBook && this.juryBook.finalVotes) || {};
+        const finalists = nonEvictedHouseguests(gs).map((hg) => hg.id);
+        return {
+            cast: gs.houseguests.map((hg) => ({ name: hg.name, imageURL: hg.imageURL })),
+            weeks: s.history.map((w) => ({
+                hoh: w.hohId,
+                noms: w.nomineeIds,
+                pov: w.povId,
+                breaker: w.blockbusterId,
+                evicted: w.evictedIds,
+                votes: w.votes ? w.nomineeIds.map((id) => w.votes![id] ?? 0) : [],
+            })),
+            placements: gs.houseguests.map((hg) => (rows.find((r) => r.id === hg.id) || { placement: gs.houseguests.length }).placement),
+            winner,
+            runnerUp: finalists.find((id) => id !== winner),
+            jury: Object.keys(finalVotes).map((j) => [Number(j), finalVotes[Number(j)]] as [number, number]),
+            players: [...s.humanIds],
+            difficulty: difficultyLabel(this.difficulty),
+        };
+    }
+
     // A player's season, for their career stats and achievements.
     public summaryFor(id: number): SeasonSummary {
         const s = this.state;
@@ -6939,6 +6970,7 @@ export class PlayerModeController {
                 const summary = this.summaryFor(id);
                 return { summary, unlocked: recordSeason(summary) };
             });
+        const shared = this.sharedSeason();
         // the daily season: the day's result, the first time it's finished
         const dailyCard = this.state.daily && !this.net ? cards[0] : undefined;
         if (dailyCard) {
@@ -6968,6 +7000,7 @@ export class PlayerModeController {
             content: (
                 <div>
                     {dailyCard && <DailyCard />}
+                    {!this.watching && <ShareSeasonLink season={shared} />}
                     {cards.length > 0 && (
                         <div className="bbb-season-cards">
                             {cards.map((c) => (

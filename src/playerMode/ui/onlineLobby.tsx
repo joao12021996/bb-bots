@@ -5,6 +5,7 @@ import { cast$, pushToMainContentStream } from "../../subjects/subjects";
 import { Screens } from "../../components/topbar/topBar";
 import { actorOf, PlayerModeController, PlayerSave, Prompt } from "../playerModeController";
 import { NetSession, NetStatus, SessionOptions, setActiveSession, REACTIONS } from "../net/netSession";
+import { clearTitleFlag, notifyState, NotifyState, setNotifications, turnWatcher } from "../net/notify";
 import { cleanRoomCode, joinLink, listPublicGames, newRoomCode, openRoom, parseInvite, PublicGame } from "../net/room";
 import { buildOnlineSeason, defaultSetup, houseOf, lobbyJury, maxHouse, minHouse } from "../net/lobby";
 import { DifficultyPicker, RulesEditor, rulesSummary } from "./rulesEditor";
@@ -770,9 +771,54 @@ function useReactions(session: NetSession): { [playerId: number]: string } {
     return out;
 }
 
+// While a season is on: tells the player when it's their move, or when someone writes to them, if the game's tab
+// is in the background (see notify.ts).
+function useTurnNotifications(session: NetSession, controller: PlayerModeController) {
+    React.useEffect(() => {
+        const watcher = turnWatcher();
+        const check = () => {
+            const me = session.localPlayerId;
+            if (me === null || controller.player(me).isEvicted) return watcher.update(null, () => "");
+            const own = controller.personal$.value[me];
+            const shared = controller.prompt$.value;
+            const mine: Prompt | null =
+                own && !["socialDone", "waiting"].includes(own.kind) ? own : shared && actorOf(shared) === me && shared.kind !== "gameOver" ? shared : null;
+            const key = mine ? `${controller.gameState.phase}:${controller.state.step}:${mine.kind}:${(mine as any).title || ""}` : null;
+            watcher.update(key, () => {
+                if (!mine) return "";
+                if (mine.kind === "choose") return mine.title;
+                if (mine.kind === "compPlay") return `The ${mine.comp.name} is on.`;
+                if (mine.kind === "social") return "It's your social time.";
+                if (mine.kind === "breakVote") return `Next up: ${mine.next}.`;
+                return "The house is waiting for you.";
+            });
+        };
+        const chat = () => watcher.chat(session.chat$.value, session.localPlayerId, (id) => controller.player(id).name);
+        const subs = [controller.prompt$.subscribe(check), controller.personal$.subscribe(check), session.chat$.subscribe(chat)];
+        const seen = () => {
+            if (!document.hidden) clearTitleFlag();
+        };
+        document.addEventListener("visibilitychange", seen);
+        return () => {
+            subs.forEach((s) => s.unsubscribe());
+            document.removeEventListener("visibilitychange", seen);
+            clearTitleFlag();
+        };
+    }, [session, controller]);
+}
+
+const BELL_TITLE: { [state in NotifyState]: string } = {
+    on: "Notifications are on: you'll be told when it's your move, while this tab is open in the background. Tap to turn them off.",
+    off: "Tell me when it's my move (while this tab is open in the background)",
+    blocked: "Your browser is blocking notifications for this site. Allow them in the site's settings to turn this on.",
+    unsupported: "This browser can't show notifications.",
+};
+
 export function OnlineBar(props: { session: NetSession; controller: PlayerModeController }) {
     const status = useStatus(props.session);
     const me = status.localPlayerId;
+    useTurnNotifications(props.session, props.controller);
+    const [bell, setBell] = React.useState<NotifyState>(() => notifyState());
     const reactions = useReactions(props.session);
     return (
         <div className="bbb-online-bar">
@@ -780,6 +826,19 @@ export function OnlineBar(props: { session: NetSession; controller: PlayerModeCo
                 🌐 <b>{status.code}</b>
                 {status.isHost && " · 👑 host"}
                 {status.spectating && " · 👀 watching"} <CopyButton text={joinLink(status.code)} label="🔗 invite link" />
+                {me !== null && bell !== "unsupported" && (
+                    <button
+                        type="button"
+                        className="bbb-bell"
+                        aria-pressed={bell === "on"}
+                        aria-label={BELL_TITLE[bell]}
+                        title={BELL_TITLE[bell]}
+                        disabled={bell === "blocked"}
+                        onClick={async () => setBell(await setNotifications(bell !== "on"))}
+                    >
+                        {bell === "on" ? "🔔" : "🔕"}
+                    </button>
+                )}
             </span>
             <span className="bbb-online-players">
                 {status.slots.map((slot) => {

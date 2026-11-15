@@ -5,7 +5,7 @@ import { ThemeProvider } from "styled-components";
 import { ColorTheme, darkTheme, lightTheme } from "./theme/theme";
 import { scheme$ } from "./prefs/colorScheme";
 import { GlobalStyles } from "./theme/globalTheme";
-import "./theme/modern.css";
+import "./theme/css";
 import { Subscription } from "rxjs";
 import { KnownProfileModal } from "./playerMode/ui/knownProfile";
 import { Lang, language$ } from "./i18n/i18n";

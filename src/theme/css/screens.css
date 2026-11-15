@@ -1,0 +1,454 @@
+/* Other screens: the avatar builder, How to Play, loading, the week in review, the crash screen, and
+   accessibility (focus you can see, less motion). */
+
+/* ---------- avatar builder ---------- */
+.bbb-face-editor-side {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.bbb-face-editor-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.bbb-avatar-parts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 6px 14px;
+    margin: 10px 0 12px;
+}
+.bbb-avatar-part {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.bbb-avatar-label {
+    width: 82px;
+    flex: none;
+    font-size: 0.8rem;
+    color: var(--bbb-muted);
+}
+.bbb-avatar-value {
+    flex: 1;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.bbb-avatar-part .button {
+    min-width: 30px;
+    font-weight: 800;
+}
+.bbb-lobby-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    object-fit: cover;
+}
+
+/* ---------- how to play ---------- */
+.bbb-hero-help {
+    margin-top: 12px;
+}
+.bbb-tutorial {
+    max-width: 760px;
+    margin: 0 auto;
+}
+.bbb-tutorial-faces {
+    display: flex;
+    justify-content: center;
+    margin-top: 14px;
+}
+.bbb-tutorial-faces img {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--bbb-card-2);
+    border: 2px solid var(--bbb-bg);
+    margin-left: -10px;
+    object-fit: cover;
+}
+.bbb-tutorial-faces img:first-child {
+    margin-left: 0;
+}
+.bbb-tutorial-toc {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    margin: 18px 0;
+}
+.bbb-tutorial-toc a {
+    font-size: 0.85rem;
+    padding: 4px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--bbb-border);
+    background: var(--bbb-card);
+    color: var(--bbb-text);
+}
+.bbb-tutorial-toc a:hover {
+    border-color: var(--bbb-accent);
+}
+.bbb-tutorial-section {
+    background: var(--bbb-card);
+    border: 1px solid var(--bbb-border);
+    border-radius: var(--bbb-radius);
+    padding: 18px 20px;
+    margin-bottom: 12px;
+    scroll-margin-top: 12px;
+}
+.bbb-tutorial-section h2 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin: 0 0 10px;
+    color: var(--bbb-text);
+}
+.bbb-tutorial-section p,
+.bbb-tutorial-section li {
+    color: var(--bbb-muted);
+}
+.bbb-tutorial-section p + p,
+.bbb-tutorial-section p + ul,
+.bbb-tutorial-section ul + p {
+    margin-top: 8px;
+}
+.bbb-tutorial-section b {
+    color: var(--bbb-text);
+}
+.bbb-tutorial-section ul {
+    list-style: disc;
+    padding-left: 20px;
+}
+.bbb-tutorial-steps {
+    list-style: none;
+    counter-reset: step;
+    padding: 0;
+    margin: 0;
+}
+.bbb-tutorial-steps li {
+    counter-increment: step;
+    position: relative;
+    padding: 6px 0 6px 40px;
+}
+.bbb-tutorial-steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 6px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--bbb-accent), var(--bbb-accent-2));
+    color: #fff;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+}
+@media (max-width: 600px) {
+    .bbb-tutorial-section {
+        padding: 14px 14px;
+    }
+}
+
+/* ---------- loading, sound, back to the game, bests ---------- */
+.bbb-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 32px 12px;
+    text-align: center;
+}
+.bbb-loading-eye {
+    font-size: 44px;
+    animation: bbb-loading-pulse 1.4s ease-in-out infinite;
+}
+.bbb-loading-text {
+    font-weight: 700;
+    color: var(--bbb-text);
+}
+.bbb-loading-detail {
+    color: var(--bbb-muted);
+    font-size: 0.9rem;
+    max-width: 420px;
+}
+@keyframes bbb-loading-pulse {
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 0.6;
+    }
+    50% {
+        transform: scale(1.15);
+        opacity: 1;
+    }
+}
+.bbb-icon-button {
+    background: none;
+    border: 1px solid var(--bbb-border);
+    border-radius: 999px;
+    color: var(--bbb-text);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 4px 8px;
+}
+.bbb-icon-button:hover {
+    border-color: var(--bbb-accent);
+}
+.bbb-back-to-game {
+    font-weight: 700;
+    color: var(--bbb-gold) !important;
+}
+.bbb-new-best {
+    text-align: center;
+    font-weight: 800;
+    color: var(--bbb-gold);
+    margin: 10px 0;
+}
+.bbb-test-best {
+    margin-left: 6px;
+    font-size: 0.75em;
+    opacity: 0.8;
+}
+
+/* ---------- week in review ---------- */
+.bbb-review {
+    background: var(--bbb-card);
+    border: 1px solid var(--bbb-border);
+    border-radius: var(--bbb-radius);
+    padding: 14px 16px;
+    margin: 12px auto;
+    max-width: 680px;
+    text-align: left;
+}
+.bbb-review-title {
+    font-family: var(--bbb-display);
+    font-weight: 800;
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+}
+.bbb-review-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 6px 14px;
+}
+.bbb-review-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.bbb-review-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--bbb-muted);
+}
+.bbb-review-face {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    vertical-align: middle;
+    object-fit: cover;
+    background: var(--bbb-card-2);
+}
+.bbb-review-tally {
+    color: var(--bbb-muted);
+}
+.bbb-review-why,
+.bbb-review-threats,
+.bbb-review-you {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--bbb-border);
+}
+.bbb-review-threat {
+    margin-right: 10px;
+    white-space: nowrap;
+}
+.bbb-review-you-title {
+    font-weight: 800;
+    margin-bottom: 6px;
+}
+.bbb-review-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.bbb-chip {
+    font-size: 0.8rem;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--bbb-card-2);
+    border: 1px solid var(--bbb-border);
+}
+.bbb-review-tip {
+    margin-top: 6px;
+    color: var(--bbb-gold-text);
+}
+.bbb-why-week {
+    margin: 6px 0;
+    padding: 6px 10px;
+    border: 1px solid var(--bbb-border);
+    border-radius: 10px;
+}
+.bbb-why-week summary {
+    cursor: pointer;
+    font-weight: 700;
+}
+.bbb-why-week p {
+    margin: 4px 0;
+}
+
+/* ---------- accessibility: focus you can see, and less motion ---------- */
+:focus-visible {
+    outline: 3px solid var(--bbb-gold) !important;
+    outline-offset: 2px;
+}
+[role="button"] {
+    cursor: pointer;
+}
+.bbb-link-button {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--bbb-indigo-text);
+    cursor: pointer;
+    font: inherit;
+    text-decoration: underline;
+}
+.bbb-settings {
+    position: relative;
+    display: inline-block;
+}
+/* Other games: a nav link that opens a small panel under it, from the left */
+.bbb-nav > .bbb-other-games {
+    padding: 0;
+}
+.bbb-nav-button {
+    background: none;
+    border: 0;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+.bbb-nav-button:hover,
+.bbb-nav-button[aria-expanded="true"] {
+    background: rgba(var(--bbb-ink), 0.06);
+    color: var(--bbb-text);
+}
+.bbb-other-games-panel {
+    left: 0;
+    right: auto;
+    width: min(280px, 86vw);
+    gap: 2px;
+    padding: 6px;
+}
+.bbb-other-game {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 10px;
+    border-radius: 8px;
+    color: var(--bbb-text) !important;
+    text-decoration: none;
+    font-weight: 400;
+}
+.bbb-other-game:hover,
+.bbb-other-game:focus-visible {
+    background: rgba(var(--bbb-ink), 0.06);
+}
+.bbb-settings-panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 50;
+    width: min(300px, 86vw);
+    background: var(--bbb-card-2);
+    border: 1px solid var(--bbb-border);
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-align: left;
+}
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+body.bbb-reduce-motion *,
+body.bbb-reduce-motion *::before,
+body.bbb-reduce-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+}
+
+/* ---------- the crash screen (see errorBoundary.tsx) ---------- */
+.bbb-crash {
+    max-width: 560px;
+    margin: 12vh auto;
+    padding: 24px 16px;
+    text-align: center;
+    color: var(--bbb-text);
+}
+.bbb-crash-emoji {
+    font-size: 48px;
+}
+.bbb-crash h2 {
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin: 8px 0;
+}
+.bbb-crash-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 16px;
+}
+.bbb-crash-details {
+    margin-top: 16px;
+    text-align: left;
+    font-size: 0.75rem;
+    max-height: 240px;
+    overflow: auto;
+    white-space: pre-wrap;
+    background: var(--bbb-card-2);
+    color: var(--bbb-muted);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+/* ---------- avatar options to earn ---------- */
+.bbb-avatar-unlocks {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 8px;
+    text-align: left;
+}
+.bbb-ach-gift {
+    display: block;
+    color: var(--bbb-gold-text);
+    font-weight: 600;
+}

@@ -17,6 +17,8 @@ import { HostOnlineButton, joinCodeFromUrl, PublicGames, QuickPlayButton, Rejoin
 import { t } from "../../i18n/i18n";
 import { SavedSeasons } from "../../playerMode/ui/savedSeasons";
 import { DailyCard } from "../../playerMode/ui/dailyCard";
+import { seasonFromUrl } from "../../career/seasonShare";
+import { SeasonReplay } from "../../career/seasonReplay";
 
 // An invite link (?join=CODE) opens the join screen, once.
 let inviteHandled = false;
@@ -44,6 +46,16 @@ export class PregameScreen extends React.Component<PregameScreenProps, PregameSc
         this.setState({ ...cast$.value.options });
         const code = !inviteHandled && joinCodeFromUrl();
         const shared = !inviteHandled && castFromUrl();
+        // a link to a season someone played: it plays back
+        const watch = !inviteHandled ? seasonFromUrl() : null;
+        if (watch) {
+            try {
+                window.history.replaceState(null, "", window.location.pathname);
+            } catch (e) {
+                // fine: the link just stays in the address bar
+            }
+            setTimeout(() => pushToMainContentStream(<SeasonReplay season={watch} onDone={() => dealNewCast()} />, Screens.Ingame), 0);
+        }
         inviteHandled = true;
         if (shared) {
             // a shared cast link: that cast, ready to play

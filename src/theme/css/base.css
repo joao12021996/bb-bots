@@ -1,0 +1,308 @@
+/* Site-wide modern styling. Dark by default; the light palette is at the end of this file. Which one shows is
+   ⚙️ Settings > Theme (the device's setting unless the player picks), set as data-theme on <html>. */
+
+:root {
+    --bbb-ink: 255, 255, 255; /* tints and hairlines: white on dark, ink on light */
+    --bbb-lilac: #c4b5fd;
+    --bbb-lilac-2: #ddd6fe;
+    --bbb-gold-text: #fde68a;
+    --bbb-rose-text: #fda4af;
+    --bbb-pink-text: #f9a8d4;
+    --bbb-sky-text: #bae6fd;
+    --bbb-indigo-text: #a5b4fc;
+    --bbb-green-text: #6ee7b7;
+    --bbb-bg: #0c0a1a;
+    --bbb-card: #17142b;
+    --bbb-card-2: #201c3b;
+    --bbb-border: rgba(var(--bbb-ink), 0.08);
+    --bbb-text: #f4f2ff;
+    --bbb-muted: #a9a3c7;
+    --bbb-accent: #8b5cf6;
+    --bbb-accent-2: #ec4899;
+    --bbb-gold: #fbbf24;
+    --bbb-radius: 16px;
+    --bbb-font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --bbb-display: "Outfit", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html {
+    background: var(--bbb-bg);
+}
+
+body {
+    font-family: var(--bbb-font);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    background: radial-gradient(1200px 600px at 10% -10%, rgba(139, 92, 246, 0.18), transparent 60%),
+        radial-gradient(900px 500px at 110% 10%, rgba(236, 72, 153, 0.12), transparent 60%), var(--bbb-bg) !important;
+    background-attachment: fixed !important;
+    min-height: 100vh;
+    margin: 0;
+    padding: 12px;
+}
+
+h1,
+h2,
+h3,
+h4 {
+    font-family: var(--bbb-display);
+    letter-spacing: -0.01em;
+}
+
+a {
+    color: var(--bbb-lilac);
+    cursor: pointer;
+}
+a:hover {
+    color: var(--bbb-lilac-2);
+}
+
+/* cards */
+.box {
+    border-radius: var(--bbb-radius) !important;
+    border: 1px solid var(--bbb-border);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+    background: linear-gradient(180deg, rgba(var(--bbb-ink), 0.02), transparent), var(--bbb-card) !important;
+    padding: 1.1rem 1.25rem;
+    color: var(--bbb-text); /* not Bulma's dark grey, which disappears on a dark card */
+}
+.label,
+.box strong {
+    color: inherit;
+}
+
+/* highlighted text (sidebar selection, active nav) */
+mark {
+    background: linear-gradient(90deg, var(--bbb-accent), var(--bbb-accent-2)) !important;
+    color: white !important;
+    border-radius: 8px;
+    padding: 2px 8px;
+}
+
+/* buttons */
+.button {
+    border-radius: 12px !important;
+    font-weight: 600;
+    border: 1px solid transparent;
+    transition: transform 80ms ease, filter 120ms ease, box-shadow 120ms ease;
+    color: #1b1530 !important;
+    background: #ece9f8;
+}
+.button:hover:not([disabled]) {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+}
+.button:active:not([disabled]) {
+    transform: translateY(1px);
+}
+.button.is-primary {
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9) !important;
+    color: white !important;
+    box-shadow: 0 6px 16px rgba(109, 40, 217, 0.35);
+}
+.button.is-success {
+    background: linear-gradient(135deg, #34d399, #059669) !important;
+    color: white !important;
+    box-shadow: 0 6px 16px rgba(5, 150, 105, 0.3);
+}
+.button.is-danger {
+    background: linear-gradient(135deg, #fb7185, #e11d48) !important;
+    color: white !important;
+    box-shadow: 0 6px 16px rgba(225, 29, 72, 0.3);
+}
+.button.is-warning {
+    background: linear-gradient(135deg, #fde68a, #f59e0b) !important;
+    color: #2a1a00 !important;
+    box-shadow: 0 6px 16px rgba(245, 158, 11, 0.3);
+}
+.button.is-info {
+    background: linear-gradient(135deg, #7dd3fc, #0284c7) !important;
+    color: white !important;
+    box-shadow: 0 6px 16px rgba(2, 132, 199, 0.3);
+}
+.button.is-light {
+    background: rgba(var(--bbb-ink), 0.08) !important;
+    color: var(--bbb-text) !important;
+    border: 1px solid var(--bbb-border) !important;
+}
+.button[disabled] {
+    opacity: 0.45;
+    box-shadow: none !important;
+}
+
+/* inputs */
+.input,
+input[type="text"],
+input[type="number"] {
+    border-radius: 10px;
+}
+
+/* tabs */
+.tabs a {
+    font-weight: 600;
+}
+
+/* ---------- top bar ---------- */
+.bbb-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0.7rem 1rem !important;
+    margin-bottom: 12px !important;
+}
+.bbb-nav {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.bbb-nav > * {
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--bbb-muted) !important;
+    background: transparent;
+    cursor: pointer;
+    transition: background 120ms, color 120ms;
+}
+.bbb-nav > a:hover {
+    background: rgba(var(--bbb-ink), 0.06);
+    color: var(--bbb-text) !important;
+}
+.bbb-nav > mark {
+    color: white !important;
+    padding: 6px 12px;
+}
+
+/* ---------- footer ---------- */
+.bbb-footer {
+    text-align: center;
+    padding: 16px 0 8px;
+    font-size: 0.9rem;
+}
+.bbb-footer a {
+    color: var(--bbb-muted);
+}
+.bbb-footer a:hover {
+    color: var(--bbb-text);
+}
+
+/* ---------- sidebar ---------- */
+.bbb-sidebar br {
+    display: none;
+}
+.bbb-sidebar b,
+.bbb-sidebar a {
+    display: block;
+    padding: 5px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    color: var(--bbb-text);
+}
+.bbb-sidebar a {
+    font-size: 0.9rem;
+    color: var(--bbb-muted);
+    padding-left: 22px;
+}
+.bbb-sidebar b:hover,
+.bbb-sidebar a:hover {
+    background: rgba(var(--bbb-ink), 0.05);
+}
+.bbb-sidebar mark {
+    display: inline-block;
+}
+
+/* ---------- start screen hero ---------- */
+.bbb-hero {
+    text-align: center;
+    padding: 18px 8px 8px;
+}
+.bbb-hero-kicker {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--bbb-lilac);
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    border-radius: 999px;
+    padding: 3px 12px;
+    margin-bottom: 10px;
+}
+.bbb-hero h1 {
+    font-size: clamp(2rem, 6vw, 3.2rem);
+    font-weight: 800;
+    line-height: 1.05;
+    margin: 0 0 8px;
+    background: linear-gradient(90deg, var(--bbb-text), #c4b5fd 50%, #f9a8d4);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+.bbb-hero p {
+    color: var(--bbb-muted);
+    max-width: 620px;
+    margin: 0 auto;
+}
+.bbb-hero.small h3 {
+    margin-top: 4px;
+}
+.bbb-modes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    margin: 18px 0;
+}
+.bbb-mode-card {
+    border-radius: var(--bbb-radius);
+    border: 1px solid var(--bbb-border);
+    background: var(--bbb-card-2);
+    padding: 16px;
+    text-align: left;
+}
+.bbb-mode-card h3 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0 0 4px;
+}
+.bbb-mode-card p {
+    color: var(--bbb-muted);
+    font-size: 0.9rem;
+    margin: 0 0 12px;
+}
+.bbb-mode-card.is-featured {
+    background: linear-gradient(160deg, rgba(139, 92, 246, 0.28), rgba(236, 72, 153, 0.16)), var(--bbb-card-2);
+    border-color: rgba(167, 139, 250, 0.45);
+}
+.bbb-public-games {
+    margin: 18px 0;
+}
+.bbb-public-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+    gap: 8px;
+}
+.bbb-public-game {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: var(--bbb-radius);
+    background: var(--bbb-card-2);
+}
+.bbb-public-game > span {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.bbb-steps {
+    color: var(--bbb-muted);
+    font-size: 0.9rem;
+    text-align: center;
+}

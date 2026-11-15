@@ -1,0 +1,451 @@
+/* Online play: the lobby, the bar at the top of a season, chat, reactions, removing a player. */
+
+/* ---------- online play ---------- */
+.bbb-room-code {
+    margin: 14px auto;
+    padding: 14px;
+    max-width: 360px;
+    border-radius: var(--bbb-radius);
+    background: rgba(139, 92, 246, 0.14);
+    border: 1px solid rgba(167, 139, 250, 0.4);
+    text-align: center;
+}
+.bbb-room-code span {
+    display: block;
+    color: var(--bbb-muted);
+    font-size: 0.85rem;
+}
+.bbb-room-code b {
+    display: block;
+    font-family: var(--bbb-display);
+    font-size: 2.4rem;
+    letter-spacing: 0.25em;
+    margin: 2px 0 8px;
+    color: var(--bbb-gold);
+}
+.bbb-room-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.bbb-code-input {
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-weight: 700;
+    text-align: center;
+}
+.bbb-online-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px 12px;
+    margin: 0 auto 8px;
+    padding: 6px 12px;
+    max-width: 720px;
+    border-radius: 12px;
+    background: var(--bbb-card);
+    border: 1px solid var(--bbb-border);
+    font-size: 0.85rem;
+}
+.bbb-online-players {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.bbb-online-players > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px 2px 2px;
+    border-radius: 999px;
+    background: rgba(var(--bbb-ink), 0.05);
+    opacity: 0.5;
+}
+.bbb-online-players > span.is-on {
+    opacity: 1;
+    box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.6);
+}
+.bbb-online-players img {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.bbb-online-notice {
+    flex-basis: 100%;
+    text-align: center;
+    color: var(--bbb-gold);
+}
+.bbb-online-note {
+    margin: 0 auto 8px;
+    text-align: center;
+    color: var(--bbb-muted);
+    font-size: 0.85rem;
+}
+.bbb-waiting-pulse {
+    animation: bbb-waiting 1.6s ease-in-out infinite;
+}
+@keyframes bbb-waiting {
+    50% {
+        opacity: 0.4;
+    }
+}
+.bbb-waiting-on {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 12px;
+}
+.bbb-waiting-on > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px 2px 2px;
+    border-radius: 999px;
+    background: rgba(var(--bbb-ink), 0.07);
+}
+.bbb-waiting-on img {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+@media (prefers-reduced-motion: reduce) {
+    .bbb-waiting-pulse {
+        animation: none;
+    }
+}
+.bbb-lobby-me {
+    margin: 12px auto;
+    padding: 12px;
+    max-width: 520px;
+    border-radius: var(--bbb-radius);
+    background: var(--bbb-card);
+    border: 1px solid var(--bbb-border);
+}
+.bbb-lobby-me .bbb-add-yourself {
+    margin-top: 8px;
+}
+.bbb-lobby-seated {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    text-align: left;
+}
+.bbb-lobby-seated img {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid var(--bbb-accent);
+}
+.bbb-lobby-settings {
+    margin: 8px auto;
+}
+.bbb-invite-link {
+    margin: 6px 0 10px;
+    text-align: center;
+    font-size: 0.85rem;
+}
+.bbb-room-code .bbb-room-fallback {
+    margin-top: 10px;
+    font-size: 0.8rem;
+}
+.bbb-room-code .bbb-room-fallback b {
+    display: inline;
+    font-size: inherit;
+    letter-spacing: 0.1em;
+    margin: 0;
+    color: var(--bbb-text);
+}
+
+/* online comps: how the other players are doing, while you play */
+.bbb-live-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin: 4px 0 8px;
+}
+.bbb-live-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 10px 2px 2px;
+    border-radius: 999px;
+    background: rgba(var(--bbb-ink), 0.07);
+    font-size: 0.85rem;
+}
+.bbb-live-chip img {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.bbb-live-chip.is-done {
+    opacity: 0.75;
+}
+.bbb-live-standings {
+    margin-top: 12px;
+}
+/* between a comp's stages: everyone's score so far */
+.bbb-stage-scores {
+    margin: 12px 0;
+}
+.bbb-banner.bbb-rule-breaker {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.45);
+    color: var(--bbb-rose-text);
+}
+
+/* online: a Continue that's been pressed, waiting for the other players to press theirs */
+.button.bbb-continue-waiting {
+    opacity: 0.75;
+    cursor: default;
+    animation: bbb-pulse-soft 1.6s ease-in-out infinite;
+}
+@keyframes bbb-pulse-soft {
+    50% {
+        opacity: 0.5;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .button.bbb-continue-waiting {
+        animation: none;
+    }
+}
+
+/* chat boxes: talking to a bot, texting a player */
+.bbb-chat-system {
+    color: var(--bbb-muted);
+    font-size: 0.8rem;
+    margin: 6px 4px;
+}
+.bbb-chat-system {
+    font-style: italic;
+}
+.bbb-chat-thread {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.bbb-chat-msg {
+    align-self: flex-start;
+    max-width: 85%;
+    padding: 6px 10px;
+    border-radius: 12px 12px 12px 4px;
+    background: rgba(var(--bbb-ink), 0.07);
+    word-break: break-word;
+}
+.bbb-chat-msg.is-mine {
+    align-self: flex-end;
+    border-radius: 12px 12px 4px 12px;
+    background: rgba(139, 92, 246, 0.45);
+}
+.bbb-chat-form {
+    display: flex;
+    gap: 6px;
+    padding: 8px;
+    border-top: 1px solid var(--bbb-border);
+}
+.bbb-chat-form input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--bbb-border);
+    background: var(--bbb-bg);
+    color: inherit;
+    font: inherit;
+    font-size: 16px; /* no zoom on phones */
+}
+
+.bbb-talk-count {
+    align-self: center;
+    font-size: 0.8rem;
+    color: var(--bbb-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* online: a player texted you */
+.bbb-texts-banner {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 8px 0;
+}
+.bbb-texts-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: var(--bbb-radius-md);
+    background: rgba(251, 191, 36, 0.12);
+    border: 1px solid rgba(251, 191, 36, 0.45);
+}
+/* moving on with a text nobody's answered */
+.bbb-confirm {
+    margin: 10px 0;
+    padding: 12px;
+    border-radius: var(--bbb-radius-md);
+    background: var(--bbb-card-2);
+    border: 1px solid var(--bbb-border);
+}
+.bbb-confirm p {
+    margin: 0 0 8px;
+}
+
+/* talking to a bot on the social screen */
+.bbb-talk {
+    display: flex;
+    flex-direction: column;
+    max-width: 560px;
+    margin: 10px auto;
+    border: 1px solid var(--bbb-border);
+    border-radius: 14px;
+    background: var(--bbb-card);
+    text-align: left;
+}
+.bbb-talk .bbb-chat-thread {
+    min-height: 120px;
+    max-height: 320px;
+}
+.bbb-talk-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 8px 4px;
+}
+/* what you can do with them: actions, and the picker an action needs */
+.bbb-talk-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 0 6px;
+    margin-bottom: 6px;
+    border-top: 1px solid var(--bbb-border);
+    border-bottom: 1px solid var(--bbb-border);
+}
+.bbb-talk-menu > p,
+.bbb-talk-menu > .bbb-inline-form {
+    padding: 0 8px;
+    margin: 0;
+}
+.bbb-talk-menu > .button {
+    align-self: flex-start;
+    margin-left: 8px;
+}
+/* a houseguest who came to talk: what they said, and your answers */
+.bbb-chat-approach {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.bbb-chat-approach .bbb-talk-chips {
+    padding: 0;
+}
+
+/* ---------- online: removing a player, reactions, the rejoin banner ---------- */
+.bbb-kick {
+    margin-left: 6px;
+    border: 0;
+    background: transparent;
+    color: var(--bbb-rose-text);
+    cursor: pointer;
+    font-size: 0.8em;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+.bbb-kick:hover,
+.bbb-kick:focus-visible {
+    background: rgba(225, 29, 72, 0.15);
+}
+.bbb-reaction {
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 1.25em;
+    animation: bbb-reaction-pop 0.35s ease-out;
+}
+@keyframes bbb-reaction-pop {
+    from {
+        transform: scale(0.2) translateY(6px);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+.bbb-reduce-motion .bbb-reaction {
+    animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+    .bbb-reaction {
+        animation: none;
+    }
+}
+.bbb-react-bar {
+    display: inline-flex;
+    gap: 2px;
+    flex-wrap: wrap;
+}
+.bbb-react-bar button {
+    border: 0;
+    background: transparent;
+    font-size: 1.15rem;
+    line-height: 1;
+    padding: 4px 5px;
+    border-radius: 8px;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.bbb-react-bar button:hover,
+.bbb-react-bar button:focus-visible {
+    background: var(--bbb-card-2);
+}
+.bbb-rejoin {
+    max-width: 760px;
+    margin: 0 auto 14px;
+    padding: 10px 14px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    border-radius: 12px;
+    border: 1px solid var(--bbb-info);
+    background: rgba(2, 132, 199, 0.12);
+    text-align: left;
+}
+.bbb-rejoin-buttons {
+    display: flex;
+    gap: 6px;
+}
+
+/* ---------- online: the notifications bell ---------- */
+.bbb-bell {
+    border: 0;
+    background: transparent;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 3px 5px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.bbb-bell:hover,
+.bbb-bell:focus-visible {
+    background: var(--bbb-card-2);
+}
+.bbb-bell:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

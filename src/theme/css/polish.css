@@ -1,0 +1,388 @@
+/* ==========================================================================
+   Polish pass: one set of tokens for status colors, radii and shadows; dark form controls that match the
+   cards; consistent button variants; tidier text and numbers. Later rules here win over earlier ones.
+   ========================================================================== */
+:root {
+    color-scheme: dark; /* native controls (dropdowns, scrollbars, date pickers) in dark */
+    --bbb-success: #34d399;
+    --bbb-danger: #fb7185;
+    --bbb-info: #38bdf8;
+    --bbb-radius-sm: 10px;
+    --bbb-radius-md: 12px;
+    --bbb-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    --bbb-ring: 0 0 0 3px rgba(139, 92, 246, 0.45);
+}
+
+::selection {
+    background: rgba(139, 92, 246, 0.55);
+    color: #fff;
+}
+
+/* thin, quiet scrollbars */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(196, 181, 253, 0.35) transparent;
+}
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(196, 181, 253, 0.3);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(196, 181, 253, 0.5);
+}
+
+/* text: balanced headings, no lonely last words in paragraphs */
+h1,
+h2,
+h3,
+.title {
+    text-wrap: balance;
+}
+p,
+li {
+    text-wrap: pretty;
+}
+
+/* checkboxes, radios and sliders in the accent color */
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
+    accent-color: var(--bbb-accent);
+}
+
+/* form controls: dark, like the cards they sit on */
+.input,
+.textarea,
+.select select,
+input[type="text"],
+input[type="number"],
+input[type="search"],
+input[type="url"],
+textarea {
+    background-color: rgba(var(--bbb-ink), 0.06);
+    color: var(--bbb-text);
+    border: 1px solid rgba(var(--bbb-ink), 0.14);
+    border-radius: var(--bbb-radius-sm);
+    box-shadow: none;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.input::placeholder,
+.textarea::placeholder,
+input::placeholder,
+textarea::placeholder {
+    color: rgba(169, 163, 199, 0.75);
+}
+.input:hover,
+.textarea:hover,
+input[type="text"]:hover,
+textarea:hover {
+    border-color: rgba(196, 181, 253, 0.35);
+}
+.input:focus,
+.textarea:focus,
+.select select:focus,
+input[type="text"]:focus,
+input[type="number"]:focus,
+textarea:focus {
+    border-color: var(--bbb-accent);
+    box-shadow: var(--bbb-ring);
+    outline: none;
+}
+.input[readonly] {
+    background-color: rgba(var(--bbb-ink), 0.03);
+    color: var(--bbb-muted);
+}
+.select select option {
+    background: var(--bbb-card-2);
+    color: var(--bbb-text);
+}
+
+/* buttons */
+.button {
+    border-radius: var(--bbb-radius-md) !important;
+    min-height: 2.25em;
+}
+.button[disabled] {
+    cursor: not-allowed;
+}
+.button.is-small {
+    border-radius: var(--bbb-radius-sm) !important;
+}
+/* soft variants: a tint of the color, not the full gradient */
+.button.is-info.is-light {
+    background: rgba(56, 189, 248, 0.14) !important;
+    color: var(--bbb-sky-text) !important;
+    border: 1px solid rgba(56, 189, 248, 0.35) !important;
+    box-shadow: none;
+}
+.button.is-link.is-light {
+    background: rgba(139, 92, 246, 0.16) !important;
+    color: var(--bbb-lilac-2) !important;
+    border: 1px solid rgba(139, 92, 246, 0.4) !important;
+}
+.button.is-text {
+    background: transparent !important;
+    color: var(--bbb-muted) !important;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    border: none !important;
+    box-shadow: none !important;
+}
+.button.is-text:hover:not([disabled]) {
+    color: var(--bbb-text) !important;
+    transform: none;
+}
+/* bigger tap targets on phones */
+@media (max-width: 600px) {
+    .button:not(.is-small) {
+        min-height: 2.75em;
+    }
+}
+
+/* focus: the gold ring everywhere, including Bulma's own focus styles */
+.button:focus:not(:focus-visible) {
+    box-shadow: none;
+}
+.button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+    outline: 3px solid var(--bbb-gold) !important;
+    outline-offset: 2px;
+}
+
+/* numbers that change (scores, timers, counts) don't jiggle */
+.bbb-score,
+.bbb-timer,
+.bbb-setup-summary,
+.bbb-stepper,
+table td {
+    font-variant-numeric: tabular-nums;
+}
+
+/* cards: one shadow */
+.box {
+    box-shadow: var(--bbb-shadow) !important;
+}
+
+/* ---- Settings > Rename things ---- */
+.bbb-names-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 5vh 16px;
+    overflow-y: auto;
+}
+.bbb-names {
+    width: min(520px, 100%);
+    background: var(--bbb-card-2);
+    border: 1px solid var(--bbb-border);
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.bbb-names .title {
+    margin: 0;
+}
+.bbb-names-group {
+    border: 1px solid var(--bbb-border);
+    border-radius: 10px;
+    padding: 8px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.bbb-names-group legend {
+    padding: 0 6px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
+.bbb-names-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+}
+.bbb-names-custom {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+}
+.bbb-names-group > .button {
+    align-self: flex-start;
+}
+.bbb-names-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+/* ---- Packing Day comp ---- */
+.bbb-pack-play {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 6px;
+}
+.bbb-pack-truck {
+    display: grid;
+    width: min(62vw, 230px);
+    aspect-ratio: 8 / 15;
+    gap: 1px;
+    padding: 3px;
+    background: #1e1b2e;
+    border: 2px solid var(--bbb-border);
+    border-top-style: dashed;
+    border-radius: 6px;
+    touch-action: none;
+}
+.bbb-pack-space {
+    background: rgba(var(--bbb-ink), 0.03);
+    border-radius: 2px;
+}
+.bbb-pack-box {
+    border-radius: 2px;
+    background: linear-gradient(var(--tape), var(--tape)) center / 100% 22% no-repeat, #c8a165;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.bbb-pack-box.is-ghost {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--tape);
+    opacity: 0.6;
+}
+.bbb-pack-side {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+.bbb-pack-next {
+    display: grid;
+    grid-template-columns: repeat(4, 14px);
+    grid-auto-rows: 14px;
+    gap: 1px;
+}
+.bbb-pack-keys {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+.bbb-pack-key {
+    min-width: 52px;
+    min-height: 48px;
+    font-size: 1.3rem;
+    touch-action: manipulation;
+    user-select: none;
+}
+
+/* ---- real time: the break between comps ---- */
+.bbb-break {
+    text-align: center;
+    padding: 18px 8px;
+}
+.bbb-break-clock {
+    font-size: 2.4rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    margin: 4px 0 8px;
+}
+.bbb-break-votes {
+    margin-top: 14px;
+}
+.bbb-break-votes > div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 6px;
+}
+.bbb-break-voter {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px 3px 3px;
+    border-radius: 999px;
+    border: 1px solid var(--bbb-border);
+    font-size: 0.85rem;
+    opacity: 0.7;
+}
+.bbb-break-voter.is-ready {
+    opacity: 1;
+    border-color: #34d399;
+}
+.bbb-break-voter img {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+/* ---- online: time to act, and pauses ---- */
+.bbb-turn-clock {
+    margin: 0 auto 8px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    width: fit-content;
+    max-width: 100%;
+    font-size: 0.9rem;
+    font-variant-numeric: tabular-nums;
+    background: rgba(var(--bbb-ink), 0.06);
+    border: 1px solid var(--bbb-border);
+}
+.bbb-turn-clock.is-urgent {
+    border-color: #fb7185;
+    color: var(--bbb-rose-text);
+}
+.bbb-pause-row,
+.bbb-pause-ask {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 0 auto 8px;
+    font-size: 0.9rem;
+}
+.bbb-pause-ask {
+    padding: 6px 12px;
+    border-radius: 10px;
+    background: rgba(250, 204, 21, 0.12);
+    border: 1px solid rgba(250, 204, 21, 0.4);
+    width: fit-content;
+}
+.bbb-pause-cover {
+    position: fixed;
+    inset: 0;
+    z-index: 150;
+    background: rgba(5, 5, 15, 0.82);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+.bbb-pause-card {
+    width: min(420px, 100%);
+    text-align: center;
+    background: var(--bbb-card-2);
+    border: 1px solid var(--bbb-border);
+    border-radius: 14px;
+    padding: 22px 18px;
+}
+.bbb-lobby-waiting {
+    text-align: center;
+}

@@ -130,3 +130,40 @@ describe("the daily season, played", () => {
         expect((new PlayerModeController(newPlayerSave(new GameState({ players: cast(6), jury: 3 }), [0])).state as any).daily).toBeUndefined();
     });
 });
+
+describe("a finished season, as a link to watch", () => {
+    beforeEach(() => window.localStorage.clear());
+
+    it("tells the season as it happened, and survives the trip through a link", () => {
+        const { decodeSeason, encodeSeason, houseAt } = require("../career/seasonShare");
+        const controller = new PlayerModeController(newPlayerSave(newGame(10), [4]));
+        controller.state.seed = 777;
+        play(controller);
+        const shared = controller.sharedSeason();
+        const gs = controller.gameState;
+        expect(shared.cast.map((c: any) => c.name)).toEqual(gs.houseguests.map((hg) => hg.name));
+        expect(shared.weeks.length).toBe(controller.state.history.length);
+        expect(shared.players).toEqual([4]);
+        // the two left at the end are the winner and the runner-up, in first and second place
+        const finalists = gs.houseguests.filter((hg) => !hg.isEvicted).map((hg) => hg.id);
+        expect([shared.winner, shared.runnerUp].sort()).toEqual([...finalists].sort());
+        expect(shared.placements[shared.winner!]).toBe(1);
+        expect(shared.placements[shared.runnerUp!]).toBe(2);
+        expect(shared.jury.length).toBeGreaterThan(0);
+        shared.jury.forEach(([, vote]: [number, number]) => expect(finalists).toContain(vote));
+        // everyone evicted in a week was on the block that week, and the count is for the nominees
+        shared.weeks.forEach((w: any) => {
+            w.evicted.forEach((id: number) => expect(w.noms).toContain(id));
+            if (w.votes.length) expect(w.votes.length).toBe(w.noms.length);
+        });
+        const back = decodeSeason(encodeSeason(shared));
+        expect(back.weeks).toEqual(shared.weeks);
+        expect(back.winner).toBe(shared.winner);
+        expect(back.jury).toEqual(shared.jury);
+        expect(back.placements).toEqual(shared.placements);
+        // by the finale, only the two finalists are still in the house
+        expect(houseAt(back, back.weeks.length).out.size).toBe(8);
+        // it fits in a link
+        expect(encodeSeason(shared).length).toBeLessThan(6000);
+    });
+});
