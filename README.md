@@ -62,7 +62,7 @@ Online play goes through a small WebSocket relay. To run your own, see [server/R
 
 | Folder | What's in it |
 | --- | --- |
-| `src/playerMode` | Playing a season: the controller, the week's steps, saving |
+| `src/playerMode` | Playing a season: the controller (one class across `controllerCore`, `controllerComps`, `controllerSocial`, `controllerHouse` and `playerModeController`), the week's steps, saving |
 | `src/playerMode/comps` | Every competition, and how bots play them |
 | `src/playerMode/social` | Alliances, promises, personalities, the jury, powers and twists |
 | `src/playerMode/net` | Online play |
