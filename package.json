@@ -4,28 +4,16 @@
     "version": "0.1.0",
     "private": true,
     "dependencies": {
-        "@types/jest": "24.0.9",
-        "@types/lodash": "^4.14.149",
-        "@types/node": "11.10.4",
-        "@types/react": "16.8.6",
-        "@types/react-beautiful-dnd": "^13.1.2",
-        "@types/react-dom": "16.8.2",
-        "@types/react-paginate": "^6.2.1",
-        "@types/react-tooltip": "^3.11.0",
-        "@types/rx": "^4.1.1",
-        "@types/styled-components": "^5.1.26",
         "lodash": "^4.17.19",
         "pure-rand": "^1.7.0",
         "react": "^16.12.0",
         "react-beautiful-dnd": "^13.1.0",
         "react-dom": "^16.12.0",
         "react-file-drop": "^0.2.8",
-        "react-paginate": "^6.3.2",
         "react-scripts": "^5.0.1",
         "react-tiny-popover": "^4.0.0",
         "rxjs": "^6.5.4",
-        "styled-components": "^5.3.5",
-        "typescript": "^4.8.3"
+        "styled-components": "^5.3.5"
     },
     "scripts": {
         "start": "react-scripts start",
@@ -53,11 +41,16 @@
         "not op_mini all"
     ],
     "devDependencies": {
+        "@types/jest": "24.0.9",
+        "@types/lodash": "^4.14.149",
+        "@types/node": "11.10.4",
+        "@types/react": "16.8.6",
+        "@types/react-beautiful-dnd": "^13.1.2",
+        "@types/react-dom": "16.8.2",
+        "@types/styled-components": "^5.1.26",
         "bulma": "^0.9.3",
-        "extract-text-webpack-plugin": "^4.0.0-beta.0",
         "gh-pages": "^2.2.0",
         "sass": "^1.48.0",
-        "webpack": "^4.28.3",
-        "webpack-cli": "^4.9.1"
+        "typescript": "^4.8.3"
     }
 }
