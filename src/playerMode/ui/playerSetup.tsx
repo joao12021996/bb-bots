@@ -15,6 +15,7 @@ import { loadCareer } from "../../career/career";
 import { t } from "../../i18n/i18n";
 import { cartoonCast, cartoonFor } from "../../cartoon/cartoon";
 import { DAILY_BOTS, dailyKey, dailySeed } from "../../career/daily";
+import { playPrelude, takeOver } from "../dailyPrelude";
 import { count } from "../../analytics/analytics";
 import { FaceEditor, Look } from "./faceEditor";
 import { PlayerModeScreen } from "./playerModeScreen";
@@ -38,28 +39,28 @@ export async function startDaily(name: string, imageURL?: string) {
     const seed = dailySeed(key);
     const bots = cartoonCast(DAILY_BOTS, seed);
     const clean = name.trim().slice(0, 24) || "You";
-    // (a bot with your name would be confusing: it gets a number)
-    bots.forEach((b) => {
-        if (b.name.toLowerCase() === clean.toLowerCase()) b.name = `${b.name} II`;
-    });
-    const me: PlayerProfile = { name: clean, imageURL: imageURL || cartoonFor(clean), social: 5, comp: 5 };
-    const setup = buildSeason(
-        [me, ...bots],
-        [0],
-        bots.map((_, i) => i + 1)
-    );
-    await inlineBlobImages(setup.gameState.houseguests);
-    const save = newPlayerSave(setup.gameState, setup.humanIds, setup.castOptions, true, {
-        difficulty: "normal",
-        powers: "surprise",
-        battleBack: true,
-        rules: DEFAULT_RULES,
-        seed,
-        daily: key,
-    });
+    // an uploaded photo becomes a picture in the save (a blob: link dies with the page)
+    const faceHolder = [{ imageURL: imageURL || cartoonFor(clean) }];
+    await inlineBlobImages(faceHolder);
+    const face = faceHolder[0].imageURL;
+    const extras = { difficulty: "normal" as Difficulty, powers: "surprise" as const, battleBack: true, rules: DEFAULT_RULES, seed, daily: key };
+    // the bots are a few weeks in already: a stand-in plays you (under the same placeholder for everyone, so the
+    // day's season is the same whoever plays it), and you take over with eight or fewer left
+    const prelude = playPrelude(bots, extras, { seed });
+    let save: PlayerSave;
+    if (prelude) save = takeOver(prelude, clean, face);
+    else {
+        // the stand-in never made it far enough: the season starts from day one
+        const me: PlayerProfile = { name: clean, imageURL: face, social: 5, comp: 5 };
+        bots.forEach((b) => {
+            if (b.name.toLowerCase() === clean.toLowerCase()) b.name = `${b.name} II`;
+        });
+        const fresh = buildSeason([me, ...bots], [0], bots.map((_, i) => i + 1));
+        save = newPlayerSave(fresh.gameState, fresh.humanIds, fresh.castOptions, true, extras);
+    }
     count("daily:start");
     await newEpisode(null);
-    await newEpisode(new PregameEpisode(setup.gameState));
+    await newEpisode(new PregameEpisode(save.gameState));
     launch(new PlayerModeController(save));
 }
 

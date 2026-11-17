@@ -7,7 +7,7 @@ import { ordinal } from "./career";
 // roll of the dice. What differs is you: who you talk to, what you promise, how you play the comps. Finish it and
 // you get a result to share and compare; only your first finish of the day counts.
 
-export const DAILY_BOTS = 11; // plus you: a house of twelve
+export const DAILY_BOTS = 11; // plus you: a house of twelve, though you take over with eight or fewer left (see dailyPrelude.ts)
 export const DAILY_URL = "https://spotlegame.co.uk/houseguests/";
 
 // The day, the same everywhere in the world (UTC): "2026-11-14".

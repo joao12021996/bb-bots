@@ -5,6 +5,9 @@ import { buildSeason } from "./setupGame";
 import { cartoonCast } from "../cartoon/cartoon";
 import { DAILY_BOTS, dailyResult, dailySeed } from "../career/daily";
 import { answer, cast, newGame } from "./testing";
+import { FACE_TOKEN, NAME_TOKEN, playPrelude, takeOver } from "./dailyPrelude";
+import { nonEvictedHouseguests } from "../model";
+import { serialize } from "./save/serialize";
 
 function play(controller: PlayerModeController, wins: boolean | "random" = "random") {
     let prompt: Prompt | null = null;
@@ -128,6 +131,54 @@ describe("the daily season, played", () => {
         expect(dailyResult("2026-11-14")).toEqual(first);
         // an ordinary season isn't a daily one
         expect((new PlayerModeController(newPlayerSave(new GameState({ players: cast(6), jury: 3 }), [0])).state as any).daily).toBeUndefined();
+    });
+});
+
+describe("the daily season, already under way", () => {
+    beforeEach(() => window.localStorage.clear());
+
+    const prelude = (maxLeft?: number) => {
+        const seed = dailySeed("2026-11-16");
+        const bots = cartoonCast(DAILY_BOTS, seed);
+        return playPrelude(bots, { powers: "surprise", battleBack: true, seed, daily: "2026-11-16" }, { seed, maxLeft });
+    };
+
+    it("starts with the bots weeks in, eight or fewer left, and you still in it", () => {
+        const a = prelude()!;
+        expect(a).not.toBeNull();
+        const left = nonEvictedHouseguests(a.gameState);
+        expect(left.length).toBeLessThanOrEqual(8);
+        const me = a.gameState.houseguests.find((hg) => hg.name === NAME_TOKEN)!.id;
+        expect(left.some((hg) => hg.id === me)).toBe(true);
+        expect(a.history.length).toBeGreaterThan(0);
+        // the same day's house for everyone
+        expect(serialize(prelude()!)).toEqual(serialize(a));
+
+        const s = takeOver(a, "Sam", "face.png");
+        const json = serialize(s);
+        expect(json).not.toContain(NAME_TOKEN);
+        expect(json).not.toContain(FACE_TOKEN);
+        expect(getById(s.gameState, me).name).toBe("Sam");
+        expect(getById(s.gameState, me).imageURL).toBe("face.png");
+        expect(s.humanIds).toEqual([me]);
+        expect(s.watching).toBeFalsy();
+        expect(s.personalities![me]).toBeUndefined();
+        expect(s.announce![0].title).toContain("Previously");
+        expect(s.announce![0].lines.join(" ")).toContain("can't stand you");
+
+        // and it plays on to the end, with the result recorded
+        play(new PlayerModeController(s));
+        const r = dailyResult("2026-11-16")!;
+        expect(r.name).toBe("Sam");
+        expect(r.castSize).toBe(12);
+        expect(r.placement).toBeLessThanOrEqual(8);
+    });
+
+    it("a bot with your name keeps it; you get a II", () => {
+        const a = prelude(7)!;
+        const me = a.gameState.houseguests.find((hg) => hg.name === NAME_TOKEN)!.id;
+        const botName = a.gameState.houseguests.find((hg) => hg.id !== me)!.name;
+        expect(getById(takeOver(a, botName, "x").gameState, me).name).toBe(`${botName} II`);
     });
 });
 

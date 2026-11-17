@@ -73,7 +73,7 @@ export function DailyCard(props: { onPlay?: (name: string) => void; onResume?: (
                 <>
                     <p>
                         {t(
-                            "One season a day, the same for everyone: the same eleven houseguests, the same comps, the same twists. How far can you get? Share your result and compare."
+                            "One season a day, the same for everyone. You arrive weeks in: eight or fewer are left, the alliances are set, someone already can't stand you, and you might be on the block. How far can you get? Share your result and compare."
                         )}
                     </p>
                     {going ? (
