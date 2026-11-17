@@ -14,4 +14,7 @@ The full jest suite takes about 3 minutes (playerMode.test.tsx ~170s, netSession
 
 ## Git
 
+The user works on two machines. Always `git pull` before starting work (and in ../spotle before syncing the
+build there), so you never build on a stale checkout.
+
 Commit and push directly on `master`; no feature branches.
