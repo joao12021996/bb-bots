@@ -14,7 +14,7 @@ import { botPawnTalk, NOMINATION_HIT, nominationHit, settlePawnTalk, tellPawn } 
 import { evictionSpeech, makePromise, nominationSpeech, vetoSpeech } from "./social/speeches";
 import { botGuess, closestGuesses, makeTiebreaker } from "./comps/tiebreaker";
 import { botHide, hideOutcome, tiebreakHouse } from "./comps/hideTiebreak";
-import { botFlip, DUEL_PAIRS, duelDeck, Matched, MEMORY_DUEL_ID } from "./comps/memoryDuel";
+import { botFlip, DUEL_PAIRS, duelDeck, Matched, MEMORY_DUEL_ID, recall } from "./comps/memoryDuel";
 import { WineCellarComp } from "./comps/wineCellar";
 import { botSwaps, STRIKES_OUT, TAINTED_WINE_ID } from "./comps/taintedWine";
 import { seededRand } from "./comps/random";
@@ -1619,6 +1619,19 @@ describe("memory duel", () => {
         const first = botFlip(deck, {}, [0, twin], null, 1, 3);
         expect([0, twin]).toContain(first);
         expect(botFlip(deck, {}, [0, twin], first, 1, 3)).toBe(first === 0 ? twin : 0);
+        // memory fades with time, faster for weaker bots
+        expect(recall(1, 0)).toBeGreaterThan(recall(0, 0));
+        expect(recall(1, 10)).toBeGreaterThan(0.6);
+        expect(recall(0, 10)).toBeLessThan(0.15);
+        // a pair seen a dozen flips ago (other cards seen since): sharp bots mostly take it, weak ones mostly don't
+        const others = deck.map((_, i) => i).filter((i) => i !== 0 && i !== twin);
+        const old = [0, twin, ...others.slice(0, 12)];
+        const takes = (skill: number) => {
+            let n = 0;
+            for (let seed = 1; seed <= 200; seed++) if ([0, twin].includes(botFlip(deck, {}, old, null, skill, seed))) n++;
+            return n;
+        };
+        expect(takes(1)).toBeGreaterThan(takes(0) * 2);
         // whole duels between two bots
         const play = (skillA: number, skillB: number, seed: number) => {
             const d = duelDeck(seed);
@@ -1628,9 +1641,9 @@ describe("memory duel", () => {
             let turn = seed % 2;
             while (Object.keys(matched).length < d.length) {
                 const skill = turn === 0 ? skillA : skillB;
-                const c1 = botFlip(d, matched, seen, null, skill, seed * 1000 + seen.length);
+                const c1 = botFlip(d, matched, seen, null, skill, seed * 2 + turn);
                 seen.push(c1);
-                const c2 = botFlip(d, matched, seen, c1, skill, seed * 1000 + seen.length);
+                const c2 = botFlip(d, matched, seen, c1, skill, seed * 2 + turn);
                 seen.push(c2);
                 expect(c2).not.toBe(c1);
                 if (d[c1] === d[c2]) {

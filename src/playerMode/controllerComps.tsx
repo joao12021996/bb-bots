@@ -897,7 +897,7 @@ export abstract class ControllerComps extends ControllerCore {
                 while (Object.keys(matched).length < deck.length) {
                     if (!this.isHuman(this.player(actor))) {
                         const skill = this.botSkill(this.player(actor), `${seed}:duel`);
-                        turnOver(botFlip(deck, matched, seen, open.length ? open[0] : null, skill, hashcode(`${dseed}:${seen.length}`)));
+                        turnOver(botFlip(deck, matched, seen, open.length ? open[0] : null, skill, hashcode(`${dseed}:mind:${actor}`)));
                         continue;
                     }
                     const shownRecent = recent;

@@ -35,18 +35,31 @@ export type Matched = { [card: number]: number }; // card -> who found the pair
 
 const mix = (...ns: number[]) => ns.reduce((h, n) => (Math.imul(h ^ n, 0x5bd1e995) + 0x9e3779b9) >>> 0, 0x12345);
 
-// The card a bot turns over next. It remembers each card it has seen turned over with a chance that grows with
-// its skill and fades with time (decided from the seed, so a replay picks the same cards), takes a pair it
-// remembers, and otherwise turns over a card nobody has seen yet.
+// How likely a bot is to still recall a card it saw turned over `age` flips ago: a sharp bot (skill 1) keeps most of
+// the board in its head, a weak one (skill 0) only the last few cards.
+export function recall(skill: number, age: number): number {
+    return (0.5 + 0.45 * skill) * Math.pow(0.85 + 0.12 * skill, age);
+}
+
+// The card a bot turns over next. A bot plays like a person: it only knows what was turned over in front of it,
+// and its memory of each card it saw is imperfect. Every sighting gets a fixed "how long it sticks" draw from the
+// bot's own seed (the same for the whole duel, so a replay picks the same cards); it remembers the card while that
+// draw is under recall(skill, age), and once it has forgotten, it stays forgotten (until it sees the card again).
+// It also only half-remembers which spots were already tried, so a forgetful bot turns over cards again.
+// `seed`: this bot's seed for the whole duel; each flip's choice among equally good cards mixes in the flip number.
 export function botFlip(deck: string[], matched: Matched, seen: number[], open: number | null, skill: number, seed: number): number {
     const known = new Map<number, string>();
+    const tried = new Set<number>(); // spots it remembers were turned over, whatever they showed
     seen.forEach((card, k) => {
+        if (matched[card] !== undefined || card === open) return;
         const age = seen.length - 1 - k;
-        const memory = (0.45 + 0.5 * skill) * Math.pow(0.93 + 0.05 * skill, age);
-        if (matched[card] === undefined && card !== open && seededRand(mix(seed, card, k))() < memory) known.set(card, deck[card]);
+        const sticks = seededRand(mix(seed, card, k))();
+        const memory = recall(skill, age);
+        if (sticks < memory) known.set(card, deck[card]);
+        if (sticks < Math.sqrt(memory)) tried.add(card);
     });
     const hidden = deck.map((_, i) => i).filter((i) => matched[i] === undefined && i !== open);
-    const unseen = hidden.filter((i) => !seen.includes(i));
+    const unseen = hidden.filter((i) => !tried.has(i) && !known.has(i));
     const rand = seededRand(mix(seed, seen.length, 77));
     const anyOf = (list: number[]) => list[Math.floor(rand() * list.length)];
     const entries = Array.from(known.entries());
@@ -58,9 +71,9 @@ export function botFlip(deck: string[], matched: Matched, seen: number[], open: 
     // the second card: the first one's twin, if it remembers where that is
     const twin = entries.find(([card, face]) => card !== open && face === deck[open]);
     if (twin) return twin[0];
-    // just seen the first card turned over: a new card might be its twin (no point turning over a known non-match)
-    const fresh = unseen.filter((i) => !known.has(i));
-    return anyOf(fresh.length ? fresh : unseen.length ? unseen : hidden.filter((i) => !known.has(i)).length ? hidden.filter((i) => !known.has(i)) : hidden);
+    // otherwise a card it doesn't think it has tried (no point turning over a card it knows doesn't match)
+    const notKnown = hidden.filter((i) => !known.has(i));
+    return anyOf(unseen.length ? unseen : notKnown.length ? notKnown : hidden);
 }
 
 const REPLAY_MS = 1300;
