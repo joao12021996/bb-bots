@@ -281,3 +281,8 @@
 .bbb-reduce-motion .bbb-replay-face {
     transition: none;
 }
+.bbb-season-card-share {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}

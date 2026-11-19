@@ -661,7 +661,14 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                     prompt.kind !== "handoff" &&
                     // don't spoil the eviction reveal
                     !(prompt.kind === "scene" && /Eviction/.test(prompt.scene.title)) && (
-                        <div className="bbb-banner">{banner}</div>
+                        <div className="bbb-banner">
+                            {banner}
+                            {controller.canSkipToEnd && (
+                                <button type="button" className="button is-small is-light bbb-skip-end" onClick={() => controller.skipToEnd()}>
+                                    ⏩ Skip to the end
+                                </button>
+                            )}
+                        </div>
                     )}
                 {!["handoff", "compPlay", "tiebreak", "hideTiebreak", "memoryDuel", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(chrome) && <LiveFeed controller={controller} />}
                 {!["handoff", "compPlay", "tiebreak", "hideTiebreak", "memoryDuel", "winePour", "wineDrink", "gameOver", "juryReveal"].includes(chrome) && !inComp && (

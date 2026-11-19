@@ -2,6 +2,7 @@ import React from "react";
 import { Achievement, ACHIEVEMENTS, ordinal, SeasonSummary } from "./career";
 import { APP_NAME, SHOW_NAME } from "../playerMode/terms";
 import { rename } from "../i18n/rename";
+import { DAILY_URL } from "./daily";
 
 export function placementText(s: SeasonSummary): string {
     if (s.won) return `Winner of ${SHOW_NAME}`;
@@ -151,7 +152,32 @@ export async function shareSeason(s: SeasonSummary, unlocked: Achievement[]): Pr
     return "saved";
 }
 
-// A finished season, on screen: the card, its achievements, and a share button.
+// The season as plain text, for sharing where a picture won't do (or isn't wanted).
+export function seasonShareText(s: SeasonSummary, unlocked: Achievement[]): string {
+    const lines = [`${s.won ? "🏆" : "🏠"} ${s.name}: ${placementText(s)} in ${APP_NAME}!`, statLine(s).join(" · ")];
+    if (s.highlight) lines.push(`“${s.highlight}”`);
+    if (unlocked.length > 0) lines.push(`🏅 ${unlocked.map((a) => `${a.emoji} ${a.title}`).join(" · ")}`);
+    lines.push(`${s.castSize} houseguests · ${s.difficulty}`);
+    lines.push(DAILY_URL);
+    return rename(lines.join("\n"));
+}
+
+// Shares the text, or copies it where the browser can't share.
+export async function shareSeasonText(s: SeasonSummary, unlocked: Achievement[]): Promise<"shared" | "copied" | "failed"> {
+    const text = seasonShareText(s, unlocked);
+    try {
+        if (navigator.share) {
+            await navigator.share({ text });
+            return "shared";
+        }
+        await navigator.clipboard.writeText(text);
+        return "copied";
+    } catch (e) {
+        return "failed";
+    }
+}
+
+// A finished season, on screen: the card, its achievements, and share buttons: as text, or as a picture.
 export function SeasonCard(props: { summary: SeasonSummary; unlocked: Achievement[] }) {
     const { summary: s, unlocked } = props;
     const [status, setStatus] = React.useState<string | null>(null);
@@ -176,17 +202,30 @@ export function SeasonCard(props: { summary: SeasonSummary; unlocked: Achievemen
                         ))}
                     </div>
                 )}
-                <button
-                    type="button"
-                    className="button is-warning is-small"
-                    onClick={async () => {
-                        setStatus("…");
-                        const r = await shareSeason(s, unlocked);
-                        setStatus(r === "shared" ? "Shared!" : r === "saved" ? "Saved the picture." : "Couldn't make the picture (a photo from another site can't be drawn).");
-                    }}
-                >
-                    📤 Share my season
-                </button>
+                <div className="bbb-season-card-share">
+                    <button
+                        type="button"
+                        className="button is-warning is-small"
+                        onClick={async () => {
+                            setStatus("…");
+                            const r = await shareSeasonText(s, unlocked);
+                            setStatus(r === "shared" ? "Shared!" : r === "copied" ? "Copied the text." : null);
+                        }}
+                    >
+                        📝 Share as text
+                    </button>
+                    <button
+                        type="button"
+                        className="button is-warning is-light is-small"
+                        onClick={async () => {
+                            setStatus("…");
+                            const r = await shareSeason(s, unlocked);
+                            setStatus(r === "shared" ? "Shared!" : r === "saved" ? "Saved the picture." : "Couldn't make the picture (a photo from another site can't be drawn).");
+                        }}
+                    >
+                        🖼️ Share the picture
+                    </button>
+                </div>
                 {status && <span className="bbb-subtle"> {status}</span>}
             </div>
         </div>

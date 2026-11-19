@@ -92,6 +92,8 @@ export function JuryReveal(props: {
     const juror = (id: number) => props.jurors.find((j) => j.id === id)!;
     const last = shown[shown.length - 1];
     const won = !!winner;
+    // once someone has won, the votes left unread: shown too, so everyone sees how the jury really split
+    const unread = winner ? props.votes.slice(read) : [];
     React.useEffect(() => {
         if (won) play("fanfare");
         else if (read > 0) play("vote");
@@ -119,8 +121,20 @@ export function JuryReveal(props: {
                                         🔑
                                     </span>
                                 ))}
+                            {unread
+                                .filter((v) => v.finalistId === f.id)
+                                .map((v) => (
+                                    <span key={v.jurorId} className="is-unread" title={`${juror(v.jurorId).name} (not read out)`}>
+                                        🔑
+                                    </span>
+                                ))}
                         </div>
-                        <div className="bbb-reveal-count">{count(f.id)}</div>
+                        <div className="bbb-reveal-count">
+                            {count(f.id)}
+                            {unread.some((v) => v.finalistId === f.id) && (
+                                <span className="bbb-reveal-final"> → {props.votes.filter((v) => v.finalistId === f.id).length}</span>
+                            )}
+                        </div>
                     </div>
                 ))}
             </div>
@@ -138,7 +152,18 @@ export function JuryReveal(props: {
                             <div className="bbb-winner-name">{winner.name}</div>
                         </div>
                     </div>
-                    {props.votes.length > read && <Subtle>The remaining {props.votes.length - read} votes won't be read.</Subtle>}
+                    {unread.length > 0 && (
+                        <div className="bbb-reveal-rest">
+                            <Subtle>The rest of the votes, never read out on the night:</Subtle>
+                            <ul>
+                                {unread.map((v) => (
+                                    <li key={v.jurorId}>
+                                        🔑 {juror(v.jurorId).name} voted for {props.finalists.find((f) => f.id === v.finalistId)!.name}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                     <BigButton onClick={props.onDone}>Continue</BigButton>
                 </div>
             ) : (

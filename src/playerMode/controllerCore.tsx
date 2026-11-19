@@ -11,6 +11,7 @@ import { setSuspicion } from "./social/promises";
 import { capitalize, explainNomination, ReasonContext } from "./social/reasons";
 import { botPercentile } from "./comps/botScores";
 import { seededRand } from "./comps/random";
+import { rankResults } from "./comps/compRunner";
 import { Approach, shiftRelationship, setRelationship, SocialMemory } from "./social/socialActions";
 import { fallBackToPlanB, Alliance, AllianceBook, aliveMembers, betray, botNominate, pruneAlliances } from "./social/alliances";
 import { DAY_PART, dayOf } from "./days";
@@ -367,7 +368,76 @@ export abstract class ControllerCore {
         seedRng(`${s.seed}:${s.gameState.phase}:${s.step}:${s.socialTurn}:${s.socialStage}:${s.actionsLeft}${who}:${extra}`);
     }
 
-    protected show(prompt: Prompt) {
+    // Skip to the end: every player is out of the game, and they'd rather not sit through the rest. Screens nobody
+    // has to decide on are clicked through, one after another (a loop, not a recursion: a season is thousands of
+    // screens), until something a player still has a say in (a juror's question, say), the jury's votes, or the end.
+    protected skipping = false;
+    private skipQueue: Prompt | null = null;
+    private skipLooping = false;
+
+    public get canSkipToEnd(): boolean {
+        const s = this.state;
+        const now = this.prompt$.value;
+        return (
+            !this.net &&
+            !this.skipping &&
+            s.step !== Step.GameOver &&
+            s.humanIds.length > 0 &&
+            s.humanIds.every((id) => this.player(id).isEvicted) &&
+            !!now &&
+            this.skipPast(now) !== null
+        );
+    }
+
+    public skipToEnd() {
+        if (!this.canSkipToEnd) return;
+        this.skipping = true;
+        const now = this.prompt$.value;
+        if (now) this.show(now);
+    }
+
+    // what clicking through a screen does, or null: the skip stops here and the screen is shown
+    private skipPast(p: Prompt): (() => void) | null {
+        if (actorOf(p) !== null && this.isHuman({ id: actorOf(p)! })) return null;
+        switch (p.kind) {
+            case "scene":
+                return () => this.continue();
+            case "handoff":
+                return () => p.next();
+            case "compResults":
+                return () => p.onDone(rankResults(p.results, [])[0].id);
+            case "hideResults":
+            case "tiebreakResults":
+            case "knockout":
+                return () => p.onDone();
+            case "memoryDuel":
+                return p.onDone ? () => p.onDone!() : null;
+            default:
+                return null;
+        }
+    }
+
+    protected show(prompt: Prompt): void {
+        if (this.skipping) {
+            const past = this.skipPast(prompt);
+            if (past) {
+                this.skipQueue = prompt;
+                if (this.skipLooping) return;
+                this.skipLooping = true;
+                try {
+                    for (let p: Prompt | null = this.skipQueue; p && this.skipping; p = this.skipQueue) {
+                        this.skipQueue = null;
+                        const go = this.skipPast(p);
+                        if (!go) return this.show(p);
+                        go();
+                    }
+                } finally {
+                    this.skipLooping = false;
+                }
+                return;
+            }
+            this.skipping = false;
+        }
         if (this.multiplayer && !this.net) {
             if (prompt.kind === "handoff") this.afterPrivate = false;
             else if (this.inPrivate) this.afterPrivate = true;

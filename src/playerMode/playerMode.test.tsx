@@ -4,6 +4,7 @@ import { GameState, getById, inJury, nonEvictedHouseguests, PlayerProfile, Mutab
 import { rng } from "../utils";
 import { seedRng } from "./seeding";
 import { PlayerModeController, newPlayerSave, Prompt, Step, PlayerSave, migrateSave } from "./playerModeController";
+import { actorOf } from "./controllerTypes";
 import { botPercentile, compLuck, luckyComp } from "./comps/botScores";
 import { cartoonCast, cartoonURL, statRoll, decodeLook, encodeLook, lookDistance, lookFromURL, lookOf, randomLook } from "../cartoon/cartoon";
 import { botSocialTime, performSocialAction, SocialMemory } from "./social/socialActions";
@@ -128,6 +129,36 @@ describe("player mode season", () => {
         }
         expect(evictedSeen).toBe(true);
         expect(jurySeen).toBe(true);
+    });
+
+    it("an evicted player can skip to the end, stopping only for what they still have a say in", () => {
+        let skipped = 0;
+        for (let id = 0; id < 6; id++) {
+            const controller = new PlayerModeController(newPlayerSave(newGame(10), [id]));
+            controller.state.seed = id * 7919 + 10;
+            let prompt: Prompt | null = null;
+            controller.prompt$.subscribe((p) => (prompt = p));
+            controller.start();
+            for (let guard = 0; guard < 5000; guard++) {
+                const p = prompt as Prompt | null;
+                if (!p || p.kind === "gameOver") break;
+                if (controller.canSkipToEnd) {
+                    expect(getById(controller.gameState, id).isEvicted).toBe(true);
+                    controller.skipToEnd();
+                    skipped++;
+                    const after = prompt as Prompt | null;
+                    expect(after).not.toBeNull();
+                    // where it stops: a decision of their own, the jury's votes, or the end
+                    const stop = after!.kind === "juryReveal" || after!.kind === "gameOver" || actorOf(after!) === id;
+                    expect(stop).toBe(true);
+                    expect(controller.canSkipToEnd).toBe(false);
+                    continue;
+                }
+                answer(controller, p, "random", false);
+            }
+            expect(controller.state.step).toBe(Step.GameOver);
+        }
+        expect(skipped).toBeGreaterThan(0);
     });
 
     it("only shows pass-the-device screens in pass-and-play", () => {

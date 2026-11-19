@@ -135,7 +135,12 @@ describe("player mode screens", () => {
         expect(c.querySelectorAll(".bbb-ach.is-unlocked").length).toBeGreaterThan(0);
         expect(c.querySelectorAll(".bbb-ach:not(.is-unlocked)").length).toBeGreaterThan(5);
         act(() => (c.querySelector(".bbb-season-row") as HTMLButtonElement).click());
-        expect(c.textContent).toContain("Share my season");
+        expect(c.textContent).toContain("Share as text");
+        expect(c.textContent).toContain("Share the picture");
+        const { seasonShareText } = require("../../career/seasonCard");
+        const text = seasonShareText(require("../../career/career").loadCareer().seasons[0], []);
+        expect(text).toContain("Juno");
+        expect(text).toContain("Runner-up");
     });
 
     it("how to play: every section, with a contents link to each, and none of the old show names", () => {
@@ -964,7 +969,9 @@ describe("player mode screens", () => {
         expect(c.textContent).not.toContain("The winner of The Houseguests");
         click(c, "Read the next vote");
         expect(c.textContent).toContain("The winner of The Houseguests");
-        expect(c.textContent).toContain("The remaining 1 votes won't be read");
+        // the vote that wasn't read out is shown anyway
+        expect(c.textContent).toContain(`${jurors[4].name} voted for ${b.name}`);
+        expect(c.querySelectorAll(".bbb-reveal-keys .is-unread").length).toBe(1);
         click(c, "Continue");
         expect(done).toBe(true);
     });

@@ -745,3 +745,20 @@
     color: var(--bbb-rose-text);
     font-weight: 700;
 }
+
+.bbb-reveal-keys .is-unread {
+    opacity: 0.4;
+}
+.bbb-reveal-final {
+    font-size: 0.6em;
+    opacity: 0.7;
+}
+.bbb-reveal-rest {
+    margin: 10px 0;
+    text-align: center;
+}
+.bbb-reveal-rest ul {
+    list-style: none;
+    margin: 6px 0 0;
+    padding: 0;
+}
