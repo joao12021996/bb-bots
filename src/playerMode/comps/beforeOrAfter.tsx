@@ -1,7 +1,7 @@
 import React from "react";
 import { DAY_PART, dayLabel } from "../days";
 import { GameState, getById, Houseguest } from "../../model";
-import { WeekRecord } from "../history";
+import { presentFor, WeekRecord } from "../history";
 import { Face, Grid, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { answerQuestion, clamp, gaussian, Rand, sample, seededRand, shuffled } from "./random";
@@ -16,12 +16,9 @@ interface Question {
     answer: string;
 }
 
-function faceOptions(gs: GameState, answer: Houseguest, rand: Rand): Question["options"] {
-    const wrong = sample(
-        rand,
-        gs.houseguests.filter((hg) => hg.id !== answer.id),
-        3
-    );
+function faceOptions(gs: GameState, pool: Houseguest[], answer: Houseguest, rand: Rand): Question["options"] {
+    const others = pool.filter((hg) => hg.id !== answer.id);
+    const wrong = sample(rand, others.length >= 3 ? others : gs.houseguests.filter((hg) => hg.id !== answer.id), 3);
     return shuffled(rand, [answer, ...wrong]).map((hg) => ({ key: `${hg.id}`, hg }));
 }
 
@@ -30,27 +27,30 @@ const yesNo = [
     { key: "no", label: "No" },
 ];
 
+// Only about `history`, the season the players saw (the daily season: from when the player took over; see
+// seenHistory), and only with houseguests who were in the house for it.
 export function buildQuiz(gs: GameState, history: WeekRecord[], rand: Rand): Question[] {
     const qs: Question[] = [];
+    const pool = presentFor(gs.houseguests, history);
     history.forEach((w) => {
         if (w.hohId !== undefined) {
             qs.push({
                 prompt: `Who won Head of Household on ${dayLabel(gs, w.week, DAY_PART.hoh)}?`,
-                options: faceOptions(gs, getById(gs, w.hohId), rand),
+                options: faceOptions(gs, pool, getById(gs, w.hohId), rand),
                 answer: `${w.hohId}`,
             });
         }
         if (w.povId !== undefined) {
             qs.push({
                 prompt: `Who won the Power of Veto on ${dayLabel(gs, w.week, DAY_PART.veto)}?`,
-                options: faceOptions(gs, getById(gs, w.povId), rand),
+                options: faceOptions(gs, pool, getById(gs, w.povId), rand),
                 answer: `${w.povId}`,
             });
         }
         if (w.evictedIds.length > 0) {
             qs.push({
                 prompt: `Who was evicted on ${dayLabel(gs, w.week, DAY_PART.eviction)}?`,
-                options: faceOptions(gs, getById(gs, w.evictedIds[0]), rand),
+                options: faceOptions(gs, pool, getById(gs, w.evictedIds[0]), rand),
                 answer: `${w.evictedIds[0]}`,
             });
         }
@@ -68,15 +68,22 @@ export function buildQuiz(gs: GameState, history: WeekRecord[], rand: Rand): Que
             });
         }
     }
-    // "Was A ever nominated?"
-    sample(rand, gs.houseguests, 3).forEach((hg) => {
-        const nominated = history.some((w) => w.nomineeIds.includes(hg.id));
-        qs.push({
-            prompt: `Did ${hg.name} ever face eviction on the block (after the veto ceremony)?`,
-            options: yesNo,
-            answer: nominated ? "yes" : "no",
-        });
-    });
+    // "Was A on the block after the veto ceremony on Day N?"
+    const blockWeeks = history.filter((w) => w.nomineeIds.length > 0);
+    if (blockWeeks.length > 0) {
+        for (let k = 0; k < 3; k++) {
+            const w = sample(rand, blockWeeks, 1)[0];
+            const there = presentFor(gs.houseguests, history.filter((x) => x.week >= w.week)).filter((hg) => hg.id !== w.hohId);
+            const hg = sample(rand, there.length > 0 ? there : pool, 1)[0];
+            const prompt = hg && `Was ${hg.name} on the block after the veto ceremony on ${dayLabel(gs, w.week, DAY_PART.vetoCeremony)}?`;
+            if (!hg || qs.some((q) => q.prompt === prompt)) continue;
+            qs.push({
+                prompt,
+                options: yesNo,
+                answer: w.nomineeIds.includes(hg.id) ? "yes" : "no",
+            });
+        }
+    }
     return sample(rand, qs, MAX_QUESTIONS);
 }
 
@@ -201,7 +208,7 @@ export const BeforeOrAfterComp: CompDefinition = {
     emoji: "❓",
     kind: "quiz",
     finaleOnly: true,
-    rules: `How well do you know this season? Answer up to ${MAX_QUESTIONS} questions about past HoHs, vetoes, nominations and evictions. ${SECONDS_PER_QUESTION} seconds per question. Most right answers wins; ties go to a tiebreaker.`,
+    rules: `How well do you know this season? Answer up to ${MAX_QUESTIONS} questions about this season's HoHs, vetoes, nominations and evictions. ${SECONDS_PER_QUESTION} seconds per question. Most right answers wins; ties go to a tiebreaker.`,
     maxSeconds: MAX_QUESTIONS * SECONDS_PER_QUESTION + 15,
     Component: BeforeOrAfter,
     simulate: simulateBeforeOrAfter,

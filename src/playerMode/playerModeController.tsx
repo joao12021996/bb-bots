@@ -1151,7 +1151,7 @@ export class PlayerModeController extends ControllerHouse {
     protected blockbuster() {
         const s = this.state;
         const noms = s.week.nomineeIds!.map((id) => getById(s.gameState, id));
-        const comp = compById(this.compChoice(() => pickQuickComp(s.gameState, s.history, s.usedComps, this.rules.kinds, this.haveNotCompeting(noms)).id));
+        const comp = compById(this.compChoice(() => pickQuickComp(s.gameState, this.compHistory, s.usedComps, this.rules.kinds, this.haveNotCompeting(noms)).id));
         this.runComp("Block Breaker Competition", comp, noms, (winnerId) => {
             const [gs, scene, remaining] = generateBlockbusterScene(s.gameState, noms, winnerId);
             s.gameState = gs;
@@ -1383,7 +1383,7 @@ export class PlayerModeController extends ControllerHouse {
     protected finaleHoh() {
         const s = this.state;
         const gs = s.gameState;
-        if (!s.week.finaleComps) s.week.finaleComps = finaleComps(gs, s.history, s.usedComps).map((c) => c.id);
+        if (!s.week.finaleComps) s.week.finaleComps = finaleComps(gs, this.compHistory, s.usedComps).map((c) => c.id);
         const [c1, c2, c3] = s.week.finaleComps.map(compById);
         const final3 = nonEvictedHouseguests(gs);
         let comp: CompDefinition;

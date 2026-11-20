@@ -1,7 +1,7 @@
 import { GameState, getById, Houseguest } from "../model";
 import { CastOptionsOverride } from "../components/episode/episodeFactory";
 import { Scene } from "../components/episode/scenes/scene";
-import { WeekRecord } from "./history";
+import { JoinedAt, WeekRecord } from "./history";
 import { Difficulty, SeasonRules } from "./rules";
 import { CompDefinition, Opponent } from "./comps/compTypes";
 import { Claim, Pour } from "./comps/taintedWine";
@@ -127,6 +127,7 @@ export interface PlayerSave {
     rivalries?: Rivalry[]; // houseguests who blew up at each other and haven't made up
     doubleDone?: boolean; // the season's Double Eviction has happened
     daily?: string; // the daily season: which day's ("2026-11-14")
+    joinedAt?: JoinedAt; // the daily season: when the player took over from their stand-in (see seenHistory)
     reunited?: boolean; // All-Stars: returning houseguests have been reminded of their history with the players
     pacts?: Pact[]; // final-three pacts (see endgame.ts)
     juryCases?: { [playerId: number]: number[] }; // houseguests each player has already made their case to

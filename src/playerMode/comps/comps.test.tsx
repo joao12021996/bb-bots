@@ -306,6 +306,55 @@ describe("Fact or Fiction", () => {
     });
 });
 
+describe("the daily season: memory comps skip what happened before you took over", () => {
+    const { seenHistory } = require("../history");
+    const { buildQuiz } = require("./beforeOrAfter");
+    const { makeFacts } = require("./houseComps");
+    const { generateRankRounds } = require("./rankEm");
+    const { dayOf } = require("../days");
+    const season = [
+        { week: 1, hohId: 0, nomineeIds: [1, 2], povId: 3, evictedIds: [1] },
+        { week: 2, hohId: 4, nomineeIds: [2, 5], povId: 6, evictedIds: [2] },
+        { week: 3, hohId: 3, nomineeIds: [5, 6], povId: 7, evictedIds: [5] },
+        { week: 4, hohId: 6, nomineeIds: [7, 0], povId: 4, evictedIds: [7] },
+    ];
+
+    it("trims the weeks before, and the part of the week before", () => {
+        expect(seenHistory(season, undefined)).toBe(season);
+        const seen = seenHistory(season, { week: 3, part: 0.35 });
+        expect(seen.map((w: any) => w.week)).toEqual([3, 4]);
+        expect(seen[0]).toMatchObject({ hohId: undefined, povId: 7, nomineeIds: [5, 6], evictedIds: [5] });
+        expect(seenHistory(season, { week: 3, part: 0.9 })[0]).toMatchObject({ povId: undefined, nomineeIds: [], evictedIds: [5] });
+        expect(seen[1]).toEqual(season[3]);
+    });
+
+    it("asks nothing about days before", () => {
+        const gs = game();
+        [1, 2, 5, 7].forEach((id) => (gs.houseguests.find((h) => h.id === id)!.isEvicted = true));
+        const joinedAt = { week: 3, part: 0.35 };
+        const seen = seenHistory(season, joinedAt);
+        const joinedDay = dayOf(gs, 3, 0.35);
+        const goneBefore = ["Houseguest1", "Houseguest2"];
+        for (let seed = 0; seed < 20; seed++) {
+            const quiz = buildQuiz(gs, seen, seededRand(seed));
+            expect(quiz.length).toBeGreaterThan(0);
+            quiz.forEach((q: any) => {
+                const days = (q.prompt.match(/Day (\d+)/g) || []).map((d: string) => Number(d.slice(4)));
+                days.forEach((d: number) => expect(d).toBeGreaterThanOrEqual(joinedDay));
+                goneBefore.forEach((n) => expect(q.prompt).not.toContain(n));
+                q.options.forEach((o: any) => o.hg && expect(goneBefore).not.toContain(o.hg.name));
+            });
+            makeFacts(gs, seededRand(seed), seen).forEach((f: any) => {
+                goneBefore.forEach((n) => expect(f.text).not.toContain(n));
+                if (/HoH|Head of Household|veto|block/.test(f.text)) expect(f.text).toContain(`since Day ${joinedDay}`);
+            });
+            generateRankRounds(seededRand(seed), gs, seen).forEach((r: any) =>
+                r.hgs.forEach((hg: any) => expect(goneBefore).not.toContain(hg.name))
+            );
+        }
+    });
+});
+
 describe("the Block Breaker", () => {
     it("is always a quick comp, never a long puzzle like Wine Cellar", () => {
         const { pickQuickComp, QUICK_COMPS } = require("./index");

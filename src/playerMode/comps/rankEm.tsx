@@ -2,6 +2,7 @@ import React from "react";
 import { Houseguest } from "../../model";
 import { BigButton, Face, Grid, Subtle, Title } from "../ui/common";
 import { GameState } from "../../model";
+import { presentFor, sinceLabel, tally, WeekRecord } from "../history";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { AnswerReveal, bestOf, Reveal, revealRows, sumSoFar } from "./compUi";
 import { gaussian, pick, Rand, sample, seededRand, shuffled } from "./random";
@@ -15,11 +16,16 @@ interface Criterion {
     key: (hg: Houseguest) => number | string;
 }
 
-const CRITERIA: Criterion[] = [
-    { label: "Most HoH wins first", key: (hg) => -hg.hohWins },
-    { label: "Most veto wins first", key: (hg) => -hg.povWins },
-    { label: "Most times nominated first", key: (hg) => -hg.nominations },
-];
+// Counted from the season the players saw (the daily season: from when the player took over; see seenHistory).
+function criteria(gs: GameState, history: WeekRecord[]): Criterion[] {
+    const t = tally(history);
+    const since = sinceLabel(gs, history);
+    return [
+        { label: `Most HoH wins${since} first`, key: (hg) => -(t.hoh.get(hg.id) ?? 0) },
+        { label: `Most veto wins${since} first`, key: (hg) => -(t.pov.get(hg.id) ?? 0) },
+        { label: `Most times on the block (after the veto)${since} first`, key: (hg) => -(t.block.get(hg.id) ?? 0) },
+    ];
+}
 const ALPHABETICAL: Criterion = { label: "Alphabetical order (A → Z)", key: (hg) => hg.name.toLowerCase() };
 const REVERSE: Criterion = {
     label: "Reverse alphabetical order (Z → A)",
@@ -31,9 +37,9 @@ const REVERSE: Criterion = {
             .join(""),
 };
 
-function pickCriterion(hgs: Houseguest[], used: Set<string>, rand: Rand): Criterion {
+function pickCriterion(hgs: Houseguest[], stats: Criterion[], used: Set<string>, rand: Rand): Criterion {
     // only use stat criteria where the chosen houseguests actually differ
-    const varied = CRITERIA.filter((c) => !used.has(c.label) && new Set(hgs.map(c.key)).size >= 3);
+    const varied = stats.filter((c) => !used.has(c.label) && new Set(hgs.map(c.key)).size >= 3);
     if (varied.length > 0) return pick(rand, varied);
     return used.has(ALPHABETICAL.label) ? REVERSE : ALPHABETICAL;
 }
@@ -52,18 +58,22 @@ function pairScore(order: Houseguest[], criterion: Criterion): number {
 }
 
 // The three rounds (who to rank, and by what). Same for every player and bot.
-export function generateRankRounds(rand: Rand, gs: GameState) {
+// Only houseguests who were in the house for the season the players saw.
+export function generateRankRounds(rand: Rand, gs: GameState, history: WeekRecord[] = []) {
     const used = new Set<string>();
+    const stats = criteria(gs, history);
+    const present = presentFor(gs.houseguests, history);
+    const pool = present.length >= PER_ROUND ? present : gs.houseguests;
     return Array.from({ length: ROUNDS }, () => {
-        const hgs = sample(rand, gs.houseguests, PER_ROUND);
-        const criterion = pickCriterion(hgs, used, rand);
+        const hgs = sample(rand, pool, PER_ROUND);
+        const criterion = pickCriterion(hgs, stats, used, rand);
         used.add(criterion.label);
         return { hgs, criterion };
     });
 }
 
 function simulateRankEm(ctx: SimContext, skill: number, noise: Rand): SimResult {
-    const rounds = generateRankRounds(seededRand(ctx.seed), ctx.gameState);
+    const rounds = generateRankRounds(seededRand(ctx.seed), ctx.gameState, ctx.history);
     let total = 0;
     const picks: number[] = [];
     rounds.forEach(({ hgs, criterion }) => {
@@ -84,7 +94,7 @@ function simulateRankEm(ctx: SimContext, skill: number, noise: Rand): SimResult 
 }
 
 function RankEm(props: CompProps) {
-    const [rounds] = React.useState(() => generateRankRounds(props.rand, props.gameState));
+    const [rounds] = React.useState(() => generateRankRounds(props.rand, props.gameState, props.history));
     const [round, setRound] = React.useState(0);
     const [order, setOrder] = React.useState<Houseguest[]>(() => shuffled(props.rand, rounds[0].hgs));
     const [picked, setPicked] = React.useState<number | null>(null);
@@ -182,7 +192,7 @@ export const RankEmComp: CompDefinition = {
     name: "Rank 'Em",
     emoji: "📊",
     kind: "skill",
-    rules: `Three rounds. Each round, put ${PER_ROUND} houseguests in order: by HoH wins, veto wins, nominations, or alphabetically. Tap two to swap them. The most accurate rankings win; ties go to a tiebreaker.`,
+    rules: `Three rounds. Each round, put ${PER_ROUND} houseguests in order: by HoH wins, veto wins, times on the block, or alphabetically. Tap two to swap them. The most accurate rankings win; ties go to a tiebreaker.`,
     maxSeconds: 180,
     Component: RankEm,
     simulate: simulateRankEm,

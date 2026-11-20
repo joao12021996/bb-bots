@@ -1,6 +1,6 @@
 import React from "react";
-import { GameState } from "../../model";
-import { WeekRecord } from "../history";
+import { GameState, Houseguest } from "../../model";
+import { sinceLabel, tally, WeekRecord } from "../history";
 import { Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { AnswerReveal, QuizScoreboard, Reveal, revealRows, rightSoFar, useQuizClock, wrongOption } from "./compUi";
@@ -167,33 +167,41 @@ interface Fact {
 // How many former houseguests Fact or Fiction needs: it's a late-game comp.
 export const FACT_MIN_EVICTED = 4;
 
-// Statements about former houseguests only: the people who've already left the house.
+// Statements about former houseguests only: the people who've already left the house. Everything is counted from
+// `history`, the season the players saw (the daily season: from when the player took over; see seenHistory), and
+// only houseguests evicted in it are asked about.
 export function makeFacts(gs: GameState, rand: Rand, history: WeekRecord[] = []): Fact[] {
-    const former = gs.houseguests.filter((hg) => hg.isEvicted);
+    const evicted = new Set(history.flatMap((w) => w.evictedIds));
+    const former = gs.houseguests.filter((hg) => hg.isEvicted && evicted.has(hg.id));
     if (former.length < 2) return [];
+    const t = tally(history);
+    const since = sinceLabel(gs, history);
+    const hoh = (hg: Houseguest) => t.hoh.get(hg.id) ?? 0;
+    const pov = (hg: Houseguest) => t.pov.get(hg.id) ?? 0;
+    const block = (hg: Houseguest) => t.block.get(hg.id) ?? 0;
     // eviction order, from the season's history
     // (the last time: someone who came back in the Battle Back can be evicted twice)
     const order = (id: number) => history.reduce((at, w, i) => (w.evictedIds.includes(id) ? i : at), -1);
     const gens: (() => Fact | null)[] = [
         () => {
             const a = pick(rand, former);
-            return { text: `${a.name} won Head of Household at least once.`, truth: a.hohWins > 0 };
+            return { text: `${a.name} won Head of Household at least once${since}.`, truth: hoh(a) > 0 };
         },
         () => {
             const a = pick(rand, former);
-            return { text: `${a.name} was never nominated.`, truth: a.nominations === 0 };
+            return { text: `${a.name} was never on the block after a veto ceremony${since}.`, truth: block(a) === 0 };
         },
         () => {
             const [a, b] = sample(rand, former, 2);
-            return { text: `${a.name} was nominated more times than ${b.name}.`, truth: a.nominations > b.nominations };
+            return { text: `${a.name} was on the block (after the veto) more times than ${b.name}${since}.`, truth: block(a) > block(b) };
         },
         () => {
             const [a, b] = sample(rand, former, 2);
-            return { text: `${a.name} won more vetoes than ${b.name}.`, truth: a.povWins > b.povWins };
+            return { text: `${a.name} won more vetoes than ${b.name}${since}.`, truth: pov(a) > pov(b) };
         },
         () => {
             const a = pick(rand, former);
-            return { text: `${a.name} won the Power of Veto at least once.`, truth: a.povWins > 0 };
+            return { text: `${a.name} won the Power of Veto at least once${since}.`, truth: pov(a) > 0 };
         },
         () => {
             const a = pick(rand, former);
@@ -325,7 +333,7 @@ export const FactOrFictionComp: CompDefinition = {
     name: "Fact or Fiction",
     emoji: "📜",
     kind: "quiz",
-    rules: `${FACTS} statements about the houseguests who've already left: HoH wins, nominations, vetoes, who went home when. Is each one FACT or FICTION? ${FACT_SECONDS} seconds each. Most right wins; ties go to a tiebreaker.`,
+    rules: `${FACTS} statements about the houseguests who've already left: HoH wins, times on the block, vetoes, who went home when. Is each one FACT or FICTION? ${FACT_SECONDS} seconds each. Most right wins; ties go to a tiebreaker.`,
     maxSeconds: FACTS * FACT_SECONDS + 20,
     Component: FactOrFiction,
     simulate: simulateFactOrFiction,
@@ -333,6 +341,9 @@ export const FactOrFictionComp: CompDefinition = {
     format: (s) => `${Math.floor(s / 100)}/${FACTS} right`,
     progress: (r, n) => rightSoFar(r, n) * 100,
     // a late-game comp: there have to be enough former houseguests to ask about
-    available: (gs) => gs.houseguests.filter((hg) => hg.isEvicted).length >= FACT_MIN_EVICTED,
+    available: (gs, history) => {
+        const evicted = new Set(history.flatMap((w) => w.evictedIds));
+        return gs.houseguests.filter((hg) => hg.isEvicted && evicted.has(hg.id)).length >= FACT_MIN_EVICTED;
+    },
 };
 

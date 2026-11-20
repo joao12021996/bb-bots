@@ -28,6 +28,13 @@ export const FACE_TOKEN = "⁣FACE⁣";
 
 // Where in the week you can take over, and what's ahead of you there.
 const TAKEOVER_STEPS: Step[] = [Step.SocialMorning, Step.SocialAfternoon, Step.Veto, Step.SocialCampaign];
+// ...and how far into the week that is (as in DAY_PART): memory comps never ask about anything before it.
+const TAKEOVER_PART: { [step: string]: number } = {
+    [Step.SocialMorning]: 0, // the HoH comp is ahead
+    [Step.SocialAfternoon]: 0.35, // the nominations are in; the veto is ahead
+    [Step.Veto]: 0.35,
+    [Step.SocialCampaign]: 0.9, // only the eviction is ahead
+};
 const MAX_TRIES = 8;
 
 export interface PreludeOptions {
@@ -114,6 +121,7 @@ export function takeOver(prelude: PlayerSave, name: string, imageURL: string): P
     const s = deserialize<PlayerSave>(json);
     s.watching = undefined;
     s.humanIds = [me];
+    s.joinedAt = { week: s.weekStartState.phase, part: TAKEOVER_PART[s.step] ?? 0 };
     s.social = { [me]: { chatsThisWeek: {} } };
     s.approaches = {};
     s.approachKey = {};

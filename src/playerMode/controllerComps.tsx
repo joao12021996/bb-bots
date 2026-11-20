@@ -163,7 +163,7 @@ export abstract class ControllerComps extends ControllerCore {
     // performing according to their Comp score.
     // Some bots throw the comp: they'd rather not win it (see throwing.ts).
     protected simulateBots(comp: CompDefinition, participants: Houseguest[], seed: number, role: CompRole): CompResult[] {
-        const ctx = { seed, gameState: this.gameState, history: this.state.history, participants };
+        const ctx = { seed, gameState: this.gameState, history: this.compHistory, participants };
         return participants
             .filter((hg) => !this.isHuman(hg))
             .map((hg) => {
@@ -314,7 +314,7 @@ export abstract class ControllerComps extends ControllerCore {
                     const startKey = `compStart:${seed}:${player.id}`;
                     const started = this.locked<{ score: number | null }>(startKey);
                     const forfeitScore = started
-                        ? started.score ?? comp.botScore(0, { gameState: this.gameState, history: this.state.history })
+                        ? started.score ?? comp.botScore(0, { gameState: this.gameState, history: this.compHistory })
                         : undefined;
                     return {
                         kind: "compPlay",
@@ -343,7 +343,7 @@ export abstract class ControllerComps extends ControllerCore {
                     // a bot finishes their turn: no better than the score they had when they left
                     const sofar = this.locked<{ score: number | null }>(`compStart:${seed}:${player.id}`);
                     const sim = comp.simulate(
-                        { seed, gameState: this.gameState, history: this.state.history, participants },
+                        { seed, gameState: this.gameState, history: this.compHistory, participants },
                         this.botSkill(player),
                         seededRand(hashcode(`${seed}:bot:${player.id}`))
                     );
@@ -372,7 +372,7 @@ export abstract class ControllerComps extends ControllerCore {
             const started = this.locked<{ score: number | null }>(startKey);
             if (started) {
                 // they left in the middle of their turn: no do-overs, they keep the score they had
-                const score = started.score ?? comp.botScore(0, { gameState: this.gameState, history: this.state.history });
+                const score = started.score ?? comp.botScore(0, { gameState: this.gameState, history: this.compHistory });
                 this.tell([player.id], `⏱️ You left the ${comp.name} in the middle of your turn. Your score stands: ${comp.format(score)}.`);
                 return record({ id: player.id, score });
             }
@@ -616,11 +616,11 @@ export abstract class ControllerComps extends ControllerCore {
     protected pickComp(competitors: Houseguest[], hoh: boolean): string {
         return this.compChoice(() => {
             // a Double Eviction night: something quick
-            if (this.state.week.fast) return pickQuickComp(this.state.gameState, this.state.history, this.state.usedComps, this.rules.kinds, this.haveNotCompeting(competitors)).id;
+            if (this.state.week.fast) return pickQuickComp(this.state.gameState, this.compHistory, this.state.usedComps, this.rules.kinds, this.haveNotCompeting(competitors)).id;
             if (hoh && this.useKnockout(competitors)) return KNOCKOUT_ID;
             if (this.useTaintedWine(competitors)) return TAINTED_WINE_ID;
             if (this.useMemoryDuel(competitors)) return MEMORY_DUEL_ID;
-            return pickWeeklyComp(this.state.gameState, this.state.history, this.state.usedComps, this.rules.kinds, this.haveNotCompeting(competitors)).id;
+            return pickWeeklyComp(this.state.gameState, this.compHistory, this.state.usedComps, this.rules.kinds, this.haveNotCompeting(competitors)).id;
         });
     }
 

@@ -1020,7 +1020,7 @@ export abstract class ControllerHouse extends ControllerSocial {
             ]);
             return this.run();
         }
-        const comp = compById(this.compChoice(() => pickQuickComp(s.gameState, s.history, s.usedComps, this.rules.kinds, this.haveNotCompeting(candidates)).id));
+        const comp = compById(this.compChoice(() => pickQuickComp(s.gameState, this.compHistory, s.usedComps, this.rules.kinds, this.haveNotCompeting(candidates)).id));
         this.runComp("🔙 Battle Back Competition", comp, candidates, (winnerId) => {
             const back = this.player(winnerId);
             const wasJuror = back.isJury;

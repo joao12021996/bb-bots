@@ -6,6 +6,7 @@ import { cartoonCast } from "../cartoon/cartoon";
 import { DAILY_BOTS, dailyResult, dailySeed } from "../career/daily";
 import { answer, cast, newGame } from "./testing";
 import { FACE_TOKEN, NAME_TOKEN, playPrelude, takeOver } from "./dailyPrelude";
+import { seenHistory } from "./history";
 import { nonEvictedHouseguests } from "../model";
 import { serialize } from "./save/serialize";
 
@@ -165,6 +166,9 @@ describe("the daily season, already under way", () => {
         expect(s.personalities![me]).toBeUndefined();
         expect(s.announce![0].title).toContain("Previously");
         expect(s.announce![0].lines.join(" ")).toContain("can't stand you");
+        // memory comps only ask about what happened after you took over
+        expect(s.joinedAt!.week).toBe(s.weekStartState.phase);
+        expect(seenHistory(s.history, s.joinedAt)).toEqual([]);
 
         // and it plays on to the end, with the result recorded
         play(new PlayerModeController(s));

@@ -433,7 +433,7 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                         participants={prompt.participants}
                         player={controller.player(prompt.playerId)}
                         gameState={controller.gameState}
-                        history={controller.state.history}
+                        history={controller.compHistory}
                         seed={prompt.seed}
                         opponents={prompt.opponents}
                         moreToPlay={prompt.moreToPlay}

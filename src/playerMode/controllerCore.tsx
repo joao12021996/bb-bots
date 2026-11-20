@@ -1,4 +1,5 @@
 import React from "react";
+import { seenHistory, WeekRecord } from "./history";
 import { BehaviorSubject, Subject } from "rxjs";
 import { EpisodeType, GameState, getById, Houseguest, MutableGameState, nonEvictedHouseguests } from "../model";
 import { hashcode, rng } from "../utils";
@@ -130,6 +131,11 @@ export abstract class ControllerCore {
 
     get gameState(): GameState {
         return this.state.gameState;
+    }
+
+    // the season as the players saw it, for memory comps (the daily season: from the moment the player took over)
+    get compHistory(): WeekRecord[] {
+        return seenHistory(this.state.history, this.state.joinedAt);
     }
 
     get players(): Houseguest[] {
