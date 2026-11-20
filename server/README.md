@@ -31,6 +31,15 @@ So one visitor (or one script) can't take the relay down for everyone:
 
 Set the environment variables in the systemd unit (`Environment=ALLOWED_ORIGINS=...`) to change them.
 
+To let another of our sites use the relay (Hidabout's matches against a friend go through it too), run on the droplet:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/joao12021996/bb-bots/master/server/allow-origin.sh | bash -s example.com
+```
+
+It adds `.example.com` (the domain and its subdomains) to what's allowed now, in a systemd drop-in that
+`droplet-setup.sh` leaves alone, restarts the relay and checks a handshake from that site gets through.
+
 ## Is it up?
 
 `curl https://api.spotlegame.co.uk/bb-relay/health` answers with the number of connections, rooms, players and
