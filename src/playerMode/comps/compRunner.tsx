@@ -1,4 +1,5 @@
 import React from "react";
+import { ResultsVideo, videoLength } from "./compVideo";
 import { GameState, Houseguest } from "../../model";
 import { WeekRecord } from "../history";
 import { BigButton, Face, formatSeconds, Grid, Panel, Subtle, Title } from "../ui/common";
@@ -25,7 +26,10 @@ function contenders(results: CompResult[]): CompResult[] {
 // Everyone tied for first. A tie is what the houseguests see: scores that read the same (the same number right,
 // the same rounded time) are tied, even if a hidden time bonus would split them. Endurance comps are last one
 // standing: whoever outlasts the rest wins, however close it was, so only an exactly equal score ties there.
-export function tiedForFirst(comp: { format: (score: number) => string; kind?: string }, results: CompResult[]): number[] {
+export function tiedForFirst(
+    comp: { format: (score: number) => string; kind?: string },
+    results: CompResult[],
+): number[] {
     if (results.length === 0) return [];
     results = contenders(results);
     const top = Math.max(...results.map((r) => r.score));
@@ -77,13 +81,19 @@ export interface LiveScore {
 
 // The other players in a comp being played at the same time, as opponents the comp can show: those done with
 // their final score. Endurance comps are last one standing, so those still going count as still up.
-export function liveOpponents(comp: CompDefinition, participants: Houseguest[], live: LiveScore[]): Opponent[] {
+export function liveOpponents(
+    comp: CompDefinition,
+    participants: Houseguest[],
+    live: LiveScore[],
+): Opponent[] {
     const out: Opponent[] = [];
     live.forEach((l) => {
         const hg = participants.find((p) => p.id === l.id);
         if (!hg) return;
-        if (l.done && l.score !== null) out.push({ hg, score: l.score, answers: l.answers, picks: l.picks, live: { done: true } });
-        else if (!l.done && comp.kind === "endurance") out.push({ hg, score: Infinity, live: { done: false } });
+        if (l.done && l.score !== null)
+            out.push({ hg, score: l.score, answers: l.answers, picks: l.picks, live: { done: true } });
+        else if (!l.done && comp.kind === "endurance")
+            out.push({ hg, score: Infinity, live: { done: false } });
     });
     return out;
 }
@@ -99,8 +109,8 @@ function LiveStrip(props: { comp: CompDefinition; participants: Houseguest[]; li
                 const text = l.done
                     ? `✓ ${l.score !== null ? props.comp.format(l.score) : "done"}`
                     : l.score !== null
-                    ? `${props.comp.format(l.score)} so far`
-                    : "playing…";
+                      ? `${props.comp.format(l.score)} so far`
+                      : "playing…";
                 return (
                     <span key={l.id} className={`bbb-live-chip ${l.done ? "is-done" : ""}`}>
                         <img src={hg.imageURL} alt="" />
@@ -139,7 +149,11 @@ export function CompPlay(props: CompPlayProps) {
     const done = React.useRef(false);
 
     const { onReport, onStart, onScore, autoSubmit } = props;
-    const sofar = () => [answers.current.length ? [...answers.current] : undefined, picks.current.length ? [...picks.current] : undefined] as const;
+    const sofar = () =>
+        [
+            answers.current.length ? [...answers.current] : undefined,
+            picks.current.length ? [...picks.current] : undefined,
+        ] as const;
     const recordAnswer = React.useCallback(
         (index: number, correct: boolean, pick?: number | string) => {
             answers.current[index] = correct;
@@ -148,11 +162,16 @@ export function CompPlay(props: CompPlayProps) {
             if (onReport && lastReported.current !== null) onReport(lastReported.current, ...sofar());
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [onReport]
+        [onReport],
     );
     const submit = React.useCallback(
-        (s: number) => onScore(s, answers.current.length ? [...answers.current] : undefined, picks.current.length ? [...picks.current] : undefined),
-        [onScore]
+        (s: number) =>
+            onScore(
+                s,
+                answers.current.length ? [...answers.current] : undefined,
+                picks.current.length ? [...picks.current] : undefined,
+            ),
+        [onScore],
     );
     const finish = React.useCallback(
         (s: number) => {
@@ -162,14 +181,14 @@ export function CompPlay(props: CompPlayProps) {
             setPhase("done");
             if (autoSubmit) submit(s);
         },
-        [autoSubmit, submit]
+        [autoSubmit, submit],
     );
     const report = React.useCallback(
         (s: number) => {
             lastReported.current = s;
             if (onReport) onReport(s, ...sofar());
         },
-        [onReport]
+        [onReport],
     );
     // the other players, as opponents the comp can show (only changes when their scores do). A comp played in
     // one go shows nobody's score until everyone's done (endurance: who's still up is the comp itself).
@@ -180,18 +199,27 @@ export function CompPlay(props: CompPlayProps) {
     const opponents = React.useMemo(
         () => [...baseOpponents, ...liveOpponents(props.comp, props.participants, JSON.parse(liveKey))],
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [baseOpponents, liveKey]
+        [baseOpponents, liveKey],
     );
 
     // for the screens between stages: everyone's score so far
     const stage = React.useMemo<StageInfo>(() => {
         const playing = (JSON.parse(liveKey) as LiveScore[])
             .filter((l) => !l.done)
-            .map((l) => ({ hg: props.participants.find((p) => p.id === l.id)!, score: l.score, answers: l.answers }))
+            .map((l) => ({
+                hg: props.participants.find((p) => p.id === l.id)!,
+                score: l.score,
+                answers: l.answers,
+            }))
             .filter((p) => !!p.hg);
         return {
             comp: props.comp,
-            ctx: { seed: props.seed, gameState: props.gameState, history: props.history, participants: props.participants },
+            ctx: {
+                seed: props.seed,
+                gameState: props.gameState,
+                history: props.history,
+                participants: props.participants,
+            },
             human: props.player,
             mine: () => ({ answers: answers.current, picks: picks.current }),
             opponents,
@@ -226,7 +254,10 @@ export function CompPlay(props: CompPlayProps) {
     }, [phase]);
 
     const paused = pausedTotal.current + (pausedAt.current !== null ? now - pausedAt.current : 0);
-    const remaining = phase === "play" ? Math.max(0, props.comp.maxSeconds - (now - playStart - paused) / 1000) : props.comp.maxSeconds;
+    const remaining =
+        phase === "play"
+            ? Math.max(0, props.comp.maxSeconds - (now - playStart - paused) / 1000)
+            : props.comp.maxSeconds;
     const { comp, gameState, history } = props;
     React.useEffect(() => {
         if (phase === "play" && remaining <= 0) {
@@ -252,7 +283,11 @@ export function CompPlay(props: CompPlayProps) {
                     ))}
                 </Grid>
                 <p className="bbb-rules">{props.comp.rules}</p>
-                <Subtle>{props.comp.hideTimer ? "There's a time limit, but no clock. That's the point!" : `Time limit: ${formatSeconds(props.comp.maxSeconds)}`}</Subtle>
+                <Subtle>
+                    {props.comp.hideTimer
+                        ? "There's a time limit, but no clock. That's the point!"
+                        : `Time limit: ${formatSeconds(props.comp.maxSeconds)}`}
+                </Subtle>
                 <BigButton
                     kind="success"
                     onClick={() => {
@@ -284,10 +319,14 @@ export function CompPlay(props: CompPlayProps) {
                         {props.comp.emoji} {props.comp.name}
                     </b>
                     {!props.comp.hideTimer && (
-                        <span className={`bbb-timer ${remaining < 15 ? "is-low" : ""}`}>⏳ {formatSeconds(remaining)}</span>
+                        <span className={`bbb-timer ${remaining < 15 ? "is-low" : ""}`}>
+                            ⏳ {formatSeconds(remaining)}
+                        </span>
                     )}
                 </div>
-                {staged && props.live && <LiveStrip comp={props.comp} participants={props.participants} live={props.live} />}
+                {staged && props.live && (
+                    <LiveStrip comp={props.comp} participants={props.participants} live={props.live} />
+                )}
                 <StageContext.Provider value={stage}>
                     <Component
                         participants={props.participants}
@@ -310,14 +349,22 @@ export function CompPlay(props: CompPlayProps) {
     return (
         <Panel>
             {header}
-            {forfeited && <Subtle>⏱️ You left in the middle of your turn. No do-overs: your score stands.</Subtle>}
+            {forfeited && (
+                <Subtle>⏱️ You left in the middle of your turn. No do-overs: your score stands.</Subtle>
+            )}
             <Title>Your result: {props.comp.format(score!)}</Title>
             {autoSubmit && !forfeited ? (
                 <Subtle>Waiting for the others…</Subtle>
             ) : (
                 <>
-                    <Subtle>{props.moreToPlay ? "Don't tell anyone! Pass the device to the next player." : "Let's see how everyone did…"}</Subtle>
-                    <BigButton onClick={() => submit(score!)}>{props.moreToPlay ? "Next player" : forfeited ? "Continue" : "See the results"}</BigButton>
+                    <Subtle>
+                        {props.moreToPlay
+                            ? "Don't tell anyone! Pass the device to the next player."
+                            : "Let's see how everyone did…"}
+                    </Subtle>
+                    <BigButton onClick={() => submit(score!)}>
+                        {props.moreToPlay ? "Next player" : forfeited ? "Continue" : "See the results"}
+                    </BigButton>
                 </>
             )}
         </Panel>
@@ -380,7 +427,7 @@ function Spectate(props: CompResultsProps) {
         const t = setTimeout(() => setShown((n) => n + 1), shown === 0 ? 900 : 1300);
         return () => clearTimeout(t);
     }, [shown, done]);
-    if (done) return <Standings {...props} spectating={false} />;
+    if (done) return <Standings {...props} spectating={false} video={false} />;
     const byId = (id: number) => props.participants.find((hg) => hg.id === id)!;
     const revealed = ranked.slice(ranked.length - shown);
     const still = ranked.slice(0, ranked.length - shown);
@@ -414,8 +461,9 @@ function Spectate(props: CompResultsProps) {
     );
 }
 
-function Standings(props: CompResultsProps) {
+function Standings(props: CompResultsProps & { video?: boolean }) {
     const ranked = rankResults(props.results, props.humanIds);
+    const [skipped, setSkipped] = React.useState(props.video === false);
     const winner = ranked[0];
     const byId = (id: number) => props.participants.find((hg) => hg.id === id)!;
     const isHuman = (id: number) => props.humanIds.includes(id);
@@ -428,51 +476,94 @@ function Standings(props: CompResultsProps) {
                 <Title>{props.comp.name}</Title>
                 <Subtle>{props.title}</Subtle>
             </div>
-            {tied ? (
-                <div className="bbb-winner">
-                    <div>
-                        <div className="bbb-winner-label">⚖️ It's a tie!</div>
-                        <div className="bbb-winner-name">{tied.map((id) => byId(id).name).join(" vs ")}</div>
-                        <div>A tiebreaker decides it: Hide the Veto.</div>
-                    </div>
-                </div>
-            ) : (
-                <div className="bbb-winner">
-                    <img src={byId(winner.id).imageURL} alt="" />
-                    <div>
-                        <div className="bbb-winner-label">🏆 Winner</div>
-                        <div className="bbb-winner-name">
-                            {byId(winner.id).name}
-                            {isHuman(winner.id) && props.humanIds.length === 1 ? " (you!)" : ""}
+            {!skipped && (
+                <>
+                    <ResultsVideo
+                        kind={props.comp.kind}
+                        participants={props.participants}
+                        ranked={ranked}
+                        format={props.comp.format}
+                        tiedIds={tied || undefined}
+                        humanIds={props.humanIds}
+                    />
+                    <button type="button" className="bbb-video-skip" onClick={() => setSkipped(true)}>
+                        ⏩ Skip
+                    </button>
+                </>
+            )}
+            <div
+                className={skipped ? "" : "bbb-after-video"}
+                style={{ "--end": `${videoLength(ranked.length)}s` } as React.CSSProperties}
+            >
+                {tied ? (
+                    <div className="bbb-winner">
+                        <div>
+                            <div className="bbb-winner-label">⚖️ It's a tie!</div>
+                            <div className="bbb-winner-name">
+                                {tied.map((id) => byId(id).name).join(" vs ")}
+                            </div>
+                            <div>A tiebreaker decides it: Hide the Veto.</div>
                         </div>
                     </div>
-                </div>
-            )}
-            <ol className="bbb-leaderboard">
-                {ranked.map((r) => (
-                    <li key={r.id} className={isHuman(r.id) ? "is-human" : ""}>
-                        <img src={byId(r.id).imageURL} alt="" />
-                        <span className="bbb-lb-name">
-                            {byId(r.id).name}
-                            {isHuman(r.id) ? " 🎮" : ""}
-                        </span>
-                        <span className="bbb-lb-score">{r.away ? `💤 away (${props.comp.format(r.score)})` : props.comp.format(r.score)}</span>
-                    </li>
-                ))}
-            </ol>
-            {threw.length > 0 && (
-                <Subtle>👀 Didn't look like they were trying very hard: {threw.map((r) => byId(r.id).name).join(", ")}</Subtle>
-            )}
-            <BigButton onClick={() => props.onDone(winner.id)}>{tied ? "On to the tiebreaker" : "Continue"}</BigButton>
+                ) : (
+                    <div className="bbb-winner">
+                        <img src={byId(winner.id).imageURL} alt="" />
+                        <div>
+                            <div className="bbb-winner-label">🏆 Winner</div>
+                            <div className="bbb-winner-name">
+                                {byId(winner.id).name}
+                                {isHuman(winner.id) && props.humanIds.length === 1 ? " (you!)" : ""}
+                            </div>
+                        </div>
+                    </div>
+                )}
+                <ol className="bbb-leaderboard">
+                    {ranked.map((r) => (
+                        <li key={r.id} className={isHuman(r.id) ? "is-human" : ""}>
+                            <img src={byId(r.id).imageURL} alt="" />
+                            <span className="bbb-lb-name">
+                                {byId(r.id).name}
+                                {isHuman(r.id) ? " 🎮" : ""}
+                            </span>
+                            <span className="bbb-lb-score">
+                                {r.away
+                                    ? `💤 away (${props.comp.format(r.score)})`
+                                    : props.comp.format(r.score)}
+                            </span>
+                        </li>
+                    ))}
+                </ol>
+                {threw.length > 0 && (
+                    <Subtle>
+                        👀 Didn't look like they were trying very hard:{" "}
+                        {threw.map((r) => byId(r.id).name).join(", ")}
+                    </Subtle>
+                )}
+            </div>
+            <BigButton onClick={() => props.onDone(winner.id)}>
+                {tied ? "On to the tiebreaker" : "Continue"}
+            </BigButton>
         </Panel>
     );
 }
 
 // While players are still playing a comp (online): everyone's score so far, best first. Bots' results are in;
 // players still going show their score so far.
-export function LiveStandings(props: { comp: CompDefinition; participants: Houseguest[]; bots: CompResult[]; live: LiveScore[]; youId?: number }) {
+export function LiveStandings(props: {
+    comp: CompDefinition;
+    participants: Houseguest[];
+    bots: CompResult[];
+    live: LiveScore[];
+    youId?: number;
+}) {
     const rows = [
-        ...props.bots.map((b) => ({ id: b.id, score: b.score as number | null, done: true, human: false, away: !!b.away })),
+        ...props.bots.map((b) => ({
+            id: b.id,
+            score: b.score as number | null,
+            done: true,
+            human: false,
+            away: !!b.away,
+        })),
         ...props.live.map((l) => ({ id: l.id, score: l.score, done: l.done, human: true, away: false })),
     ].sort((a, b) => (a.away ? 1 : 0) - (b.away ? 1 : 0) || (b.score ?? -Infinity) - (a.score ?? -Infinity));
     const byId = (id: number) => props.participants.find((hg) => hg.id === id);
@@ -489,7 +580,15 @@ export function LiveStandings(props: { comp: CompDefinition; participants: House
                             {r.id === props.youId ? "You" : hg.name}
                             {r.human ? " 🎮" : ""}
                         </span>
-                        <span className="bbb-lb-score">{r.away ? `💤 away (${score})` : r.done ? score : r.score === null ? "playing…" : `${score} so far`}</span>
+                        <span className="bbb-lb-score">
+                            {r.away
+                                ? `💤 away (${score})`
+                                : r.done
+                                  ? score
+                                  : r.score === null
+                                    ? "playing…"
+                                    : `${score} so far`}
+                        </span>
                     </li>
                 );
             })}

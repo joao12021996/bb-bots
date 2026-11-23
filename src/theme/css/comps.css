@@ -152,3 +152,352 @@
     border-radius: 2px;
     text-transform: uppercase;
 }
+
+/* ---------- the comps' little videos (see compVideo.tsx) ---------- */
+.bbb-toon {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    margin: 0 auto;
+}
+.bbb-toon img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.bbb-toon.is-photo img {
+    border-radius: 50%;
+}
+.bbb-toon img.is-react {
+    opacity: 0;
+}
+.bbb-toon.is-photo img.is-sad {
+    filter: grayscale(0.8) brightness(0.85);
+}
+
+/* answer boards: flip one by one (--flip), then the verdict (--done) */
+.bbb-boards {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px 6px;
+    margin: 8px auto 6px;
+    max-width: 640px;
+}
+.bbb-board-fig {
+    width: 84px;
+    text-align: center;
+}
+.bbb-board-fig .bbb-toon img.is-react {
+    animation: bbb-vid-show 0.2s linear var(--done) forwards;
+}
+.bbb-board-fig.is-wrong .bbb-toon {
+    animation: bbb-vid-shake 0.45s ease-in-out var(--done);
+}
+.bbb-board-fig.is-right .bbb-toon {
+    animation: bbb-vid-hop 0.45s ease-out var(--done);
+}
+.bbb-board {
+    perspective: 400px;
+    margin-top: -14px;
+    position: relative;
+}
+.bbb-board-card {
+    position: relative;
+    height: 46px;
+    transform-style: preserve-3d;
+    animation: bbb-vid-flip 0.45s ease-in-out var(--flip) forwards;
+}
+.bbb-board-back,
+.bbb-board-front {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 4px;
+    border-radius: 8px;
+    border: 2px solid #1f1720;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    font-weight: 800;
+    line-height: 1.05;
+    overflow: hidden;
+    word-break: break-word;
+}
+.bbb-board-back {
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    color: #fff;
+    font-size: 1.4rem;
+}
+.bbb-board-front {
+    background: #fffdf5;
+    color: #1f1720;
+    font-size: 0.72rem;
+    transform: rotateY(180deg);
+}
+.bbb-board-fig.is-right .bbb-board-front {
+    animation: bbb-vid-right 0.3s linear var(--done) forwards;
+}
+.bbb-board-fig.is-wrong .bbb-board-front {
+    animation: bbb-vid-wrong 0.3s linear var(--done) forwards;
+}
+.bbb-board-fig.is-blank .bbb-board-front {
+    color: #8a8398;
+}
+.bbb-board-name {
+    display: block;
+    font-size: 0.75rem;
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.bbb-board-fig.is-you .bbb-board-name {
+    color: var(--bbb-gold);
+}
+.bbb-reveal-late {
+    opacity: 0;
+    animation: bbb-vid-show 0.3s ease-out var(--done) forwards;
+}
+
+/* results: last place first (--at), the winner at the end (--end) */
+.bbb-video {
+    position: relative;
+    margin: 6px auto 4px;
+    max-width: 640px;
+    overflow: hidden;
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(139, 92, 246, 0.16), rgba(139, 92, 246, 0.03));
+    padding: 34px 6px 8px;
+}
+.bbb-video-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 8px 2px;
+}
+.bbb-video.is-wall .bbb-video-row {
+    row-gap: 34px;
+}
+.bbb-video.is-wall {
+    padding-bottom: 30px;
+}
+.bbb-video-fig {
+    position: relative;
+    width: 52px;
+    text-align: center;
+}
+.bbb-video .bbb-toon {
+    width: 50px;
+    height: 50px;
+}
+.bbb-video-score {
+    font-size: 0.66rem;
+    font-weight: 800;
+    color: var(--bbb-gold-text, #fde68a);
+    min-height: 1.1em;
+    opacity: 0;
+    animation: bbb-vid-pop 0.35s ease-out var(--at) forwards;
+    white-space: nowrap;
+}
+.bbb-video-fig .bbb-toon img.is-react {
+    animation: bbb-vid-show 0.2s linear var(--at) forwards;
+}
+.bbb-video-podium {
+    height: 0;
+    margin: 0 4px;
+    border-radius: 6px 6px 0 0;
+    background: linear-gradient(180deg, #a78bfa, #6d28d9);
+    color: #fff;
+    font-weight: 800;
+    font-size: 0.8rem;
+    overflow: hidden;
+    animation: bbb-vid-rise 0.4s ease-out var(--at) forwards;
+}
+.bbb-video-fig.is-top .bbb-video-podium {
+    background: linear-gradient(180deg, #fde68a, #f59e0b);
+    color: #2a1a00;
+}
+.bbb-video-name {
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.bbb-video-fig.is-you .bbb-video-name {
+    color: var(--bbb-gold);
+}
+.bbb-video-fig.is-top .bbb-toon {
+    animation: bbb-vid-hop 0.45s ease-out var(--end) 2;
+}
+.bbb-video-crown {
+    position: absolute;
+    left: 50%;
+    top: 2px;
+    font-size: 1.4rem;
+    opacity: 0;
+    z-index: 1;
+    transform: translate(-50%, -60px);
+    animation: bbb-vid-crown 0.5s cubic-bezier(0.3, 1.4, 0.6, 1) var(--end) forwards;
+}
+/* endurance: everyone is on the wall, swaying, and drops off in turn */
+.bbb-video.is-wall .bbb-video-wall {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 30px;
+    bottom: 0;
+    background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.06) 0 18px, rgba(255, 255, 255, 0.02) 18px 36px);
+    border-top: 3px solid rgba(255, 255, 255, 0.15);
+}
+.bbb-video.is-wall .bbb-video-fig .bbb-toon {
+    animation: bbb-vid-sway 1.4s ease-in-out infinite;
+}
+.bbb-video.is-wall .bbb-video-fig:not(.is-top) .bbb-toon {
+    animation: bbb-vid-sway 1.4s ease-in-out infinite, bbb-vid-drop 0.45s ease-in var(--at) forwards;
+}
+.bbb-video.is-wall .bbb-video-fig.is-top .bbb-toon {
+    animation: bbb-vid-sway 1.4s ease-in-out infinite, bbb-vid-hop 0.45s ease-out var(--end) 2;
+}
+.bbb-video-confetti span {
+    position: absolute;
+    top: -10px;
+    width: 7px;
+    height: 11px;
+    border-radius: 2px;
+    background: #f472b6;
+    opacity: 0;
+    animation: bbb-vid-confetti 1.6s ease-in forwards;
+}
+.bbb-video-confetti span:nth-child(3n) {
+    background: #fbbf24;
+}
+.bbb-video-confetti span:nth-child(3n + 1) {
+    background: #34d399;
+}
+.bbb-video-confetti span:nth-child(4n) {
+    background: #60a5fa;
+}
+.bbb-video-skip {
+    display: block;
+    margin: 0 auto 6px;
+    border: none;
+    background: none;
+    color: var(--bbb-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    text-decoration: underline;
+    cursor: pointer;
+}
+.bbb-after-video {
+    opacity: 0;
+    animation: bbb-vid-show 0.4s ease-out var(--end) forwards;
+}
+@keyframes bbb-vid-show {
+    to {
+        opacity: 1;
+    }
+}
+@keyframes bbb-vid-flip {
+    to {
+        transform: rotateY(180deg);
+    }
+}
+@keyframes bbb-vid-right {
+    to {
+        background: #bbf7d0;
+        border-color: #059669;
+    }
+}
+@keyframes bbb-vid-wrong {
+    to {
+        background: #fecaca;
+        border-color: #dc2626;
+    }
+}
+@keyframes bbb-vid-pop {
+    0% {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+    70% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+@keyframes bbb-vid-rise {
+    to {
+        height: var(--h);
+    }
+}
+@keyframes bbb-vid-hop {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+    40% {
+        transform: translateY(-9px);
+    }
+}
+@keyframes bbb-vid-shake {
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+    25% {
+        transform: translateX(-4px) rotate(-3deg);
+    }
+    75% {
+        transform: translateX(4px) rotate(3deg);
+    }
+}
+@keyframes bbb-vid-crown {
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+@keyframes bbb-vid-sway {
+    0%,
+    100% {
+        rotate: -3deg;
+    }
+    50% {
+        rotate: 3deg;
+    }
+}
+@keyframes bbb-vid-drop {
+    to {
+        transform: translateY(22px) rotate(16deg);
+        opacity: 0.45;
+    }
+}
+@keyframes bbb-vid-confetti {
+    0% {
+        opacity: 1;
+        transform: translateY(0) rotate(0);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(220px) rotate(540deg);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .bbb-boards *,
+    .bbb-reveal-late,
+    .bbb-video *,
+    .bbb-after-video {
+        animation-duration: 0.01s !important;
+        animation-delay: 0s !important;
+        animation-iteration-count: 1 !important;
+    }
+}

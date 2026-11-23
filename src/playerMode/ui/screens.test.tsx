@@ -1058,9 +1058,10 @@ describe("player mode screens", () => {
         click(c, "FACT");
         expect(c.textContent).toMatch(/Right!|Wrong!/);
         expect(c.textContent).toContain("The answer:");
-        const rows = Array.from(c.querySelectorAll(".bbb-answer")).map((r) => r.textContent);
-        expect(rows.find((r) => r!.startsWith("HG1"))).toContain("✅");
-        expect(rows.find((r) => r!.startsWith("HG2"))).toContain("❌");
+        // everyone's board: right ones go green, wrong ones red
+        const board = (name: string) => Array.from(c.querySelectorAll(".bbb-board-fig")).find((f) => f.querySelector(".bbb-board-name")!.textContent === name)!;
+        expect(board("HG1").classList.contains("is-right")).toBe(true);
+        expect(board("HG2").classList.contains("is-wrong")).toBe(true);
         expect(paused).toEqual([true]);
         click(c, "Next question");
         expect(paused).toEqual([true, false]);

@@ -10,7 +10,7 @@ import { cartoonFor } from "../../cartoon/cartoon";
 import { BigButton, Panel, Subtle, Title } from "./common";
 import { bestScore, recordScore } from "../../prefs/prefs";
 import { play as playCue } from "../../sound/sound";
-import { SPECIAL_COMPS, SpecialTestController } from "../testSpecial";
+import { SPECIAL_COMPS, specialTestController, SpecialTestController } from "../testSpecial";
 import { PlayerModeScreen } from "./playerModeScreen";
 
 // Test mode: play any single comp against a few bots, outside a season. Nothing is saved.
@@ -95,7 +95,7 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
 
     const playSpecial = (id: string) => {
         const { gameState } = testSeason(props.cast, stage);
-        const controller = new SpecialTestController(gameState);
+        const controller = specialTestController(gameState);
         const participants = nonEvictedHouseguests(controller.gameState).slice(0, bots + 1);
         const run = { id, controller };
         setSpecial(run);

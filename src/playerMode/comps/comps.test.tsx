@@ -114,8 +114,12 @@ describe("comp runner screens", () => {
         });
         expect(container.textContent).toContain("Winner");
         expect(container.querySelectorAll(".bbb-leaderboard li").length).toBe(4);
+        // the results video plays first (with a Skip); Continue is there all along
+        expect(container.querySelector(".bbb-video .is-top")).not.toBeNull();
         await act(async () => {
-            (container.querySelector("button") as HTMLButtonElement).click();
+            Array.from(container.querySelectorAll("button"))
+                .find((b) => b.textContent === "Continue")!
+                .click();
         });
         expect(winner).toBe(participants[2].id);
         act(() => {
@@ -540,7 +544,7 @@ describe("after each round: your answer, everyone else's, then the right one", (
         };
         const click = (text: string) => act(async () => button(text)!.click());
         const answers = () =>
-            Array.from(container.querySelectorAll(".bbb-answer")).map((r) => `${r.querySelector("b")!.textContent}: ${r.querySelector(".bbb-answer-text")!.textContent}`);
+            Array.from(container.querySelectorAll(".bbb-board-fig")).map((r) => `${r.querySelector(".bbb-board-name")!.textContent}: ${r.querySelector(".bbb-board-front")!.textContent}`);
         const done = () => {
             ReactDOM.unmountComponentAtNode(container);
             container.remove();

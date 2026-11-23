@@ -84,10 +84,11 @@ describe("why you went home", () => {
                 if (p.kind === "gameOver") break;
                 answer(controller, p, "random", false);
             }
-            const evicted = getById(controller.gameState, id).isEvicted;
+            // evicted in a week of the season (the final eviction, at three, goes straight to the finale)
+            const evicted = getById(controller.gameState, id).isEvicted && controller.state.history.some((w) => w.evictedIds.includes(id));
             // (a player who comes back and goes out again hears it both times)
             if (evicted) expect(mine).toBeGreaterThanOrEqual(1);
-            else expect(mine).toBe(0);
+            else if (!getById(controller.gameState, id).isEvicted) expect(mine).toBe(0);
             shown += mine;
         }
         expect(shown).toBeGreaterThan(0);

@@ -13,23 +13,36 @@ export const SPECIAL_COMPS: { id: string; emoji: string; name: string }[] = [
     { id: MEMORY_DUEL_ID, emoji: "🃏", name: "Memory Duel" },
 ];
 
-export class SpecialTestController extends PlayerModeController {
-    constructor(gameState: GameState) {
-        const save = newPlayerSave(gameState, [gameState.houseguests[0].id]);
-        save.step = Step.Hoh;
-        super(save);
-    }
+export interface SpecialTestController extends PlayerModeController {
+    runSpecial(id: string, participants: Houseguest[], onWinner: (winnerId: number) => void): void;
+}
 
-    // nothing is kept: a test isn't a season
-    protected save() {
-        this.changed$.next();
-    }
+// The class is made the first time it's needed, not when this file loads: the test screen is imported (through
+// the pregame screen) while the controller's own files are still loading, and a class can't extend one that
+// isn't there yet.
+let made: (new (gameState: GameState) => SpecialTestController) | null = null;
 
-    public runSpecial(id: string, participants: Houseguest[], onWinner: (winnerId: number) => void) {
-        const title = "🧪 Test mode";
-        const done = (winnerId: number) => onWinner(winnerId);
-        if (id === KNOCKOUT_ID) this.runKnockout(title, participants, done);
-        else if (id === TAINTED_WINE_ID) this.runTaintedWine(title, participants, done);
-        else this.runMemoryDuel(title, participants, done);
+export function specialTestController(gameState: GameState): SpecialTestController {
+    if (!made) {
+        made = class extends PlayerModeController {
+            constructor(gs: GameState) {
+                const save = newPlayerSave(gs, [gs.houseguests[0].id]);
+                save.step = Step.Hoh;
+                super(save);
+            }
+
+            // nothing is kept: a test isn't a season
+            protected save() {
+                this.changed$.next();
+            }
+
+            public runSpecial(id: string, participants: Houseguest[], onWinner: (winnerId: number) => void) {
+                const title = "🧪 Test mode";
+                if (id === KNOCKOUT_ID) this.runKnockout(title, participants, onWinner);
+                else if (id === TAINTED_WINE_ID) this.runTaintedWine(title, participants, onWinner);
+                else this.runMemoryDuel(title, participants, onWinner);
+            }
+        };
     }
+    return new made(gameState);
 }
