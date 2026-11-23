@@ -13,8 +13,8 @@ import { CompKind } from "./compTypes";
 
 type CssVars = React.CSSProperties & { [v: string]: string | number };
 
-const FLIP_START = 0.3; // s before the first board flips
-const FLIP_EACH = 0.28; // s between boards
+const FLIP_START = 0.3; // s before the boards flip, all of them at once
+const FLIP_TIME = 0.45; // s the flip takes
 
 export interface BoardRow {
     id: number;
@@ -58,8 +58,11 @@ export function pickReaction(good: boolean, id: number, salt = 0): Reaction {
 }
 
 // When the boards are all turned and the answer's in, for a row of `n`: the delay before the verdict.
-export function boardsDoneAt(n: number): number {
-    return FLIP_START + n * FLIP_EACH + 0.35;
+// Everyone's answer is up together, then a hold of 1 to 3 seconds (a different one each question, to keep you
+// guessing) before the right answer is in.
+export function boardsDoneAt(salt = 0): number {
+    const hold = 1 + (Math.abs((salt + 1) * 7919) % 201) / 100;
+    return FLIP_START + FLIP_TIME + hold;
 }
 
 function Toon(props: { hg: { name: string; imageURL: string }; react?: Reaction; className?: string }) {
@@ -82,10 +85,10 @@ function Toon(props: { hg: { name: string; imageURL: string }; react?: Reaction;
 
 // `salt`: which question it is, so the same person doesn't take every one the same way
 export function AnswerBoards(props: { rows: BoardRow[]; salt?: number }) {
-    const done = boardsDoneAt(props.rows.length);
+    const done = boardsDoneAt(props.salt);
     return (
         <div className="bbb-boards" style={{ "--done": `${done}s` } as CssVars}>
-            {props.rows.map((r, i) => {
+            {props.rows.map((r) => {
                 const state =
                     r.answer === undefined
                         ? "is-blank"
@@ -98,7 +101,7 @@ export function AnswerBoards(props: { rows: BoardRow[]; salt?: number }) {
                     <div
                         key={r.id}
                         className={`bbb-board-fig ${state} ${r.you ? "is-you" : ""}`}
-                        style={{ "--flip": `${FLIP_START + i * FLIP_EACH}s` } as CssVars}
+                        style={{ "--flip": `${FLIP_START}s` } as CssVars}
                     >
                         <Toon
                             hg={r}

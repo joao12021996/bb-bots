@@ -351,7 +351,7 @@ export function AnswerReveal(props: {
         <div
             className="bbb-reveal"
             key={reveal.index}
-            style={{ "--done": `${boardsDoneAt(reveal.rows.length)}s` } as React.CSSProperties}
+            style={{ "--done": `${boardsDoneAt(reveal.index)}s` } as React.CSSProperties}
         >
             <AnswerBoards rows={reveal.rows} salt={reveal.index} />
             <div className="bbb-reveal-late">
