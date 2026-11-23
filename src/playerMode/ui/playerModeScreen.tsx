@@ -63,6 +63,7 @@ export function CoachTip(props: { tip: Tip; onDismiss: () => void; onStop: () =>
 
 interface Props {
     controller: PlayerModeController;
+    bare?: boolean; // test mode: just the comp's screens, none of the house around them
 }
 
 // whether the memory wall is open, remembered per viewer (never required: storage can be unavailable)
@@ -652,6 +653,7 @@ export class PlayerModeScreen extends React.Component<Props, State> {
             COMP_SCREENS.includes(prompt.kind) || (prompt.kind === "waiting" && !!prompt.comp);
         // a Have-Not's week is grey, part of the punishment, comps and all, until the next HoH comp
         const viewer = session ? session.localPlayerId : controller.state.humanIds.length === 1 ? controller.state.humanIds[0] : actor;
+        if (this.props.bare) return <div className="bbb-player-mode">{body}</div>;
         const haveNot =
             viewer !== null && controller.state.humanIds.includes(viewer) && controller.isHaveNot(viewer) && !controller.player(viewer).isEvicted;
         return (

@@ -10,6 +10,8 @@ import { cartoonFor } from "../../cartoon/cartoon";
 import { BigButton, Panel, Subtle, Title } from "./common";
 import { bestScore, recordScore } from "../../prefs/prefs";
 import { play as playCue } from "../../sound/sound";
+import { SPECIAL_COMPS, SpecialTestController } from "../testSpecial";
+import { PlayerModeScreen } from "./playerModeScreen";
 
 // Test mode: play any single comp against a few bots, outside a season. Nothing is saved.
 
@@ -76,6 +78,8 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
     const [tiebreak, setTiebreak] = React.useState<Tiebreak | null>(null);
     const [wantBots, setBots] = React.useState(3);
     const [newBest, setNewBest] = React.useState<number | null>(null);
+    // Knockout, Tainted Wine, Memory Duel: run by a season of their own
+    const [special, setSpecial] = React.useState<{ id: string; controller: SpecialTestController; winner?: Houseguest } | null>(null);
     const season = React.useMemo(() => testSeason(props.cast, stage), [props.cast, stage]);
     const maxBots = nonEvictedHouseguests(season.gameState).length - 1;
     const bots = Math.max(1, Math.min(wantBots, maxBots));
@@ -87,6 +91,18 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
         setResults(null);
         setTiebreak(null);
         setGame({ comp, seed, gameState, history, participants, opponents: testOpponents(comp, gameState, history, participants, seed) });
+    };
+
+    const playSpecial = (id: string) => {
+        const { gameState } = testSeason(props.cast, stage);
+        const controller = new SpecialTestController(gameState);
+        const participants = nonEvictedHouseguests(controller.gameState).slice(0, bots + 1);
+        const run = { id, controller };
+        setSpecial(run);
+        controller.runSpecial(id, participants, (winnerId) => {
+            playCue(winnerId === participants[0].id ? "win" : "lose");
+            setSpecial({ ...run, winner: controller.player(winnerId) });
+        });
     };
 
     const done = () => {
@@ -102,6 +118,42 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
     // you're not in it: the bots hide straight away, and you watch the search
     const startTiebreak = (g: Game, ids: number[], round: number) =>
         setTiebreak({ ids, round, hides: ids.includes(g.participants[0].id) ? undefined : botHides(g, ids, round) });
+    if (special) {
+        const info = SPECIAL_COMPS.find((c) => c.id === special.id)!;
+        if (special.winner) {
+            return (
+                <Panel className="bbb-test-mode">
+                    <Title>
+                        {info.emoji} {info.name}
+                    </Title>
+                    <div className="bbb-winner">
+                        <img src={special.winner.imageURL} alt="" />
+                        <div>
+                            <div className="bbb-winner-label">🏆 Winner</div>
+                            <div className="bbb-winner-name">
+                                {special.winner.name}
+                                {special.winner.id === special.controller.state.humanIds[0] ? " (you!)" : ""}
+                            </div>
+                        </div>
+                    </div>
+                    <BigButton kind="info" onClick={() => playSpecial(special.id)}>
+                        🔁 Play {info.name} again
+                    </BigButton>
+                    <BigButton kind="light" onClick={() => setSpecial(null)}>
+                        ← Back to the list
+                    </BigButton>
+                </Panel>
+            );
+        }
+        return (
+            <div className="bbb-test-mode">
+                <PlayerModeScreen key={special.controller.state.seed} controller={special.controller} bare={true} />
+                <BigButton kind="light" onClick={() => setSpecial(null)}>
+                    ← Back to the list
+                </BigButton>
+            </div>
+        );
+    }
     if (game && tiebreak) {
         const me = game.participants[0];
         const tied = tiebreak.ids.map((id) => game.participants.find((hg) => hg.id === id)!);
@@ -245,6 +297,16 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
                     </div>
                 );
             })}
+            <div className="bbb-test-group">
+                <h4>🎭 Special formats</h4>
+                <div className="bbb-test-comps">
+                    {SPECIAL_COMPS.map((c) => (
+                        <button key={c.id} type="button" className="button is-small is-light" onClick={() => playSpecial(c.id)}>
+                            {c.emoji} {c.name}
+                        </button>
+                    ))}
+                </div>
+            </div>
             <Subtle>* wouldn't come up at this point in a real season</Subtle>
         </Panel>
     );
