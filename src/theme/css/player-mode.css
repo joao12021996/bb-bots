@@ -856,3 +856,260 @@
 .bbb-morph img + img {
     opacity: 0.5;
 }
+
+/* Tainted Wine: both drink (see wineSip.tsx). The glasses clink, go up and drain (0-2.3s), then the faces react:
+   a grin, or green with foam at the mouth (2.3s), and someone on their last sip fakes their death (3.2s). */
+.bbb-sip-wrap {
+    margin: 4px auto 12px;
+    text-align: center;
+}
+.bbb-sip {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding-top: 6px;
+}
+.bbb-sip-fig {
+    width: 128px;
+}
+.bbb-sip-body {
+    position: relative;
+    width: 128px;
+    height: 128px;
+    transform-origin: 50% 100%;
+}
+.bbb-sip-face {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.bbb-sip-fig.is-photo .bbb-sip-face {
+    border-radius: 50%;
+}
+.bbb-sip-face.is-react,
+.bbb-sip-face.is-dead {
+    opacity: 0;
+    animation: bbb-sip-show 0.15s linear 2.3s forwards;
+}
+.bbb-sip-face.is-dead {
+    animation-delay: 3.2s;
+}
+.bbb-sip-fig.is-photo.is-tainted .bbb-sip-face.is-react,
+.bbb-sip-fig.is-photo.is-out .bbb-sip-face.is-react {
+    filter: sepia(1) hue-rotate(50deg) saturate(2.5);
+}
+.bbb-sip-fig.is-photo .bbb-sip-face.is-dead {
+    filter: grayscale(1) brightness(0.8);
+}
+.bbb-sip-hand {
+    position: absolute;
+    inset: 0;
+}
+.bbb-sip-fig.is-right .bbb-sip-hand {
+    transform: scaleX(-1);
+}
+.bbb-sip-glass {
+    position: absolute;
+    left: 85px;
+    top: 78px;
+    width: 30px;
+    height: 46px;
+    transform-origin: 50% 100%;
+    animation: bbb-sip-glass 2.3s ease-in-out forwards;
+}
+.bbb-sip-wine {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation: bbb-sip-wine 2.3s ease-in forwards;
+}
+.bbb-sip-clink {
+    position: absolute;
+    left: 50%;
+    top: 44px;
+    font-size: 1.4rem;
+    opacity: 0;
+    transform: translateX(-50%);
+    animation: bbb-sip-clink 0.5s ease-out 0.3s;
+    pointer-events: none;
+}
+.bbb-sip-name {
+    font-weight: 700;
+    font-size: 0.85rem;
+    margin-top: 2px;
+}
+.bbb-sip-fig.is-clean .bbb-sip-body {
+    animation: bbb-sip-hop 0.5s ease-out 2.3s 2;
+}
+.bbb-sip-fig.is-tainted .bbb-sip-body,
+.bbb-sip-fig.is-out .bbb-sip-body {
+    animation: bbb-sip-shake 0.6s ease-in-out 2.3s;
+}
+.bbb-sip-fig.is-left.is-out .bbb-sip-body {
+    animation: bbb-sip-shake 0.6s ease-in-out 2.3s, bbb-sip-fall-left 0.55s ease-in 3.2s forwards;
+}
+.bbb-sip-fig.is-right.is-out .bbb-sip-body {
+    animation: bbb-sip-shake 0.6s ease-in-out 2.3s, bbb-sip-fall-right 0.55s ease-in 3.2s forwards;
+}
+.bbb-sip-fig.is-out .bbb-sip-hand {
+    animation: bbb-sip-drop 0.4s ease-in 3.2s forwards;
+}
+.bbb-sip-foam span {
+    position: absolute;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid rgba(31, 23, 32, 0.35);
+    transform: translate(-50%, -50%) scale(0);
+    animation: bbb-sip-foam 0.35s ease-out forwards;
+}
+.bbb-sip-foam span.is-drip {
+    animation: bbb-sip-drip 1.8s ease-in infinite;
+}
+.bbb-sip-caption {
+    margin-top: 6px;
+    font-weight: 700;
+}
+.bbb-sip-replay {
+    border: none;
+    background: none;
+    color: var(--bbb-muted);
+    font: inherit;
+    font-weight: 400;
+    font-size: 0.85rem;
+    cursor: pointer;
+    text-decoration: underline;
+}
+@keyframes bbb-sip-glass {
+    0% {
+        transform: translate(0, 0) rotate(0);
+    }
+    16% {
+        transform: translate(16px, -24px) rotate(14deg);
+    }
+    24% {
+        transform: translate(12px, -20px) rotate(4deg);
+    }
+    38% {
+        transform: translate(8px, -15px) rotate(-58deg);
+    }
+    80% {
+        transform: translate(8px, -16px) rotate(-78deg);
+    }
+    100% {
+        transform: translate(0, 0) rotate(0);
+    }
+}
+@keyframes bbb-sip-wine {
+    0%,
+    40% {
+        transform: scaleY(1);
+    }
+    80%,
+    100% {
+        transform: scaleY(0);
+    }
+}
+@keyframes bbb-sip-clink {
+    0% {
+        opacity: 0;
+        transform: translateX(-50%) scale(0.4);
+    }
+    40% {
+        opacity: 1;
+        transform: translateX(-50%) scale(1.2);
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(-50%) scale(1);
+    }
+}
+@keyframes bbb-sip-show {
+    to {
+        opacity: 1;
+    }
+}
+@keyframes bbb-sip-hop {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+    40% {
+        transform: translateY(-10px);
+    }
+}
+@keyframes bbb-sip-shake {
+    0%,
+    100% {
+        transform: translateX(0) rotate(0);
+    }
+    20% {
+        transform: translateX(-4px) rotate(-3deg);
+    }
+    40% {
+        transform: translateX(4px) rotate(3deg);
+    }
+    60% {
+        transform: translateX(-3px) rotate(-2deg);
+    }
+    80% {
+        transform: translateX(3px) rotate(2deg);
+    }
+}
+/* falling outwards, away from the other one, and landing flat within their own space */
+@keyframes bbb-sip-fall-left {
+    0% {
+        transform: translate(0, 0) rotate(0);
+    }
+    35% {
+        transform: translate(0, -6px) rotate(8deg);
+    }
+    100% {
+        transform: translate(60px, -45px) rotate(-90deg);
+    }
+}
+@keyframes bbb-sip-fall-right {
+    0% {
+        transform: translate(0, 0) rotate(0);
+    }
+    35% {
+        transform: translate(0, -6px) rotate(-8deg);
+    }
+    100% {
+        transform: translate(-60px, -45px) rotate(90deg);
+    }
+}
+@keyframes bbb-sip-drop {
+    to {
+        opacity: 0;
+    }
+}
+@keyframes bbb-sip-foam {
+    to {
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+@keyframes bbb-sip-drip {
+    0% {
+        transform: translate(-50%, -50%) scale(0.4);
+        opacity: 1;
+    }
+    30% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(-50%, 180%) scale(0.7);
+        opacity: 0;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .bbb-sip *,
+    .bbb-sip-glass,
+    .bbb-sip-wine {
+        animation-duration: 0.01s !important;
+        animation-delay: 0s !important;
+        animation-iteration-count: 1 !important;
+    }
+}

@@ -237,6 +237,31 @@ export interface DrawOptions {
     mask?: "none" | "eyes" | "cowl"; // a superhero's mask
     maskColor?: string;
     villain?: boolean; // scowling brows and a sneer
+    bare?: boolean; // no background square (the head and shoulders alone, to move about)
+    expression?: Expression; // Tainted Wine: how the wine went down
+}
+
+export type Expression = "happy" | "sick" | "dead";
+
+// a color part of the way to another: "#rrggbb"
+function mixColor(a: string, b: string, t: number): string {
+    const ch = (c: string, i: number) => parseInt(c.slice(1 + 2 * i, 3 + 2 * i), 16);
+    return "#" + [0, 1, 2].map((i) => Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * t).toString(16).padStart(2, "0")).join("");
+}
+
+// Eyes and mouth for an expression, drawn over nothing (they replace the usual ones).
+function expressionEyes(e: Expression): string {
+    const s = `stroke="${INK}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"`;
+    if (e === "happy") return `<path d="M36.5 53.5 Q41 48 45.5 53.5 M54.5 53.5 Q59 48 63.5 53.5" ${s}/>`;
+    if (e === "sick") return `<path d="M37 49.5 L44 52.5 L37 55.5 M63 49.5 L56 52.5 L63 55.5" ${s}/>`;
+    return `<path d="M37 48.5 L45 56.5 M45 48.5 L37 56.5 M55 48.5 L63 56.5 M63 48.5 L55 56.5" stroke="${INK}" stroke-width="2.2" stroke-linecap="round"/>`;
+}
+
+function expressionMouth(e: Expression): string {
+    if (e === "happy")
+        return `<path d="M41 66 Q50 78 59 66 Z" fill="#7f1d1d" stroke="${INK}" stroke-width="1.4" stroke-linejoin="round"/><path d="M42.5 67 L57.5 67 L56 69 L44 69 Z" fill="#fff"/>`;
+    if (e === "sick") return `<ellipse cx="50" cy="69.5" rx="5.5" ry="4.6" fill="#3f0d12" stroke="${INK}" stroke-width="1.4"/>`;
+    return `<ellipse cx="50" cy="69" rx="5" ry="3.6" fill="#3f0d12" stroke="${INK}" stroke-width="1.4"/><path d="M50 70 Q50 79 55 79 Q59.5 79 58.5 71 Z" fill="#f87171" stroke="${INK}" stroke-width="1.2"/>`;
 }
 
 function faceShape(face: number, skin: string): string {
@@ -495,14 +520,17 @@ function hat(style: number, c: string): string {
 
 // The picture, as SVG markup.
 export function cartoonSVG(look: CartoonLook, opts: DrawOptions = {}): string {
-    const skin = SKINS[look.skin] || SKINS[0];
+    const expression = opts.expression;
+    const baseSkin = SKINS[look.skin] || SKINS[0];
+    // the tainted wine turns you green
+    const skin = expression === "sick" ? mixColor(baseSkin, "#84cc16", 0.45) : expression === "dead" ? mixColor(baseSkin, "#94a3b8", 0.55) : baseSkin;
     const hairC = HAIR[look.hairColor] || HAIR[0];
     const shirt = SHIRTS[look.shirt] || SHIRTS[0];
     const mask = opts.mask || "none";
     const maskColor = opts.maskColor || "#111";
     const villain = !!opts.villain;
     const parts: string[] = [];
-    if (!opts.headOnly) {
+    if (!opts.headOnly && !opts.bare) {
         parts.push(`<rect width="100" height="100" fill="${BGS[look.bg] || BGS[0]}"/>`);
         parts.push(`<circle cx="50" cy="44" r="40" fill="#fff" opacity="0.18"/>`);
     }
@@ -519,11 +547,13 @@ export function cartoonSVG(look: CartoonLook, opts: DrawOptions = {}): string {
     parts.push(extra(look.extra));
     parts.push(facialHair(look.facialHair, hairC));
     parts.push(nose(look.nose));
-    parts.push(mouth(look.mouth, villain));
+    parts.push(expression ? expressionMouth(expression) : mouth(look.mouth, villain));
     if (mask === "eyes") parts.push(`<path d="M28 47 Q50 41 72 47 L71 58 Q50 53 29 58 Z" fill="${maskColor}" stroke="${INK}" stroke-width="1.2"/>`);
     // masked heroes have plain white eyes; everyone else, their own
     parts.push(
-        mask === "none"
+        expression
+            ? expressionEyes(expression)
+            : mask === "none"
             ? eyes(villain && look.eyes === 6 ? 5 : look.eyes, IRIS[look.eyeColor] || IRIS[0])
             : `<g fill="#fff" stroke="${INK}" stroke-width="0.9"><path d="M36 52 Q41 48 46 52 Q41 54.5 36 52 Z"/><path d="M54 52 Q59 48 64 52 Q59 54.5 54 52 Z"/></g>`
     );

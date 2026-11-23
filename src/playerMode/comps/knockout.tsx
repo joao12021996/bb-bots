@@ -1,6 +1,7 @@
 import React from "react";
 import { Houseguest } from "../../model";
 import { BigButton, Face, Grid, Panel, Subtle, Title } from "../ui/common";
+import { Sip, WineSip } from "./wineSip";
 
 // Knockout: two houseguests duel on a closest-number question. The loser is out of the comp, and the winner
 // picks the next two to face off, so everyone sees who the winner is gunning for. Last one standing wins.
@@ -22,6 +23,8 @@ export function KnockoutBoard(props: {
     emoji?: string; // other last-one-standing comps (Tainted Wine) reuse this board
     name?: string;
     captions?: { [id: number]: string }; // a caption under each houseguest still in, instead of "still in"
+    sip?: Sip; // Tainted Wine: the glass just drunk, with the two who drank it
+    player?: (id: number) => Houseguest;
     onDone: () => void;
 }) {
     return (
@@ -43,6 +46,7 @@ export function KnockoutBoard(props: {
                     </div>
                 </div>
             )}
+            {props.sip && props.player && <WineSip sip={props.sip} pourer={props.player(props.sip.pourerId)} drinker={props.player(props.sip.drinkerId)} />}
             <div className="bbb-log">
                 {props.lines.map((line, i) => (
                     <p key={i}>{line}</p>

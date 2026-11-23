@@ -5,6 +5,7 @@ import { JoinedAt, WeekRecord } from "./history";
 import { Difficulty, SeasonRules } from "./rules";
 import { CompDefinition, Opponent } from "./comps/compTypes";
 import { Claim, Pour } from "./comps/taintedWine";
+import { Sip } from "./comps/wineSip";
 import { CompResult } from "./comps/compRunner";
 import { Approach, SocialMemory } from "./social/socialActions";
 import { AllianceBook, emptyBook } from "./social/alliances";
@@ -226,6 +227,7 @@ export type Prompt =
           emoji?: string;
           name?: string;
           captions?: { [id: number]: string };
+          sip?: Sip; // Tainted Wine: the glass just drunk, to show both drinking
           onDone: () => void;
       }
     | {

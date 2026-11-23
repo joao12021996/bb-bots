@@ -5,6 +5,7 @@ import { CompDefinition, EnduranceDeals, Opponent } from "./comps/compTypes";
 import { CompRole, THROW_EFFORT, throwChance } from "./comps/throwing";
 import { KNOCKOUT_ID, KNOCKOUT_RULES } from "./comps/knockout";
 import { botPour, botSwaps, claimLine, Pour, STRIKES_OUT, TAINTED_WINE_ID, TAINTED_WINE_RULES } from "./comps/taintedWine";
+import { Sip } from "./comps/wineSip";
 import { pickQuickComp, pickWeeklyComp } from "./comps";
 import { sample, seededRand } from "./comps/random";
 import { CompResult, LiveScore, tiedForFirst } from "./comps/compRunner";
@@ -641,6 +642,7 @@ export abstract class ControllerComps extends ControllerCore {
         participants.forEach((p) => (strikes[p.id] = 0));
         const offered: { pourerId: number; targetId: number }[] = [];
         let lines: string[] = [TAINTED_WINE_RULES];
+        let sip: Sip | undefined; // the glass drunk since the board was last shown
         let round = 0;
         // the stage: the two on it, who's still to go up this time round, and who's been up and is still in
         const order = shuffled(noise, remaining);
@@ -661,16 +663,20 @@ export abstract class ControllerComps extends ControllerCore {
             if (lines.length === 0 && winnerId === undefined) return next();
             if (stage && this.locked(stage) !== undefined) {
                 lines = [];
+                sip = undefined;
                 return next();
             }
             const shown = lines;
+            const drunk = sip;
             lines = [];
+            sip = undefined;
             this.show({
                 kind: "knockout",
                 title,
                 emoji: "🍷",
                 name: "Tainted Wine",
                 lines: shown,
+                sip: drunk,
                 remaining: remaining.map((id) => this.player(id)),
                 out: out.map((id) => this.player(id)),
                 captions: captions(),
@@ -696,6 +702,7 @@ export abstract class ControllerComps extends ControllerCore {
             const victim = drinkerTainted ? targetId : pourerId;
             const other = victim === targetId ? pourerId : targetId;
             strikes[victim]++;
+            sip = { pourerId, drinkerId: targetId, victimId: victim, out: strikes[victim] >= STRIKES_OUT };
             const said = pour.claim === "none" ? "said nothing" : `said “${claimLine(pour.claim)}”`;
             const bluff =
                 pour.claim === "none" ? "" : (pour.claim === "clean") === pour.offerTainted ? " It was a bluff." : " It was the truth.";

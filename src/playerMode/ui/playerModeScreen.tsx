@@ -538,6 +538,8 @@ export class PlayerModeScreen extends React.Component<Props, State> {
                         emoji={prompt.emoji}
                         name={prompt.name}
                         captions={prompt.captions}
+                        sip={prompt.sip}
+                        player={(id) => controller.player(id)}
                         onDone={prompt.onDone}
                     />
                 );
