@@ -379,17 +379,47 @@ export function knockoutRound<T extends { score: number }>(opponents: T[], clear
     return { out, still };
 }
 
+// A wrong attempt at `right` for someone who got it wrong: a digit or two off, the same way every time.
+export function nearMiss(right: string, key: string): string {
+    if (right.length === 0) return "?";
+    const h = Math.abs(hashcode(key));
+    const d = right.split("");
+    const i = h % d.length;
+    if (h % 3 === 0 && d.length > 1) {
+        // two digits the wrong way round
+        const j = (i + 1) % d.length;
+        if (d[i] !== d[j]) {
+            [d[i], d[j]] = [d[j], d[i]];
+            return d.join("");
+        }
+    }
+    d[i] = String((Number(d[i]) + 1 + (h % 8)) % 10);
+    return d.join("");
+}
+
 export function KnockoutPause(props: {
     opponents: { hg: { id: number; name: string; imageURL: string }; score: number }[];
-    cleared: number; // the round the player just got through
+    cleared: number; // the round the player just got through (with `boards`: the round just played)
     first: boolean; // the first round: everyone who couldn't even do that is out
     what: (n: number) => string; // "sequence of 5"
     onNext: () => void;
     onWin: () => void; // nobody's left in: the comp is over, and the player won it
+    // everyone still in shows what they answered, all at once, and then the right answer is in
+    boards?: {
+        human: { id: number; name: string; imageURL: string };
+        mine: string;
+        right: string;
+        label: string; // "The number"
+        wrongFor: (id: number) => string; // what someone who got it wrong answered
+        failed?: boolean; // the player got it wrong: they're out
+        onLose?: () => void;
+        last?: boolean; // the last round: after it, the results
+    };
 }) {
     const { out, still } = knockoutRound(props.opponents, props.cleared, props.first);
     const rivals = useRivalsPlaying(); // online: players still playing may still be in
-    const won = still.length === 0 && !rivals;
+    const b = props.boards;
+    const won = still.length === 0 && !rivals && props.opponents.length > 0 && !(b && b.failed);
     const face = (o: { hg: { id: number; name: string; imageURL: string } }, isOut: boolean) => (
         <div key={o.hg.id} className={`bbb-answer ${isOut ? "is-wrong" : "is-right"}`}>
             <img src={o.hg.imageURL} alt="" />
@@ -398,33 +428,80 @@ export function KnockoutPause(props: {
             <span>{isOut ? "❌" : "✅"}</span>
         </div>
     );
+    const summary = (
+        <Subtle>
+            {out.length === 0
+                ? "Nobody dropped out this round."
+                : `${out.map((o) => o.hg.name).join(", ")} ${out.length === 1 ? "is" : "are"} out.`}{" "}
+            {b && b.failed
+                ? still.length === 0
+                    ? ""
+                    : `${still.length} still in.`
+                : won
+                  ? "You're the last one standing: you win!"
+                  : still.length === 0
+                    ? props.opponents.length > 0
+                        ? "Nobody else is still in so far."
+                        : ""
+                    : `${still.length} still in with you.`}
+        </Subtle>
+    );
+    const button =
+        b && b.failed ? (
+            <BigButton kind="success" onClick={b.onLose || props.onWin}>
+                See how I did
+            </BigButton>
+        ) : won ? (
+            <BigButton kind="success" onClick={props.onWin}>
+                🏆 Finish
+            </BigButton>
+        ) : b && b.last ? (
+            <BigButton kind="success" onClick={props.onWin}>
+                See how I did
+            </BigButton>
+        ) : (
+            <BigButton kind="success" onClick={props.onNext}>
+                Next round
+            </BigButton>
+        );
+    if (b) {
+        const rows = [
+            { ...b.human, you: true, correct: !b.failed, answer: b.mine || "…" },
+            ...[...still, ...out].map((o) => {
+                const ok = still.includes(o);
+                return { ...o.hg, correct: ok, answer: ok ? b.right : b.wrongFor(o.hg.id) };
+            }),
+        ];
+        return (
+            <div
+                className="bbb-reveal"
+                key={props.cleared}
+                style={{ "--done": `${boardsDoneAt(props.cleared)}s` } as React.CSSProperties}
+            >
+                <AnswerBoards rows={rows} salt={props.cleared} />
+                <div className="bbb-reveal-late">
+                    <div className="bbb-reveal-answer">
+                        <span>{b.label}</span>
+                        <b>{b.right}</b>
+                    </div>
+                    <Title>{b.failed ? "❌ Not quite: you're out" : `✅ You got the ${props.what(props.cleared)}!`}</Title>
+                    {summary}
+                </div>
+                <StageScores cleared={b.failed ? props.cleared - 1 : props.cleared} />
+                {button}
+            </div>
+        );
+    }
     return (
         <div className="bbb-reveal">
             <Title>✅ You got the {props.what(props.cleared)}!</Title>
-            <Subtle>
-                {out.length === 0
-                    ? "Nobody dropped out this round."
-                    : `${out.map((o) => o.hg.name).join(", ")} ${out.length === 1 ? "is" : "are"} out.`}{" "}
-                {won
-                    ? "You're the last one standing: you win!"
-                    : still.length === 0
-                      ? "Nobody else is still in so far."
-                      : `${still.length} still in with you.`}
-            </Subtle>
+            {summary}
             <div className="bbb-answers">
                 {out.map((o) => face(o, true))}
                 {still.map((o) => face(o, false))}
             </div>
             <StageScores cleared={props.cleared} />
-            {won ? (
-                <BigButton kind="success" onClick={props.onWin}>
-                    🏆 Finish
-                </BigButton>
-            ) : (
-                <BigButton kind="success" onClick={props.onNext}>
-                    Next round
-                </BigButton>
-            )}
+            {button}
         </div>
     );
 }

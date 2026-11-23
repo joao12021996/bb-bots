@@ -552,6 +552,46 @@ describe("after each round: your answer, everyone else's, then the right one", (
         return { container, opponents, participants, button, click, answers, finished, done };
     }
 
+    it("Digit Span: everyone's number, then the real one; a wrong one waits for you before it ends", async () => {
+        jest.useFakeTimers();
+        try {
+            const m = await mount("digit-span", 5);
+            // the number, while it's up
+            const shown = m.container.textContent!.match(/\d{4}$/)![0];
+            await act(async () => {
+                jest.advanceTimersByTime(5000);
+            });
+            for (const d of shown) await m.click(d);
+            await m.click("OK");
+            const rows = m.answers();
+            expect(rows[0]).toBe(`You: ${shown}`);
+            m.opponents.forEach((o) => {
+                const row = rows.find((r) => r.startsWith(`${o.hg.name}: `))!;
+                const typed = row.split(": ")[1];
+                expect(typed).toHaveLength(4);
+                if (o.score >= 4) expect(typed).toBe(shown);
+                else expect(typed).not.toBe(shown);
+            });
+            expect(m.container.querySelector(".bbb-reveal-answer")!.textContent).toBe(`The number${shown}`);
+            expect(m.finished).toEqual([]);
+            await m.click("Next round");
+            await act(async () => {
+                jest.advanceTimersByTime(5000);
+            });
+            // round 2, wrong on purpose
+            for (const d of "00000") await m.click(d);
+            await m.click("OK");
+            expect(m.container.textContent).toContain("you're out");
+            expect(m.answers()[0]).toBe("You: 00000");
+            expect(m.finished).toEqual([]);
+            await m.click("See how I did");
+            expect(m.finished).toEqual([4]);
+            m.done();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
     it("Count 'Em: everyone's count, and how many there really were", async () => {
         jest.useFakeTimers();
         try {

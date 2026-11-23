@@ -1,7 +1,7 @@
 import React from "react";
 import { pressable, Subtle, Title } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
-import { AnswerReveal, guessFrom, KnockoutPause, Keypad, Reveal, revealRows, sleep, sumSoFar, useRivalsPlaying } from "./compUi";
+import { AnswerReveal, guessFrom, KnockoutPause, Keypad, nearMiss, Reveal, revealRows, sleep, sumSoFar, useRivalsPlaying } from "./compUi";
 import { chance, clamp, gaussian, pick, Rand, randInt, sample, seededRand, shuffled } from "./random";
 
 const EMOJIS = ["🍕", "🎸", "👑", "🔑", "🐍", "💎", "🎲", "🧸", "🍩", "🚀", "🌵", "🎩"];
@@ -302,12 +302,12 @@ const DIGITS_FIRST = 4; // the first number's length
 const DIGITS_TOP = DIGITS_FIRST + KNOCKOUT_ROUNDS - 1;
 
 function DigitSpan(props: CompProps) {
-    const rivals = useRivalsPlaying(); // online: other players still playing
     const [length, setLength] = React.useState(DIGITS_FIRST);
     const [digits, setDigits] = React.useState(() => Array.from({ length: DIGITS_FIRST }, () => randInt(props.rand, 0, 9)).join(""));
     const [phase, setPhase] = React.useState<"show" | "enter">("show");
     const [value, setValue] = React.useState("");
-    const [cleared, setCleared] = React.useState<number | null>(null); // between rounds: who's out
+    // after every round: everyone's number, then the real one (and who's out)
+    const [shown, setShown] = React.useState<{ typed: string; failed: boolean; final?: number } | null>(null);
     const turnStart = React.useRef(0);
     const answering = React.useRef(0); // seconds spent typing, all rounds together
 
@@ -321,20 +321,18 @@ function DigitSpan(props: CompProps) {
     }, [phase, length]);
 
     const submit = () => {
+        if (props.pauseClock) props.pauseClock(true);
         if (value !== digits) {
-            props.finish(length - 1);
+            setShown({ typed: value, failed: true });
             return;
         }
         answering.current += (performance.now() - turnStart.current) / 1000;
         if (length >= DIGITS_TOP) {
-            props.finish(speedScore(DIGITS_TOP, answering.current));
+            setShown({ typed: value, failed: false, final: speedScore(DIGITS_TOP, answering.current) });
             return;
         }
         props.report(length);
-        if (props.opponents.length > 0 || rivals) {
-            if (props.pauseClock) props.pauseClock(true);
-            setCleared(length);
-        } else nextRound();
+        setShown({ typed: value, failed: false });
     };
     const nextRound = () => {
         const n = length + 1;
@@ -344,18 +342,28 @@ function DigitSpan(props: CompProps) {
         setPhase("show");
     };
 
-    if (cleared !== null) {
+    if (shown !== null) {
         return (
             <KnockoutPause
                 opponents={props.opponents}
-                cleared={cleared}
-                first={cleared === DIGITS_FIRST}
+                cleared={length}
+                first={length === DIGITS_FIRST}
                 what={(n) => `${n} digits`}
-                onWin={() => props.finish(cleared)}
+                onWin={() => props.finish(shown.final !== undefined ? shown.final : length)}
                 onNext={() => {
                     if (props.pauseClock) props.pauseClock(false);
-                    setCleared(null);
+                    setShown(null);
                     nextRound();
+                }}
+                boards={{
+                    human: props.human,
+                    mine: shown.typed,
+                    right: digits,
+                    label: "The number",
+                    wrongFor: (id) => nearMiss(digits, `digits:${length}:${id}`),
+                    failed: shown.failed,
+                    onLose: () => props.finish(length - 1),
+                    last: shown.final !== undefined,
                 }}
             />
         );
