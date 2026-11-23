@@ -241,7 +241,29 @@ export interface DrawOptions {
     expression?: Expression; // Tainted Wine: how the wine went down
 }
 
-export type Expression = "happy" | "sad" | "sick" | "dead";
+export type Expression =
+    | "happy"
+    | "sad"
+    | "sick"
+    | "dead"
+    | "laugh"
+    | "wink"
+    | "smug"
+    | "shocked"
+    | "cry"
+    | "angry"
+    | "ecstatic"; // the winner: stars in their eyes
+
+// a five-pointed star around (cx, cy)
+function star(cx: number, cy: number, r: number): string {
+    const pts: string[] = [];
+    for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / 5;
+        const d = i % 2 ? r * 0.45 : r;
+        pts.push(`${(cx + d * Math.cos(a)).toFixed(1)},${(cy + d * Math.sin(a)).toFixed(1)}`);
+    }
+    return `<polygon points="${pts.join(" ")}" fill="#fbbf24" stroke="${INK}" stroke-width="0.9" stroke-linejoin="round"/>`;
+}
 
 // a color part of the way to another: "#rrggbb"
 function mixColor(a: string, b: string, t: number): string {
@@ -256,6 +278,18 @@ function expressionEyes(e: Expression): string {
     if (e === "sad")
         return `<path d="M36.5 51 Q41 55 45.5 51 M54.5 51 Q59 55 63.5 51 M35 45.5 L45 43 M65 45.5 L55 43" ${s}/><path d="M38.5 56 Q37 60 38.5 61.5 Q40 60 38.5 56 Z" fill="#60a5fa" stroke="${INK}" stroke-width="0.6"/>`;
     if (e === "sick") return `<path d="M37 49.5 L44 52.5 L37 55.5 M63 49.5 L56 52.5 L63 55.5" ${s}/>`;
+    if (e === "laugh") return `<path d="M37 54 L41 49.5 L45 54 M55 54 L59 49.5 L63 54" ${s}/>`;
+    if (e === "wink") return `<circle cx="41" cy="52" r="2.6" fill="${INK}"/><path d="M54.5 53.5 Q59 48 63.5 53.5" ${s}/>`;
+    if (e === "smug")
+        return `<path d="M36.5 51.5 L45.5 51.5 M54.5 51.5 L63.5 51.5" ${s}/><path d="M38.5 51.5 Q41 55.5 43.5 51.5 Z M56.5 51.5 Q59 55.5 61.5 51.5 Z" fill="${INK}"/>`;
+    if (e === "shocked")
+        return `<g stroke="${INK}" stroke-width="1.4"><circle cx="41" cy="52" r="4.3" fill="#fff"/><circle cx="59" cy="52" r="4.3" fill="#fff"/></g><circle cx="41" cy="52" r="1.5" fill="${INK}"/><circle cx="59" cy="52" r="1.5" fill="${INK}"/><path d="M35 44 Q40.5 40 46 43.5 M54 43.5 Q59.5 40 65 44" ${s}/>`;
+    if (e === "cry")
+        return `<path d="M36.5 51.5 Q41 55.5 45.5 51.5 M54.5 51.5 Q59 55.5 63.5 51.5 M35 45.5 L45 43 M65 45.5 L55 43" ${s}/><path d="M38.5 54.5 L38 68 M61.5 54.5 L62 68" stroke="#60a5fa" stroke-width="2.6" stroke-linecap="round" opacity="0.9"/>`;
+    if (e === "angry")
+        return `<circle cx="41" cy="53" r="2.2" fill="${INK}"/><circle cx="59" cy="53" r="2.2" fill="${INK}"/><path d="M35 44.5 L46 49 M65 44.5 L54 49" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/>`;
+    if (e === "ecstatic")
+        return `${star(41, 52, 5.6)}${star(59, 52, 5.6)}<ellipse cx="33.5" cy="60" rx="3.6" ry="2.2" fill="#f472b6" opacity="0.6"/><ellipse cx="66.5" cy="60" rx="3.6" ry="2.2" fill="#f472b6" opacity="0.6"/>`;
     return `<path d="M37 48.5 L45 56.5 M45 48.5 L37 56.5 M55 48.5 L63 56.5 M63 48.5 L55 56.5" stroke="${INK}" stroke-width="2.2" stroke-linecap="round"/>`;
 }
 
@@ -264,6 +298,13 @@ function expressionMouth(e: Expression): string {
         return `<path d="M41 66 Q50 78 59 66 Z" fill="#7f1d1d" stroke="${INK}" stroke-width="1.4" stroke-linejoin="round"/><path d="M42.5 67 L57.5 67 L56 69 L44 69 Z" fill="#fff"/>`;
     if (e === "sad") return `<path d="M43 71 Q50 65.5 57 71" stroke="${INK}" stroke-width="1.8" fill="none" stroke-linecap="round"/>`;
     if (e === "sick") return `<ellipse cx="50" cy="69.5" rx="5.5" ry="4.6" fill="#3f0d12" stroke="${INK}" stroke-width="1.4"/>`;
+    if (e === "laugh" || e === "ecstatic")
+        return `<path d="M39 64 Q50 82 61 64 Z" fill="#7f1d1d" stroke="${INK}" stroke-width="1.4" stroke-linejoin="round"/><path d="M40.5 65 L59.5 65 L58 67.5 L42 67.5 Z" fill="#fff"/><path d="M45 73.5 Q50 70 55 73.5 Q50 77 45 73.5 Z" fill="#f87171"/>`;
+    if (e === "wink" || e === "smug") return `<path d="M43 69 Q51 72.5 58 65.5" stroke="${INK}" stroke-width="1.8" fill="none" stroke-linecap="round"/>`;
+    if (e === "shocked") return `<ellipse cx="50" cy="70" rx="3.8" ry="5.2" fill="#3f0d12" stroke="${INK}" stroke-width="1.4"/>`;
+    if (e === "cry") return `<path d="M42.5 73 Q45 66 50 67.5 Q55 66 57.5 73 Z" fill="#3f0d12" stroke="${INK}" stroke-width="1.4" stroke-linejoin="round"/>`;
+    if (e === "angry")
+        return `<rect x="42" y="66" width="16" height="6.5" rx="2" fill="#fff" stroke="${INK}" stroke-width="1.4"/><path d="M42 69.25 L58 69.25 M47 66 L47 72.5 M53 66 L53 72.5" stroke="${INK}" stroke-width="0.9"/>`;
     return `<ellipse cx="50" cy="69" rx="5" ry="3.6" fill="#3f0d12" stroke="${INK}" stroke-width="1.4"/><path d="M50 70 Q50 79 55 79 Q59.5 79 58.5 71 Z" fill="#f87171" stroke="${INK}" stroke-width="1.2"/>`;
 }
 
@@ -526,7 +567,14 @@ export function cartoonSVG(look: CartoonLook, opts: DrawOptions = {}): string {
     const expression = opts.expression;
     const baseSkin = SKINS[look.skin] || SKINS[0];
     // the tainted wine turns you green
-    const skin = expression === "sick" ? mixColor(baseSkin, "#84cc16", 0.45) : expression === "dead" ? mixColor(baseSkin, "#94a3b8", 0.55) : baseSkin;
+    const skin =
+        expression === "sick"
+            ? mixColor(baseSkin, "#84cc16", 0.45)
+            : expression === "dead"
+              ? mixColor(baseSkin, "#94a3b8", 0.55)
+              : expression === "angry"
+                ? mixColor(baseSkin, "#ef4444", 0.22)
+                : baseSkin;
     const hairC = HAIR[look.hairColor] || HAIR[0];
     const shirt = SHIRTS[look.shirt] || SHIRTS[0];
     const mask = opts.mask || "none";

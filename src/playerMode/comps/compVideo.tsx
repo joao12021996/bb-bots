@@ -25,24 +25,63 @@ export interface BoardRow {
     answer?: string;
 }
 
+// How someone takes it: a face and a move. Not always the same one, so a row of right answers isn't a row of clones;
+// picked from who they are and which question it is, so it holds still while the screen redraws.
+export type Move = "hop" | "wiggle" | "spin" | "nod" | "shake" | "slump" | "tremble" | "jump";
+export interface Reaction {
+    face: Expression;
+    move: Move;
+}
+const GOOD: Reaction[] = [
+    { face: "happy", move: "hop" },
+    { face: "laugh", move: "wiggle" },
+    { face: "wink", move: "nod" },
+    { face: "smug", move: "nod" },
+    { face: "laugh", move: "spin" },
+    { face: "happy", move: "wiggle" },
+];
+const BAD: Reaction[] = [
+    { face: "sad", move: "slump" },
+    { face: "shocked", move: "tremble" },
+    { face: "angry", move: "shake" },
+    { face: "cry", move: "slump" },
+    { face: "shocked", move: "shake" },
+];
+// the winner's, and only the winner's
+export const WINNER: Reaction = { face: "ecstatic", move: "jump" };
+const DOWN = new Set<Expression>(["sad", "cry", "angry", "shocked", "sick", "dead"]);
+
+export function pickReaction(good: boolean, id: number, salt = 0): Reaction {
+    const list = good ? GOOD : BAD;
+    const h = Math.abs((id + 1) * 7919 + (salt + 1) * 104729) % 9973;
+    return list[h % list.length];
+}
+
 // When the boards are all turned and the answer's in, for a row of `n`: the delay before the verdict.
 export function boardsDoneAt(n: number): number {
     return FLIP_START + n * FLIP_EACH + 0.35;
 }
 
-function Toon(props: { hg: { name: string; imageURL: string }; react?: Expression; className?: string }) {
-    const { hg } = props;
+function Toon(props: { hg: { name: string; imageURL: string }; react?: Reaction; className?: string }) {
+    const { hg, react } = props;
     return (
-        <div className={`bbb-toon${isCartoon(hg) ? "" : " is-photo"} ${props.className || ""}`}>
+        <div
+            className={`bbb-toon${isCartoon(hg) ? "" : " is-photo"}${react ? ` do-${react.move}` : ""} ${props.className || ""}`}
+        >
             <img src={toonURL(hg)} alt={hg.name} />
-            {props.react && (
-                <img className={`is-react is-${props.react}`} src={toonURL(hg, props.react)} alt="" />
+            {react && (
+                <img
+                    className={`is-react is-${react.face}${DOWN.has(react.face) ? " is-down" : ""}`}
+                    src={toonURL(hg, react.face)}
+                    alt=""
+                />
             )}
         </div>
     );
 }
 
-export function AnswerBoards(props: { rows: BoardRow[] }) {
+// `salt`: which question it is, so the same person doesn't take every one the same way
+export function AnswerBoards(props: { rows: BoardRow[]; salt?: number }) {
     const done = boardsDoneAt(props.rows.length);
     return (
         <div className="bbb-boards" style={{ "--done": `${done}s` } as CssVars}>
@@ -63,7 +102,7 @@ export function AnswerBoards(props: { rows: BoardRow[] }) {
                     >
                         <Toon
                             hg={r}
-                            react={r.correct === true ? "happy" : r.correct === false ? "sad" : undefined}
+                            react={r.correct === undefined ? undefined : pickReaction(r.correct, r.id, props.salt)}
                         />
                         <div className="bbb-board">
                             <div className="bbb-board-card">
@@ -118,13 +157,17 @@ export function ResultsVideo(props: {
                     const place = ranked.findIndex((r) => r.id === hg.id); // 0: first
                     const from = n - 1 - place; // 0: comes in first (last place)
                     const top = winnerId === hg.id || (tied !== null && tied.includes(hg.id));
-                    const react: Expression | undefined = top
-                        ? "happy"
-                        : place === n - 1 && n > 2
-                          ? "sad"
-                          : wall
-                            ? "sad"
-                            : undefined;
+                    // the winner is over the moon; whoever's last (or off the wall) isn't; second place is pleased
+                    const react: Reaction | undefined =
+                        winnerId === hg.id
+                            ? WINNER
+                            : top
+                              ? pickReaction(true, hg.id, n)
+                              : wall || (place === n - 1 && n > 2)
+                                ? pickReaction(false, hg.id, n)
+                                : place === 1 && n > 3
+                                  ? pickReaction(true, hg.id, n + 1)
+                                  : undefined;
                     const height = n > 1 ? 14 + Math.round((70 * (n - 1 - place)) / (n - 1)) : 60;
                     return (
                         <div

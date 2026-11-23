@@ -173,7 +173,7 @@
 .bbb-toon img.is-react {
     opacity: 0;
 }
-.bbb-toon.is-photo img.is-sad {
+.bbb-toon.is-photo img.is-down {
     filter: grayscale(0.8) brightness(0.85);
 }
 
@@ -190,14 +190,39 @@
     width: 84px;
     text-align: center;
 }
-.bbb-board-fig .bbb-toon img.is-react {
-    animation: bbb-vid-show 0.2s linear var(--done) forwards;
+/* how they take it (see Reaction in compVideo.tsx): when, set by the scene */
+.bbb-board-fig .bbb-toon {
+    --react-at: var(--done);
 }
-.bbb-board-fig.is-wrong .bbb-toon {
-    animation: bbb-vid-shake 0.45s ease-in-out var(--done);
+.bbb-video-fig .bbb-toon {
+    --react-at: var(--at);
 }
-.bbb-board-fig.is-right .bbb-toon {
-    animation: bbb-vid-hop 0.45s ease-out var(--done);
+.bbb-toon img.is-react {
+    animation: bbb-vid-show 0.2s linear var(--react-at, 0s) forwards;
+}
+.bbb-toon.do-hop {
+    animation: bbb-vid-hop 0.45s ease-out var(--react-at) 2;
+}
+.bbb-toon.do-wiggle {
+    animation: bbb-vid-wiggle 0.6s ease-in-out var(--react-at) 2;
+}
+.bbb-toon.do-spin {
+    animation: bbb-vid-spin 0.7s ease-in-out var(--react-at);
+}
+.bbb-toon.do-nod {
+    animation: bbb-vid-nod 0.5s ease-in-out var(--react-at) 2;
+}
+.bbb-toon.do-shake {
+    animation: bbb-vid-shake 0.45s ease-in-out var(--react-at) 2;
+}
+.bbb-toon.do-slump {
+    animation: bbb-vid-slump 0.6s ease-out var(--react-at) forwards;
+}
+.bbb-toon.do-tremble {
+    animation: bbb-vid-tremble 0.12s linear var(--react-at) 6;
+}
+.bbb-toon.do-jump {
+    animation: bbb-vid-jump 0.9s cubic-bezier(0.3, 0.9, 0.5, 1) var(--react-at) 2;
 }
 .bbb-board {
     perspective: 400px;
@@ -238,12 +263,6 @@
     font-size: 0.72rem;
     transform: rotateY(180deg);
 }
-.bbb-board-fig.is-right .bbb-board-front {
-    animation: bbb-vid-right 0.3s linear var(--done) forwards;
-}
-.bbb-board-fig.is-wrong .bbb-board-front {
-    animation: bbb-vid-wrong 0.3s linear var(--done) forwards;
-}
 .bbb-board-fig.is-blank .bbb-board-front {
     color: #8a8398;
 }
@@ -258,7 +277,30 @@
 .bbb-board-fig.is-you .bbb-board-name {
     color: var(--bbb-gold);
 }
+.bbb-reveal-answer {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 4px auto 8px;
+    padding: 6px 18px;
+    border-radius: 10px;
+    background: #fffdf5;
+    color: #1f1720;
+    border: 2px solid #1f1720;
+}
+.bbb-reveal-answer span {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b6478;
+}
+.bbb-reveal-answer b {
+    font-size: 1.15rem;
+    line-height: 1.2;
+}
 .bbb-reveal-late {
+    text-align: center;
     opacity: 0;
     animation: bbb-vid-show 0.3s ease-out var(--done) forwards;
 }
@@ -332,9 +374,6 @@
 .bbb-video-fig.is-you .bbb-video-name {
     color: var(--bbb-gold);
 }
-.bbb-video-fig.is-top .bbb-toon {
-    animation: bbb-vid-hop 0.45s ease-out var(--end) 2;
-}
 .bbb-video-crown {
     position: absolute;
     left: 50%;
@@ -355,14 +394,16 @@
     background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.06) 0 18px, rgba(255, 255, 255, 0.02) 18px 36px);
     border-top: 3px solid rgba(255, 255, 255, 0.15);
 }
-.bbb-video.is-wall .bbb-video-fig .bbb-toon {
+.bbb-video.is-wall .bbb-video-fig .bbb-toon,
+.bbb-video.is-wall .bbb-video-fig .bbb-toon[class*="do-"] {
     animation: bbb-vid-sway 1.4s ease-in-out infinite;
 }
-.bbb-video.is-wall .bbb-video-fig:not(.is-top) .bbb-toon {
+.bbb-video.is-wall .bbb-video-fig:not(.is-top) .bbb-toon,
+.bbb-video.is-wall .bbb-video-fig:not(.is-top) .bbb-toon[class*="do-"] {
     animation: bbb-vid-sway 1.4s ease-in-out infinite, bbb-vid-drop 0.45s ease-in var(--at) forwards;
 }
-.bbb-video.is-wall .bbb-video-fig.is-top .bbb-toon {
-    animation: bbb-vid-sway 1.4s ease-in-out infinite, bbb-vid-hop 0.45s ease-out var(--end) 2;
+.bbb-video.is-wall .bbb-video-fig.is-top .bbb-toon.do-jump {
+    animation: bbb-vid-jump 0.9s cubic-bezier(0.3, 0.9, 0.5, 1) var(--end) 2;
 }
 .bbb-video-confetti span {
     position: absolute;
@@ -408,16 +449,67 @@
         transform: rotateY(180deg);
     }
 }
-@keyframes bbb-vid-right {
-    to {
-        background: #bbf7d0;
-        border-color: #059669;
+@keyframes bbb-vid-wiggle {
+    0%,
+    100% {
+        transform: rotate(0);
+    }
+    25% {
+        transform: rotate(-9deg);
+    }
+    75% {
+        transform: rotate(9deg);
     }
 }
-@keyframes bbb-vid-wrong {
+@keyframes bbb-vid-spin {
+    0% {
+        transform: translateY(0) rotate(0);
+    }
+    50% {
+        transform: translateY(-8px) rotate(180deg);
+    }
+    100% {
+        transform: translateY(0) rotate(360deg);
+    }
+}
+@keyframes bbb-vid-nod {
+    0%,
+    100% {
+        transform: rotate(0) translateY(0);
+    }
+    50% {
+        transform: rotate(4deg) translateY(3px);
+    }
+}
+@keyframes bbb-vid-slump {
     to {
-        background: #fecaca;
-        border-color: #dc2626;
+        transform: translateY(5px) scale(0.93) rotate(-4deg);
+    }
+}
+@keyframes bbb-vid-tremble {
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+    50% {
+        transform: translateX(-2px);
+    }
+}
+@keyframes bbb-vid-jump {
+    0% {
+        transform: translateY(0) scale(1) rotate(0);
+    }
+    20% {
+        transform: translateY(2px) scale(1.08, 0.9);
+    }
+    55% {
+        transform: translateY(-20px) scale(1.12) rotate(-8deg);
+    }
+    80% {
+        transform: translateY(-4px) scale(1.05) rotate(6deg);
+    }
+    100% {
+        transform: translateY(0) scale(1) rotate(0);
     }
 }
 @keyframes bbb-vid-pop {

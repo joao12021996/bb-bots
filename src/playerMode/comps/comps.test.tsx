@@ -573,7 +573,7 @@ describe("after each round: your answer, everyone else's, then the right one", (
                     expect(rows[i + 1]).toContain(miss === 0 ? "(spot on)" : `(${miss} off)`);
                     expect(Math.abs(parseInt(rows[i + 1].split(": ")[1], 10) - rounds[r].answer)).toBe(miss);
                 });
-                expect(m.container.textContent).toContain(`The answer: ${rounds[r].answer}`);
+                expect(m.container.textContent).toContain(`The answer${rounds[r].answer}`);
                 expect(m.finished).toEqual([]); // it waits for you
                 await m.click(r + 1 < rounds.length ? "Next round" : "See how I did");
             }
@@ -591,7 +591,7 @@ describe("after each round: your answer, everyone else's, then the right one", (
             const rows = m.answers();
             expect(rows[0]).toBe("You: ⬆️ Higher");
             m.opponents.forEach((o, i) => expect(rows[i + 1]).toBe(`${o.hg.name}: ${o.picks![k] ? "⬆️ Higher" : "⬇️ Lower"}`));
-            expect(m.container.textContent).toContain("The next card:");
+            expect(m.container.textContent).toContain("The next card");
             await m.click(k < 9 ? "Next card" : "See how I did");
         }
         expect(m.finished.length).toBe(1);
@@ -655,6 +655,9 @@ describe("every player gets exactly the same comp", () => {
     const screen = (el: HTMLElement) =>
         el.innerHTML
             .replace(/ style="[^"]*"/g, "")
+            // how each of them takes an answer is picked from who they are: a face, not a different comp
+            .replace(/ do-\w+/g, "")
+            .replace(/is-react is-\w+( is-down)?/g, "is-react")
             .replace(/Houseguest[01]\b/g, "PLAYER")
             .replace(/\b\d+(\.\d+)?\s?s\b/g, "Ns")
             .replace(/\b\d+:\d\d\b/g, "N:NN");

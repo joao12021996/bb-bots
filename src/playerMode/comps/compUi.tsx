@@ -353,12 +353,13 @@ export function AnswerReveal(props: {
             key={reveal.index}
             style={{ "--done": `${boardsDoneAt(reveal.rows.length)}s` } as React.CSSProperties}
         >
-            <AnswerBoards rows={reveal.rows} />
+            <AnswerBoards rows={reveal.rows} salt={reveal.index} />
             <div className="bbb-reveal-late">
+                <div className="bbb-reveal-answer">
+                    <span>{reveal.answerLabel || "The answer"}</span>
+                    <b>{reveal.correctText}</b>
+                </div>
                 <Title>{reveal.verdict}</Title>
-                <Subtle>
-                    {reveal.answerLabel || "The answer"}: {reveal.correctText}
-                </Subtle>
             </div>
             <StageScores done={reveal.index + 1} />
             <BigButton kind="success" onClick={props.onNext}>

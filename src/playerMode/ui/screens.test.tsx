@@ -1057,7 +1057,7 @@ describe("player mode screens", () => {
         expect(c.textContent).toContain("Fact 1 of 10");
         click(c, "FACT");
         expect(c.textContent).toMatch(/Right!|Wrong!/);
-        expect(c.textContent).toContain("The answer:");
+        expect(c.querySelector(".bbb-reveal-answer")!.textContent).toContain("The answer");
         // everyone's board: right ones go green, wrong ones red
         const board = (name: string) => Array.from(c.querySelectorAll(".bbb-board-fig")).find((f) => f.querySelector(".bbb-board-name")!.textContent === name)!;
         expect(board("HG1").classList.contains("is-right")).toBe(true);
