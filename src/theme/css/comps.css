@@ -17,6 +17,12 @@
     flex-wrap: wrap;
     gap: 6px;
 }
+/* a comp that wouldn't come up at this point in a real season: still there to try, a little set back */
+.bbb-test-comps .button.bbb-test-unfit {
+    border-style: dashed !important;
+    background: transparent !important;
+    color: var(--bbb-muted) !important;
+}
 .bbb-test-mode > .button {
     margin-top: 10px;
 }

@@ -21,7 +21,7 @@ export function DiaryRoom(props: {
                 <div key={week} style={{ margin: "6px auto", maxWidth: 600, textAlign: "left" }}>
                     <button
                         type="button"
-                        className="button is-small is-fullwidth is-dark"
+                        className="button is-small is-fullwidth is-light"
                         onClick={() => setOpen(open === week ? null : week)}
                         aria-expanded={open === week}
                     >

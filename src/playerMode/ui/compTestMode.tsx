@@ -231,7 +231,7 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
                                     <button
                                         key={c.id}
                                         type="button"
-                                        className={`button is-small ${fits ? "is-dark" : "is-dark is-outlined"}`}
+                                        className={`button is-small is-light${fits ? "" : " bbb-test-unfit"}`}
                                         title={fits ? c.rules : "Wouldn't come up at this point in a real season, but you can still try it."}
                                         onClick={() => play(c)}
                                     >
