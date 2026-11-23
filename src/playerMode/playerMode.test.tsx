@@ -3047,6 +3047,18 @@ describe("alliances and the block", () => {
         expect(controller.planBWeek).toBe(false);
     });
 
+    it("no plan B once only two are left on the block", () => {
+        const controller = new PlayerModeController(newPlayerSave(prepareNextWeek(newGame(10), BigBrotherVanilla), [0]));
+        controller.state.week.blockbuster = true;
+        controller.state.step = Step.SocialBlockbuster;
+        controller.state.week.nomineeIds = [5, 6, 7];
+        expect(controller.planBWeek).toBe(true);
+        // the Block Breaker is played: two are left, and nobody else can come off
+        controller.state.step = Step.SocialCampaign;
+        controller.state.week.nomineeIds = [6, 7];
+        expect(controller.planBWeek).toBe(false);
+    });
+
     it("the new HoH's alliance convenes after the HoH comp, before nominations; the HoH can't be the target", () => {
         const controller = new PlayerModeController(newPlayerSave(prepareNextWeek(newGame(10), BigBrotherVanilla), [0]));
         let prompt: Prompt | null = null;

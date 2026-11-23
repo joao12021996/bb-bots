@@ -157,7 +157,7 @@ function AllianceCard(props: { controller: PlayerModeController; alliance: Allia
             {a.target !== undefined && a.targetWeek === gs.phase && !controller.player(a.target).isEvicted && (
                 <Subtle>
                     🎯 Current target: <b>{controller.player(a.target).name}</b>
-                    {a.backup !== undefined && !controller.player(a.backup).isEvicted && (
+                    {a.backup !== undefined && controller.planBWeek && !controller.player(a.backup).isEvicted && (
                         <>
                             {" "}
                             · 🔁 Plan B: <b>{controller.player(a.backup).name}</b>

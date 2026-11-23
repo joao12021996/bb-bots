@@ -248,15 +248,19 @@ export abstract class ControllerCore {
         });
     }
 
-    // Plan B only matters in Blockbuster weeks, where the target can still win the Block Breaker.
+    // Plan B only matters in Blockbuster weeks, where the target can still win the Block Breaker. Once the block
+    // is down to two (the Block Breaker has been played), nobody else can come off it: no plan B.
     public get planBWeek(): boolean {
-        return !!this.state.week.blockbuster;
+        const s = this.state;
+        if (!s.week.blockbuster) return false;
+        if (s.step !== Step.SocialBlockbuster && s.step !== Step.SocialCampaign) return true;
+        return (s.week.nomineeIds || []).filter((id) => !this.player(id).isEvicted).length > 2;
     }
 
     // The target came off the block: alliances with a plan B on the block switch to it.
     protected planB() {
         const s = this.state;
-        if (!this.planBWeek) return;
+        if (!s.week.blockbuster) return;
         const block = (s.week.nomineeIds || []).filter((id) => !this.player(id).isEvicted);
         if (block.length === 0) return;
         fallBackToPlanB(s.gameState, s.book, block).forEach(({ alliance, from, to }) =>

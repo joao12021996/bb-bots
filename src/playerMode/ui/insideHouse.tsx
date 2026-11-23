@@ -36,7 +36,7 @@ export function InsideHouse(props: { controller: PlayerModeController }) {
                                 <>
                                     {" "}
                                     · 🎯 after <b>{name(a.target)}</b>
-                                    {a.backup !== undefined && isIn(a.backup) && <> (plan B: {name(a.backup)})</>}
+                                    {a.backup !== undefined && controller.planBWeek && isIn(a.backup) && <> (plan B: {name(a.backup)})</>}
                                 </>
                             )}
                         </p>
