@@ -10,9 +10,11 @@ import { ordinal } from "./career";
 export const DAILY_BOTS = 11; // plus you: a house of twelve, though you take over with eight or fewer left (see dailyPrelude.ts)
 export const DAILY_URL = "https://spotlegame.co.uk/houseguests/";
 
-// The day, the same everywhere in the world (UTC): "2026-11-14".
+// The day on this device's clock, so a new season comes at your midnight: "2026-11-14". Everyone gets the same
+// season on the same date, wherever they are, though it arrives at different moments around the world.
 export function dailyKey(now: Date = new Date()): string {
-    return now.toISOString().slice(0, 10);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 export function dailySeed(key: string): number {
@@ -26,7 +28,7 @@ export function dailyNumber(key: string): number {
 }
 
 export function msUntilNextDaily(now: Date = new Date()): number {
-    const next = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+    const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime(); // local midnight
     return next - now.getTime();
 }
 

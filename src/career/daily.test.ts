@@ -7,9 +7,10 @@ function result(key: string, over: Partial<DailyResult> = {}): DailyResult {
 describe("the daily season", () => {
     beforeEach(() => window.localStorage.clear());
 
-    it("is the same day, and the same seed, everywhere", () => {
-        expect(dailyKey(new Date("2026-11-14T23:59:59Z"))).toBe("2026-11-14");
-        expect(dailyKey(new Date("2026-11-15T00:00:01Z"))).toBe("2026-11-15");
+    it("goes by the device's own day, and the same date makes the same seed", () => {
+        expect(dailyKey(new Date(2026, 10, 14, 23, 59, 59))).toBe("2026-11-14");
+        expect(dailyKey(new Date(2026, 10, 15, 0, 0, 1))).toBe("2026-11-15");
+        expect(dailyKey(new Date(2026, 0, 5, 12))).toBe("2026-01-05");
         expect(dailySeed("2026-11-14")).toBe(dailySeed("2026-11-14"));
         expect(dailySeed("2026-11-14")).not.toBe(dailySeed("2026-11-15"));
         expect(dailySeed("2026-11-14")).toBeGreaterThan(0);
@@ -18,8 +19,8 @@ describe("the daily season", () => {
     });
 
     it("counts down to the next one", () => {
-        expect(msUntilNextDaily(new Date("2026-11-14T23:00:00Z"))).toBe(3600000);
-        expect(msUntilNextDaily(new Date("2026-11-14T00:00:00Z"))).toBe(86400000);
+        expect(msUntilNextDaily(new Date(2026, 10, 14, 23, 0, 0))).toBe(3600000);
+        expect(msUntilNextDaily(new Date(2026, 10, 14, 0, 0, 0))).toBe(86400000);
     });
 
     it("only the first finish of the day counts", () => {
