@@ -347,10 +347,19 @@ function LobbyRoom(props: { session: NetSession; status: NetStatus }) {
                             selected={spot.seat.peerId === status.selfId}
                             caption={
                                 spot.seat.peerId === status.selfId ? (
-                                    <b>🎮 You</b>
+                                    <b>
+                                        🎮 You
+                                        {spot.seat.flagged && <span className="bbb-flagged"> 🚨 caught cheating</span>}
+                                    </b>
                                 ) : (
                                     <span>
                                         {connected(spot.seat.peerId) ? "🎮 player" : "⚪ away"}
+                                        {spot.seat.flagged && (
+                                            <span className="bbb-flagged" title="Caught cheating in the last week">
+                                                {" "}
+                                                🚨 caught cheating
+                                            </span>
+                                        )}
                                         {status.isHost && (
                                             <button
                                                 type="button"

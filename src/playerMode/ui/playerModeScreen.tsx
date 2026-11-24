@@ -8,6 +8,7 @@ import { actorOf, PlayerModeController, Prompt } from "../playerModeController";
 import { sessionFor } from "../net/netSession";
 import { BackAfterComp, PauseBar, TurnClock } from "./turnClock";
 import { watchForInspector } from "../net/inspectWatch";
+import { CheatReason, markCheater, onCheat } from "../anticheat";
 import { OnlineBar, WaitingFor, WaitingOnPlayers } from "./onlineLobby";
 import { SocialDoneScreen } from "./playerChat";
 import { ChoosePrompt } from "./choosePrompt";
@@ -267,12 +268,31 @@ export class PlayerModeScreen extends React.Component<Props, State> {
         this.personalSub = controller.personal$.subscribe((personal) => later(() => this.setState({ personal }, () => this.cue())));
         // online: re-render when players come and go (who's waiting on whom)
         if (session) this.statusSub = session.status$.subscribe(() => this.forceUpdate());
-        // online: opening the inspect tools gets a player expelled
-        if (session)
-            this.stopWatch = watchForInspector(() => {
+        // cheating (see anticheat) gets a player expelled, online and offline alike
+        const caught = (reason: CheatReason, playerId?: number) => {
+            if (session) {
                 const me = session.localPlayerId;
-                if (me !== null && !controller.isRuleBreaker(me)) session.reportRuleBreak();
-            });
+                if (me === null || (playerId !== undefined && playerId !== me) || controller.isRuleBreaker(me)) return;
+                markCheater();
+                session.reportRuleBreak(reason);
+                return;
+            }
+            // offline: the player it happened to, or whoever's screen is up (anyone at all, playing alone)
+            if (controller.watching) return;
+            const humans = controller.state.humanIds.filter((h) => !controller.isRuleBreaker(h));
+            const prompt = this.state.prompt;
+            const actor = prompt ? actorOf(prompt) : null;
+            const id = playerId !== undefined ? playerId : actor !== null && humans.includes(actor) ? actor : humans.length === 1 ? humans[0] : null;
+            if (id === null || !humans.includes(id)) return;
+            markCheater();
+            setTimeout(() => controller.expel(id, reason));
+        };
+        onCheat(caught);
+        const stopInspect = watchForInspector(() => caught("inspect"));
+        this.stopWatch = () => {
+            stopInspect();
+            onCheat(null);
+        };
         // online: comp scores coming in live from the other players
         if (session)
             this.changedSub = controller.changed$.subscribe(() => {

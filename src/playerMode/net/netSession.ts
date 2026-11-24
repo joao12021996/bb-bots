@@ -1,3 +1,4 @@
+import { browserDevice, CheatReason, isCheatReason, isMarkedCheater, scoreProblem } from "../anticheat";
 import { BehaviorSubject, Subject } from "rxjs";
 import { cleanChat, cleanName } from "./filter";
 import { continueWaiting$ } from "../../subjects/subjects";
@@ -8,6 +9,8 @@ import { seedRng } from "../seeding";
 import { NetRoom, PublicGameInfo } from "./room";
 import { present$ } from "./presence";
 import { canJoin, CastCard, houseOf, LobbySeat, LobbySetup, normalizeSetup } from "./lobby";
+
+const TWO_SEATS = "This browser already has a seat in this game: one player per browser.";
 
 // Online play without a server.
 //
@@ -319,6 +322,10 @@ export class NetSession {
     private readyProposal: Proposal | null = null; // the host: what to do once everyone has
     private myReadyAt = -1; // this device pressed it (before the host has said so)
     private reportTimer: any = undefined;
+    // the host: when each player started each comp ("seed:playerId"), to check the scores handed in
+    private compStarted: { [key: string]: number } = {};
+    // the host: the browser each seat in the lobby was taken from (kept to itself, never sent out)
+    private seatDevices: { [peerId: string]: string } = {};
     private pendingHash: { seq: number; hash: string } | null = null; // hash: see signature()
     private hashTimer: any = null;
     private gapTimer: any = null;
@@ -508,9 +515,11 @@ export class NetSession {
     }
 
     // Join the house (as yourself, or as a cast member), or change how you're joining.
-    public takeSeat(seat: Omit<LobbySeat, "peerId">) {
-        if (this.isHost) this.seatPeer(this.room.selfId, seat);
-        else if (this.hostId) this.room.send("seat", seat, this.hostId);
+    // `device`: left out, this browser's (see browserDevice): one seat per browser, however many tabs it has open
+    public takeSeat(seat: Omit<LobbySeat, "peerId" | "flagged">, device: string | undefined = browserDevice()) {
+        const sent = { ...seat, device, flagged: isMarkedCheater() };
+        if (this.isHost) this.seatPeer(this.room.selfId, sent);
+        else if (this.hostId) this.room.send("seat", sent, this.hostId);
     }
 
     public leaveSeat() {
@@ -568,10 +577,19 @@ export class NetSession {
         this.reactions$.next({ playerId: Number(data.p), emoji: data.e, at: now });
     }
 
-    private seatPeer(peerId: string, seat: Omit<LobbySeat, "peerId">) {
+    private seatPeer(peerId: string, seat: Omit<LobbySeat, "peerId"> & { device?: unknown }) {
         if (!this.setup || this.started) return;
         if (this.isBanned(peerId, String(seat.name || ""))) {
             this.room.send("kicked", {}, peerId);
+            return;
+        }
+        // one seat per browser: a second tab or window of it can't sit down too
+        const device = typeof seat.device === "string" && seat.device ? seat.device.slice(0, 64) : undefined;
+        if (device && this.setup.seats.some((s) => s.peerId !== peerId && this.seatDevices[s.peerId] === device)) {
+            if (peerId === this.room.selfId) {
+                this.notice = TWO_SEATS;
+                this.emit();
+            } else this.room.send("twoSeats", {}, peerId);
             return;
         }
         const others = { ...this.setup, seats: this.setup.seats.filter((s) => s.peerId !== peerId) };
@@ -579,6 +597,7 @@ export class NetSession {
             name: cleanName(String(seat.name || "")),
             imageURL: String(seat.imageURL || ""),
             castIndex: typeof seat.castIndex === "number" && seat.castIndex >= 0 && seat.castIndex < this.cast.length ? seat.castIndex : null,
+            ...(seat.flagged === true ? { flagged: true } : {}),
         };
         if (!canJoin(others, this.cast.length, clean)) {
             if (peerId === this.room.selfId) {
@@ -593,6 +612,8 @@ export class NetSession {
         const index = this.setup.seats.findIndex((s) => s.peerId === peerId);
         const seats = [...others.seats];
         seats.splice(index >= 0 ? index : seats.length, 0, { ...clean, peerId });
+        if (device) this.seatDevices[peerId] = device;
+        else delete this.seatDevices[peerId];
         if (peerId === this.room.selfId) this.notice = undefined;
         this.setup = normalizeSetup({ ...this.setup, seats }, this.cast.length);
         this.broadcastLobby();
@@ -754,6 +775,12 @@ export class NetSession {
             case "full":
                 if (from === this.hostId) {
                     this.notice = "That houseguest is taken, or the house is full.";
+                    this.emit();
+                }
+                return;
+            case "twoSeats":
+                if (from === this.hostId) {
+                    this.notice = TWO_SEATS;
                     this.emit();
                 }
                 return;
@@ -1002,11 +1029,11 @@ export class NetSession {
         if (!this.spectating) writeOnlineSave({ code: this.code, playerId: this.localPlayerId, json });
     }
 
-    // This device's player broke the rules (opened the inspect tools): everyone finds out, and they're expelled.
-    public reportRuleBreak() {
+    // This device's player was caught cheating (see anticheat): everyone finds out, and they're expelled.
+    public reportRuleBreak(reason: CheatReason = "inspect") {
         const owner = this.localPlayerId;
         if (!this.started || !this.controller || owner === null) return;
-        const proposal: Proposal = { kind: "method", name: "ruleBreak", args: [], owner };
+        const proposal: Proposal = { kind: "method", name: "ruleBreak", args: [reason], owner };
         if (!this.valid(proposal, this.room.selfId)) return;
         if (this.isHost) this.sequence(proposal, this.room.selfId);
         else if (this.hostId) this.room.send("propose", toWireInput({ ...proposal, seq: 0 }), this.hostId);
@@ -1034,6 +1061,8 @@ export class NetSession {
         if (!this.allowed(p.owner, from)) return false;
         if (p.kind === "method" && p.name === "ruleBreak") {
             // only ever about the sender's own player
+            const why = p.args && p.args[0];
+            if (why !== undefined && !isCheatReason(why)) return false;
             return p.owner !== null && this.claims[p.owner] === from && !this.controller!.isRuleBreaker(p.owner);
         }
         if (p.kind === "method") {
@@ -1078,7 +1107,11 @@ export class NetSession {
                 }
                 this.lastReport = now;
             }
-            if (this.isHost) return this.sequence(proposal, this.room.selfId);
+            if (this.isHost) {
+                const cheat = this.compCheck(proposal);
+                if (cheat) return void this.sequence({ kind: "method", name: "ruleBreak", args: [cheat], owner: proposal.owner }, this.room.selfId);
+                return this.sequence(proposal, this.room.selfId);
+            }
             if (!this.hostId) return undefined;
             const pid = ++this.pidSeq;
             let done = false;
@@ -1234,7 +1267,37 @@ export class NetSession {
             this.room.send("rejected", { pid: p.pid }, from);
             return;
         }
+        const cheat = this.compCheck(p);
+        if (cheat) {
+            this.room.send("rejected", { pid: p.pid }, from);
+            this.sequence({ kind: "method", name: "ruleBreak", args: [cheat], owner: p.owner }, from);
+            return;
+        }
         this.sequence(p, from);
+    }
+
+    // The host: a comp score handed in is checked before anyone sees it (see anticheat). Returns what's wrong
+    // with it, if it can't be real. Also notes when each player started, to know how long they've been at it.
+    private compCheck(p: Proposal): CheatReason | null {
+        if (p.kind !== "prompt" || p.promptKind !== "compPlay" || p.owner === null || !this.controller) return null;
+        const prompt = (p.slot === null || p.slot === undefined ? this.rawPrompt : this.rawPersonal[p.slot]) as any;
+        if (!prompt || prompt.kind !== "compPlay" || prompt.playerId !== p.owner) return null;
+        const key = `${prompt.seed}:${p.owner}`;
+        if (p.name === "onStart") {
+            if (this.compStarted[key] === undefined) this.compStarted[key] = Date.now();
+            return null;
+        }
+        if (p.name !== "onScore" || prompt.forfeitScore !== undefined) return null;
+        const [score, answers, picks] = p.args || [];
+        const started = this.compStarted[key];
+        const ctx = { seed: prompt.seed, gameState: this.controller.gameState, history: this.controller.compHistory, participants: prompt.participants };
+        return scoreProblem(
+            prompt.comp,
+            score,
+            { answers: Array.isArray(answers) ? answers : undefined, picks: Array.isArray(picks) ? picks : undefined },
+            ctx,
+            started === undefined ? undefined : Date.now() - started,
+        );
     }
 
     // A proposal this device made has been applied (with its result) or turned down (nothing).

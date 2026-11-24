@@ -7,6 +7,7 @@ import { CompDefinition, EnduranceDeals, isStaged, Opponent } from "./compTypes"
 import { seededRand } from "./random";
 import { StageContext, StageInfo } from "./compUi";
 import { compsInPlay$ } from "../../subjects/subjects";
+import { reportCheat, scoreProblem, useClickWatch } from "../anticheat";
 
 export interface CompResult {
     id: number;
@@ -154,6 +155,8 @@ export function CompPlay(props: CompPlayProps) {
         }
     }, []);
     const done = React.useRef(false);
+    // auto-clickers and scripted clicks, while they play
+    useClickWatch(phase === "play", props.player.id);
 
     const { onReport, onStart, onScore, autoSubmit } = props;
     const sofar = () =>
@@ -171,13 +174,22 @@ export function CompPlay(props: CompPlayProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [onReport],
     );
+    const playStartRef = React.useRef(0);
+    playStartRef.current = playStart;
     const submit = React.useCallback(
-        (s: number) =>
-            onScore(
-                s,
-                answers.current.length ? [...answers.current] : undefined,
-                picks.current.length ? [...picks.current] : undefined,
-            ),
+        (s: number) => {
+            const a = answers.current.length ? [...answers.current] : undefined;
+            const p = picks.current.length ? [...picks.current] : undefined;
+            // a score no human could get is never handed in: they're caught instead (online, the host checks too)
+            if (!forfeited) {
+                const ctx = { seed: props.seed, gameState: props.gameState, history: props.history, participants: props.participants };
+                const elapsed = playStartRef.current ? Date.now() - playStartRef.current : undefined;
+                const cheat = scoreProblem(props.comp, s, { answers: a, picks: p }, ctx, elapsed);
+                if (cheat && reportCheat(cheat, props.player.id)) return;
+            }
+            onScore(s, a, p);
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         [onScore],
     );
     const finish = React.useCallback(

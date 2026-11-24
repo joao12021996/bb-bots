@@ -15,6 +15,7 @@ export interface LobbySeat {
     name: string;
     imageURL: string;
     castIndex: number | null; // playing as a cast member, or null: as themselves
+    flagged?: boolean; // caught cheating on this browser in the last week (see anticheat)
 }
 
 export interface LobbySetup {

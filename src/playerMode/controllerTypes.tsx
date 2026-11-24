@@ -1,3 +1,4 @@
+import { CheatReason } from "./anticheat";
 import { GameState, getById, Houseguest } from "../model";
 import { CastOptionsOverride } from "../components/episode/episodeFactory";
 import { Scene } from "../components/episode/scenes/scene";
@@ -109,7 +110,8 @@ export interface PlayerSave {
     history: WeekRecord[];
     usedComps: string[]; // every comp played this season, in order (comps don't repeat)
     social: { [humanId: number]: SocialMemory };
-    ruleBreakers?: number[]; // players expelled for breaking the rules (online: opening the inspect tools)
+    ruleBreakers?: number[]; // players expelled for breaking the rules (caught cheating: see anticheat)
+    cheats?: { [id: number]: { reason: CheatReason; week: number } }; // what each was caught doing, and when
     socialTurn: number; // which alive player is taking their social turn
     socialStage: "social" | "alliance"; // each player's turn: social time, then alliance time
     actionsLeft: number;

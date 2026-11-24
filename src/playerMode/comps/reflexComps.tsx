@@ -5,6 +5,7 @@ import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { AnswerReveal, bestOf, Reveal, revealRows, sumSoFar, useAnimationFrame } from "./compUi";
 import { chance, clamp, gaussian, Rand, randInt, seededRand, shuffled } from "./random";
 import { useColourBlind } from "../../prefs/colourBlind";
+import { FASTEST_HUMAN_MS } from "../anticheat";
 
 // ---------------- Whack-a-Houseguest ----------------
 
@@ -258,6 +259,13 @@ export const ReactionLightsComp: CompDefinition = {
     botScore: (p) => -Math.round(210 + (1 - p) * 330),
     format: (s) => `${-s} ms average`,
     progress: (r, n) => (n > 0 ? -Math.round(sumSoFar(r, n) / Math.min(n, (r.picks || []).length || 1)) : 0),
+    exactProgress: true,
+    // every round faster than anyone can react (a false start counts as 1000 ms, so it never looks fast)
+    cheatCheck: (r) => {
+        const times = (r.picks || []).map(Number);
+        if (times.some((t) => !Number.isFinite(t) || t < 0)) return "fakeScore";
+        return times.length >= 3 && times.every((t) => t < FASTEST_HUMAN_MS) ? "reaction" : null;
+    },
 };
 
 // ---------------- Color Clash ----------------

@@ -151,3 +151,29 @@ describe("quick play", () => {
         expect(pickQuickGame([game("AAAAAA", 3, 6), game("BBBBBB", 3, 12)])!.code).toBe("BBBBBB");
     });
 });
+
+describe("online: one seat per browser", () => {
+    it("a second tab of the same browser can't sit down too", () => {
+        const hub = new FakeHub();
+        const cast = testCast(8);
+        const cards = cast.map((hg) => ({ name: hg.name, imageURL: hg.imageURL }));
+        const host = NetSession.hostLobby(hub.join("h"), "TEST", { ...defaultSetup(cast.length), size: 6 }, cards, opts);
+        const tab1 = NetSession.join(hub.join("t1"), "TEST", opts);
+        const tab2 = NetSession.join(hub.join("t2"), "TEST", opts);
+        const other = NetSession.join(hub.join("o"), "TEST", opts);
+        hub.flush();
+        host.takeSeat({ name: "Host", imageURL: "", castIndex: null }, "host-browser");
+        tab1.takeSeat({ name: "Ana", imageURL: "", castIndex: null }, "ana-browser");
+        tab2.takeSeat({ name: "Ana Again", imageURL: "", castIndex: null }, "ana-browser");
+        other.takeSeat({ name: "Ben", imageURL: "", castIndex: null }, "ben-browser");
+        hub.flush();
+        expect(host.status$.value.setup!.seats.map((s) => s.name)).toEqual(["Host", "Ana", "Ben"]);
+        expect(tab2.status$.value.notice).toContain("one player per browser");
+        // the first tab can still change its name
+        tab1.takeSeat({ name: "Anna", imageURL: "", castIndex: null }, "ana-browser");
+        hub.flush();
+        expect(host.status$.value.setup!.seats.map((s) => s.name)).toEqual(["Host", "Anna", "Ben"]);
+        // the browser's own device id is never sent out to the others
+        expect(JSON.stringify(other.status$.value.setup)).not.toContain("ana-browser");
+    });
+});

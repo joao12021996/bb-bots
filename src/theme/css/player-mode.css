@@ -188,6 +188,22 @@
     color: var(--bbb-gold);
 }
 
+.bbb-cheaters {
+    margin: 8px 0 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(251, 113, 133, 0.14);
+    color: var(--bbb-rose-text);
+    font-weight: 700;
+}
+
+.bbb-flagged {
+    display: block;
+    color: #fb7185;
+    font-weight: 700;
+    font-size: 0.75rem;
+}
+
 /* endurance comps: the cast as cartoons (balance beam, hold the wall) */
 .bbb-crowd {
     display: flex;

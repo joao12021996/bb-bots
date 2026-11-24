@@ -298,6 +298,30 @@ describe("online play", () => {
         all.forEach((s) => expect(s.resyncs).toBe(0));
     });
 
+    it("expels a player who hands in a comp score that can't be real, and their score never counts", () => {
+        const { hub, host, all } = setup(10, [1, 4, 7], 23);
+        let comps: ReturnType<typeof ownScreens> = [];
+        for (let guard = 0; guard < 5000; guard++) {
+            comps = ownScreens(all).filter((o) => o.prompt.kind === "compPlay" && o.session !== host);
+            if (comps.length >= 1) break;
+            expect(step(hub, all)).toBe(true);
+        }
+        const cheat = comps[0];
+        const play = cheat.prompt as Extract<Prompt, { kind: "compPlay" }>;
+        hub.instant = true;
+        play.onStart!();
+        play.onScore(NaN);
+        hub.instant = false;
+        hub.flush();
+        all.forEach((s) => {
+            expect(s.controller!.state.ruleBreakers).toEqual([cheat.owner]);
+            expect(s.controller!.state.cheats![cheat.owner].reason).toBe("fakeScore");
+            expect(s.controller!.liveScores(play.seed, [cheat.owner])[0].done).toBe(false);
+        });
+        settle(hub, host);
+        expectInSync(all);
+    });
+
     it("a player who reloads mid-comp keeps the score they had, everywhere", () => {
         const { hub, host, clients, all } = setup(10, [1, 4, 7], 23);
         let mine: ReturnType<typeof ownScreens>[number] | undefined;

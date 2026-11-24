@@ -2,6 +2,7 @@ import React from "react";
 import { GameState, Houseguest } from "../../model";
 import { WeekRecord } from "../history";
 import { Rand } from "./random";
+import { CheatReason } from "../anticheat";
 
 // Another competitor's final score: bots' simulated results, plus players who already took their turn.
 // Comps use these to show live standings (who's still on the wall, quiz scoreboards).
@@ -96,4 +97,9 @@ export interface CompDefinition {
     // depends on how the others do, like Guess the Number's knockout). Everyone missing keeps their score.
     settle?: (results: { id: number; score: number }[]) => { [id: number]: number };
     available?: (gameState: GameState, history: WeekRecord[]) => boolean;
+    // Catching cheaters (see anticheat): `progress` after every round recorded is exactly the final score, so a
+    // score handed in above it is made up.
+    exactProgress?: boolean;
+    // Rounds no human could have played (like reacting faster than anyone can, every time).
+    cheatCheck?: (r: RoundData) => CheatReason | null;
 }

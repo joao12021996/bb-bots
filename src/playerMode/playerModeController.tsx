@@ -56,6 +56,7 @@ import { HOH, POV, VETO } from "./terms";
 import { final2Partners, reveal, shiftTrust, openPledges, pledge, promisedVotes, settleFinalPledges, settleNominationPledges } from "./social/promises";
 import { WhyTheyDidIt } from "./ui/weekReview";
 import { recordSeason, SeasonSummary } from "../career/career";
+import { CHEAT_SHORT } from "./anticheat";
 import { Hall, pastStory, recordHall } from "../career/halls";
 import { PastSeason } from "../model/playerProfile";
 import { SeasonCard } from "../career/seasonCard";
@@ -1906,7 +1907,27 @@ export class PlayerModeController extends ControllerHouse {
     protected gameOver() {
         const gs = this.state.gameState;
         const weekLabel = (week: number) => dayLabel(gs, week, DAY_PART.eviction);
-        const table = generateVotingTable(gs, weekLabel);
+        const votes = generateVotingTable(gs, weekLabel);
+        // cheaters stay on the record
+        const cheats = this.state.cheats || {};
+        const caught = (this.state.ruleBreakers || []).map((id) => {
+            const c = cheats[id];
+            const why = c ? CHEAT_SHORT[c.reason] : "broke the rules";
+            return `🚨 ${this.player(id).name}: expelled for cheating (${why}${c ? `, ${weekLabel(c.week)}` : ""})`;
+        });
+        const table =
+            caught.length > 0 ? (
+                <div>
+                    <div className="bbb-cheaters">
+                        {caught.map((line) => (
+                            <div key={line}>{line}</div>
+                        ))}
+                    </div>
+                    {votes}
+                </div>
+            ) : (
+                votes
+            );
         const content = this.state.statsHidden ? (
             <div>
                 {table}

@@ -28,6 +28,7 @@ import { partnerOf, Showmance } from "./social/showmance";
 import { shuffled } from "./comps/random";
 import { nextTip, Tip, tipIdsFor } from "./coach";
 import { breakBefore, FINAL_THREE, REGULAR_WEEK, Step } from "./week";
+import { CheatReason, cheatLine, isCheatReason } from "./anticheat";
 
 import { CREEP_LEVEL, PlayerSave, Prompt, LiveComp, actorOf, NetHooks } from "./controllerTypes";
 
@@ -1154,17 +1155,19 @@ export abstract class ControllerCore {
         Object.keys(this.personal$.value).forEach((id) => this.clearPersonal(Number(id)));
     }
 
-    // A player broke the rules (online: opened the browser's inspect tools): expelled on the spot, in front of
-    // everyone. On the block, that's the week's eviction: no vote needed. Already out, they lose their jury seat;
-    // in the final two, every jury vote goes to the other finalist.
-    public ruleBreak() {
+    // A player cheated (opened the browser's inspect tools, used an auto-clicker, handed in a fake score: see
+    // anticheat): expelled on the spot, in front of everyone. On the block, that's the week's eviction: no vote
+    // needed. Already out, they lose their jury seat; in the final two, every jury vote goes to the other finalist.
+    public ruleBreak(why?: CheatReason) {
         const s = this.state;
         const id = this.actingFor;
+        const reason: CheatReason = isCheatReason(why) ? why : "inspect";
         if (id === null || !s.humanIds.includes(id) || this.isRuleBreaker(id) || s.step === Step.GameOver) return;
         s.ruleBreakers = [...(s.ruleBreakers || []), id];
+        s.cheats = { ...(s.cheats || {}), [id]: { reason, week: s.gameState.phase } };
         const hg = this.player(id);
         const name = hg.name;
-        const lines = [`🚨 ${name} opened the inspect tools in the middle of the game. That's against the rules.`];
+        const lines = [cheatLine(name, reason)];
         const week = REGULAR_WEEK;
         const finalThree = FINAL_THREE;
         if (hg.isEvicted) {
@@ -1180,7 +1183,7 @@ export abstract class ControllerCore {
                 evictHouseguest(gs, id);
                 getById(gs, id).isJury = false;
             });
-            this.feedPush(`🚨 ${name} broke the rules and was expelled.`);
+            this.feedPush(`🚨 ${name} was caught cheating and expelled.`);
             lines.push(`${name} has been expelled from the house, effective immediately.`);
             if (finalThree.includes(s.step)) {
                 lines.push("That leaves the final two: on to the jury.");
@@ -1213,10 +1216,21 @@ export abstract class ControllerCore {
                 }
             }
         }
-        this.announce("🚨 Rule breaker", lines);
+        this.announce("🚨 Caught cheating", lines);
         this.clearAllPersonal();
         this.save();
         this.run();
+    }
+
+    // Offline: a player on this device was caught cheating (online, it goes through the session instead).
+    public expel(id: number, reason: CheatReason) {
+        const was = this.actingFor;
+        this.actingFor = id;
+        try {
+            this.ruleBreak(reason);
+        } finally {
+            this.actingFor = was;
+        }
     }
 
     // A player making their own decisions: not expelled, and (online) not away with a bot playing for them.

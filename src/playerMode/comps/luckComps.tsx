@@ -168,6 +168,7 @@ export const HigherOrLowerComp: CompDefinition = {
     },
     format: (s) => `${s} right`,
     progress: (r, n) => rightSoFar(r, n),
+    exactProgress: true,
 };
 
 // ---------------- Bank or Bust ----------------

@@ -142,7 +142,9 @@ export function answer(controller: PlayerModeController, p: Prompt, strategy: St
         p.onDone();
     } else if (p.kind === "compPlay") {
         const win = humansWin === "random" ? random() < 0.5 : humansWin;
-        p.onScore(win ? 1e9 : -1e9);
+        // endurance comps are scored in seconds lasted, and anything past the comp's limit is caught as cheating
+        if (p.comp.kind === "endurance") p.onScore(win ? p.comp.maxSeconds : 0);
+        else p.onScore(win ? 1e9 : -1e9);
     } else if (p.kind === "compResults") {
         p.onDone(rankResults(p.results, controller.state.humanIds)[0].id);
     } else if (p.kind === "choose") {
