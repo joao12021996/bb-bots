@@ -598,7 +598,7 @@ describe("after each round: your answer, everyone else's, then the right one", (
         const { encodeTurns, decodeTurns, settleGuesses, formatGuess, throughCount } = require("./guessTheNumber");
         const { randInt } = require("./random");
         expect(decodeTurns(encodeTurns([2, 1, 3])).slice(0, 4)).toEqual([2, 1, 3, 31]);
-        expect([2, 3, 4, 5, 6, 9].map(throughCount)).toEqual([1, 1, 2, 3, 3, 5]);
+        expect([2, 3, 4, 5, 6, 9, 10, 11, 12, 16].map(throughCount)).toEqual([1, 1, 2, 3, 3, 5, 4, 5, 5, 7]);
         // 4 in it: 2 needed, and 3 get it by guess 2, so 3 go through; then 3 left, the first to get it wins
         const settled = settleGuesses([
             { id: 1, score: encodeTurns([2, 4]) },

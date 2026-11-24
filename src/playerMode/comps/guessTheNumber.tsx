@@ -43,9 +43,10 @@ export function decodeTurns(score: number): number[] {
     return turns;
 }
 
-// How many it takes to end a number: half the field, rounded up; with three or fewer left, the first to get it.
+// How many it takes to end a number: half the field, rounded up; ten or more in it, 40% (rounded up: the bottom
+// 60% are out, so 4 of 10, 5 of 11); with three or fewer left, the first to get it.
 // Get it on the same turn as the last one needed and you're through too, so a tie just means another number.
-export const throughCount = (field: number) => (field <= 3 ? 1 : Math.ceil(field / 2));
+export const throughCount = (field: number) => (field <= 3 ? 1 : field >= 10 ? Math.ceil((field * 2) / 5) : Math.ceil(field / 2));
 
 // Final scores: the last one standing on top; anyone out, by the number they went out on.
 const WON = 10000;
@@ -353,7 +354,7 @@ export const GuessTheNumberComp: CompDefinition = {
     kind: "luck",
     rules:
         "A secret number from 1 to 100, and everyone guesses at once. Every guess is shown once, with higher or lower: keep track of them yourself. " +
-        "Get it and you're locked in, but it stays hidden until half of you have it. Then those go through to a new number, and the rest are out. " +
+        "Get it and you're locked in, but it stays hidden until half of you have it (40% with ten or more of you). Then those go through to a new number, and the rest are out. " +
         "Down to three or fewer, the first to get it wins (a tie on the same guess: another number).",
     maxSeconds: 600,
     Component: GuessTheNumber,
