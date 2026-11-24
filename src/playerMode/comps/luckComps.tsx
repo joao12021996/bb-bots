@@ -12,9 +12,9 @@ function botRand() {
 }
 
 // ---------------- Higher or Lower ----------------
+// Cards are just numbers, 1 to 13 (no A, J, Q or K: nobody should have to compare a 9 with a K).
 
 const HL_GUESSES = 10;
-const CARD = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 
 function HigherOrLower(props: CompProps) {
     const [deck] = React.useState(() => Array.from({ length: HL_GUESSES + 1 }, () => randInt(props.rand, 1, 13)));
@@ -37,7 +37,7 @@ function HigherOrLower(props: CompProps) {
             verdict: right ? "✅ Right!" : "❌ Wrong!",
             correctText: (
                 <>
-                    <b>{CARD[next - 1]}</b> (after {CARD[cur - 1]}){next === cur ? ", a tie: everyone's right" : ""}
+                    <b>{next}</b> (after {cur}){next === cur ? ", a tie: everyone's right" : ""}
                 </>
             ),
             answerLabel: "The next card",
@@ -73,7 +73,7 @@ function HigherOrLower(props: CompProps) {
                     boxShadow: "0 8px 20px rgba(0,0,0,0.5)",
                 }}
             >
-                {CARD[deck[reveal ? i + 1 : i] - 1]}
+                {deck[reveal ? i + 1 : i]}
             </div>
             {reveal ? (
                 <AnswerReveal reveal={reveal} last={i + 1 >= HL_GUESSES} onNext={nextCard} nextLabel="Next card" />
@@ -113,7 +113,7 @@ export const HigherOrLowerComp: CompDefinition = {
     name: "Higher or Lower",
     emoji: "🃏",
     kind: "luck",
-    rules: `A card is face up. Guess whether the next card is higher or lower. ${HL_GUESSES} guesses; most right wins. Mostly luck, but play the odds!`,
+    rules: `Cards are numbered 1 to 13, and one is face up. Guess whether the next card is higher or lower. ${HL_GUESSES} guesses; most right wins. Mostly luck, but play the odds!`,
     maxSeconds: 90,
     Component: HigherOrLower,
     simulate: simulateHigherOrLower,
