@@ -12,7 +12,61 @@ function botRand() {
 }
 
 // ---------------- Higher or Lower ----------------
-// Cards are just numbers, 1 to 13 (no A, J, Q or K: nobody should have to compare a 9 with a K).
+// Playing cards, ace low and king high. They're drawn as real cards (rank in the corners, suit in the middle) so
+// it's clear a K beats a 9.
+
+const RANK = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+const SUITS = ["♠", "♥", "♦", "♣"];
+// The suit doesn't matter; it's picked from the card's place in the deck, so the same rank twice still looks like
+// two different cards.
+const suitOf = (value: number, index: number) => SUITS[(value * 3 + index * 5) % 4];
+const cardName = (value: number, index: number) => `${RANK[value - 1]}${suitOf(value, index)}`;
+
+function PlayingCard({ value, index }: { value: number; index: number }) {
+    const suit = suitOf(value, index);
+    const color = suit === "♥" || suit === "♦" ? "#c62828" : "#111";
+    const rank = RANK[value - 1];
+    const corner = (flip: boolean): React.CSSProperties => ({
+        position: "absolute",
+        ...(flip ? { bottom: 8, right: 10, transform: "rotate(180deg)" } : { top: 8, left: 10 }),
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        lineHeight: 1,
+        fontSize: "1.3rem",
+        fontWeight: 800,
+    });
+    return (
+        <div
+            aria-label={`${rank}${suit}`}
+            style={{
+                position: "relative",
+                width: 130,
+                height: 182,
+                margin: "12px auto",
+                borderRadius: 12,
+                background: "white",
+                color,
+                border: "1px solid #ccc",
+                boxShadow: "0 8px 20px rgba(0,0,0,0.5)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "Georgia, 'Times New Roman', serif",
+            }}
+        >
+            {[false, true].map((flip) => (
+                <div key={String(flip)} style={corner(flip)}>
+                    <span>{rank}</span>
+                    <span>{suit}</span>
+                </div>
+            ))}
+            <div style={{ fontSize: "3.2rem", fontWeight: 800, lineHeight: 1 }}>{rank}</div>
+            <div style={{ fontSize: "2.4rem", lineHeight: 1 }}>{suit}</div>
+        </div>
+    );
+}
 
 const HL_GUESSES = 10;
 
@@ -37,7 +91,7 @@ function HigherOrLower(props: CompProps) {
             verdict: right ? "✅ Right!" : "❌ Wrong!",
             correctText: (
                 <>
-                    <b>{next}</b> (after {cur}){next === cur ? ", a tie: everyone's right" : ""}
+                    <b>{cardName(next, i + 1)}</b> (after {cardName(cur, i)}){next === cur ? ", a tie: everyone's right" : ""}
                 </>
             ),
             answerLabel: "The next card",
@@ -57,29 +111,12 @@ function HigherOrLower(props: CompProps) {
             <Title>
                 Card {Math.min(i + 1, HL_GUESSES)} of {HL_GUESSES}, {correct} right
             </Title>
-            <div
-                style={{
-                    width: 120,
-                    height: 170,
-                    margin: "12px auto",
-                    borderRadius: 12,
-                    background: "white",
-                    color: "#111",
-                    fontSize: "3.5rem",
-                    fontWeight: 800,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "0 8px 20px rgba(0,0,0,0.5)",
-                }}
-            >
-                {deck[reveal ? i + 1 : i]}
-            </div>
+            <PlayingCard value={deck[reveal ? i + 1 : i]} index={reveal ? i + 1 : i} />
             {reveal ? (
                 <AnswerReveal reveal={reveal} last={i + 1 >= HL_GUESSES} onNext={nextCard} nextLabel="Next card" />
             ) : (
                 <div>
-                    <Subtle>Will the next card be higher or lower? (A tie counts as right.)</Subtle>
+                    <Subtle>Will the next card be higher or lower? Ace is low, king is high. (A tie counts as right.)</Subtle>
                     <BigButton kind="success" onClick={() => guess(true)}>
                         ⬆️ Higher
                     </BigButton>
@@ -113,7 +150,7 @@ export const HigherOrLowerComp: CompDefinition = {
     name: "Higher or Lower",
     emoji: "🃏",
     kind: "luck",
-    rules: `Cards are numbered 1 to 13, and one is face up. Guess whether the next card is higher or lower. ${HL_GUESSES} guesses; most right wins. Mostly luck, but play the odds!`,
+    rules: `A playing card is face up (ace low, king high). Guess whether the next card is higher or lower. ${HL_GUESSES} guesses; most right wins. Mostly luck, but play the odds!`,
     maxSeconds: 90,
     Component: HigherOrLower,
     simulate: simulateHigherOrLower,
