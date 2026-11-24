@@ -595,6 +595,24 @@
     }
 }
 
+/* ---------- Guess the Number: every guess so far on this number ---------- */
+.bbb-guesses {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+    max-width: 420px;
+    margin: 6px auto;
+}
+.bbb-guesses span {
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border: 1px solid var(--bbb-border);
+    background: rgba(var(--bbb-ink), 0.05);
+}
+
 /* ---------- Hide the Veto tiebreaker: the search, as a cartoon (see hideTiebreak.tsx) ---------- */
 .bbb-search {
     max-width: 640px;

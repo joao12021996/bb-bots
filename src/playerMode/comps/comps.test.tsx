@@ -513,12 +513,14 @@ describe("the score between stages", () => {
 });
 
 describe("after each round: your answer, everyone else's, then the right one", () => {
-    async function mount(id: string, seed: number) {
+    async function mount(id: string, seed: number, scores?: number[]) {
         const comp = ALL_COMPS.find((c) => c.id === id)!;
         const gs = game();
         const participants = nonEvictedHouseguests(gs).slice(0, 3);
         const ctx = { seed, gameState: gs, history, participants };
-        const opponents = participants.slice(1).map((hg, i) => ({ hg, ...comp.simulate(ctx, 0.5, seededRand(i + 1)) }));
+        const opponents = participants
+            .slice(1)
+            .map((hg, i) => ({ hg, ...(scores ? { score: scores[i] } : comp.simulate(ctx, 0.5, seededRand(i + 1))) }));
         const finished: number[] = [];
         const container = document.createElement("div");
         document.body.appendChild(container);
@@ -587,6 +589,56 @@ describe("after each round: your answer, everyone else's, then the right one", (
             await m.click("See how I did");
             expect(m.finished).toEqual([4]);
             m.done();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it("Guess the Number: everyone's guess with higher or lower; got it together, a new number; the only one, the win", async () => {
+        const { encodeTurns, decodeTurns } = require("./guessTheNumber");
+        const { randInt } = require("./random");
+        expect(decodeTurns(encodeTurns([2, 1, 3]))).toEqual([2, 1, 3, 99]);
+        // got the first number sooner beats anything after it; level on it, the second number decides
+        expect(encodeTurns([2, 5, 5, 5])).toBeGreaterThan(encodeTurns([3, 1, 1, 1]));
+        expect(encodeTurns([2, 1])).toBeGreaterThan(encodeTurns([2, 2]));
+        jest.useFakeTimers();
+        try {
+            const r = seededRand(7);
+            const secrets = [0, 1, 2, 3].map(() => randInt(r, 1, 100));
+            const wrong = (n: number) => String(n === 1 ? 2 : n - 1);
+            const type = async (m: any, digits: string) => {
+                for (const d of digits) await m.click(d);
+                await m.click("Guess");
+            };
+            // both bots get the first number on guess 2; on the second, one gets it on guess 1, the other on guess 3
+            const m = await mount("guess-the-number", 7, [encodeTurns([2, 1, 4, 4]), encodeTurns([2, 3, 4, 4])]);
+            await type(m, wrong(secrets[0]));
+            const rows = m.answers();
+            expect(rows).toHaveLength(3);
+            expect(rows[0]).toMatch(/^You: \d+ (⬆️|⬇️)$/);
+            rows.slice(1).forEach((row) => expect(row).not.toContain("✅"));
+            expect(m.container.textContent).toContain("Nobody got it");
+            await m.click("Next guess");
+            expect(m.container.querySelectorAll(".bbb-guesses span")).toHaveLength(3);
+            await type(m, String(secrets[0]));
+            expect(m.answers().filter((row) => row.endsWith("✅"))).toHaveLength(3);
+            expect(m.container.textContent).toContain("New number");
+            await m.click("Next number");
+            expect(m.container.textContent).toContain("Number 2, guess 1");
+            await type(m, wrong(secrets[1]));
+            expect(m.container.textContent).toContain("You're out");
+            expect(m.finished).toEqual([]);
+            await m.click("See how I did");
+            expect(m.finished).toEqual([encodeTurns([2, 2])]);
+            m.done();
+
+            // the only one to get it wins
+            const w = await mount("guess-the-number", 7, [encodeTurns([3, 1, 1, 1]), encodeTurns([4, 1, 1, 1])]);
+            await type(w, String(secrets[0]));
+            expect(w.container.textContent).toContain("Only you got it");
+            await w.click("See how I did");
+            expect(w.finished[0]).toBeGreaterThan(encodeTurns([3, 1, 1, 1]));
+            w.done();
         } finally {
             jest.useRealTimers();
         }
