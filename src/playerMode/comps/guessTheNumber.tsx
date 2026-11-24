@@ -6,7 +6,8 @@ import { AnswerBoards, BoardRow, boardsDoneAt } from "./compVideo";
 import { clamp, Rand, randInt, seededRand } from "./random";
 
 // Guess the Number: one secret number from 1 to 100, and everyone guesses at once. Every guess is shown, each
-// with "higher" or "lower", so everyone narrows it down together. The first time anyone gets it, everyone who
+// with "higher" or "lower", once, as it's made: nobody's shown the guesses again or what's still possible, so
+// keeping track is up to you. The first time anyone gets it, everyone who
 // didn't is out. If only one got it, they win; if two or more got it on the same turn, they play a new number.
 //
 // How it fits a comp where everyone takes their own turn: a score is the turn someone got each number on, number
@@ -86,7 +87,6 @@ function GuessTheNumber(props: CompProps) {
     const [turn, setTurn] = React.useState(1);
     const [mine, setMine] = React.useState<number[]>([]); // the turn the player got each number on
     const [range, setRange] = React.useState<[number, number]>([1, 100]);
-    const [guessed, setGuessed] = React.useState<{ g: number; dir: number }[]>([]); // this number's guesses so far
     const [value, setValue] = React.useState("");
     const [shown, setShown] = React.useState<{ turn: Turn; outcome: Outcome; score: number } | null>(null);
 
@@ -154,7 +154,6 @@ function GuessTheNumber(props: CompProps) {
         props.report(score);
         if (props.pauseClock) props.pauseClock(true);
         setRange([nlo, nhi]);
-        setGuessed([...guessed, ...all.map((x) => ({ g: x.g, dir: Math.sign(secret - x.g) }))]);
         setShown({ turn: { rows, found, salt: number * 10 + turn }, outcome, score });
     };
 
@@ -172,7 +171,6 @@ function GuessTheNumber(props: CompProps) {
             setNumber(number + 1);
             setTurn(1);
             setRange([1, 100]);
-            setGuessed([]);
             setShown(null);
             return;
         }
@@ -206,11 +204,6 @@ function GuessTheNumber(props: CompProps) {
                 </Subtle>
                 <AnswerBoards rows={t.rows} salt={t.salt} />
                 <div className="bbb-reveal-late">
-                    {outcome.kind === "next" && (
-                        <Subtle>
-                            It's between {range[0]} and {range[1]}.
-                        </Subtle>
-                    )}
                     <Title>{verdict}</Title>
                 </div>
                 <BigButton kind="success" onClick={carryOn}>
@@ -220,7 +213,6 @@ function GuessTheNumber(props: CompProps) {
         );
     }
 
-    const sorted = [...guessed].sort((a, b) => a.g - b.g);
     return (
         <div>
             <Title>
@@ -233,18 +225,7 @@ function GuessTheNumber(props: CompProps) {
             ) : (
                 <Subtle>Guess a number from 1 to 100.</Subtle>
             )}
-            {sorted.length > 0 && (
-                <div className="bbb-guesses">
-                    {sorted.map((x, i) => (
-                        <span key={i} className={x.dir > 0 ? "is-low" : "is-high"}>
-                            {x.g} {x.dir > 0 ? "⬆️" : "⬇️"}
-                        </span>
-                    ))}
-                </div>
-            )}
-            <Subtle>
-                It's between {range[0]} and {range[1]}.
-            </Subtle>
+            {turn > 1 && <Subtle>Remember the guesses: nobody will show you them again.</Subtle>}
             <Keypad value={value} onChange={setValue} onSubmit={submit} maxLength={3} submitLabel="Guess" />
         </div>
     );
@@ -262,7 +243,7 @@ export const GuessTheNumberComp: CompDefinition = {
     emoji: "💯",
     kind: "luck",
     rules:
-        "One secret number from 1 to 100, and everyone guesses at once. Every guess is shown, with higher or lower, so you all close in on it together. " +
+        "One secret number from 1 to 100, and everyone guesses at once. Every guess is shown once, with higher or lower: keep track of them yourself. " +
         "The first time anyone gets it, everyone who didn't is out. Only one got it? They win. Two or more? They play a new number.",
     maxSeconds: 240,
     Component: GuessTheNumber,

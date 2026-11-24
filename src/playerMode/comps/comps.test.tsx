@@ -619,7 +619,9 @@ describe("after each round: your answer, everyone else's, then the right one", (
             rows.slice(1).forEach((row) => expect(row).not.toContain("✅"));
             expect(m.container.textContent).toContain("Nobody got it");
             await m.click("Next guess");
-            expect(m.container.querySelectorAll(".bbb-guesses span")).toHaveLength(3);
+            // nobody's shown the guesses again, or what's still possible
+            expect(m.container.textContent).not.toContain("It's between");
+            expect(m.container.textContent).not.toMatch(/\d+ (⬆️|⬇️)/);
             await type(m, String(secrets[0]));
             expect(m.answers().filter((row) => row.endsWith("✅"))).toHaveLength(3);
             expect(m.container.textContent).toContain("New number");
