@@ -2,7 +2,7 @@ import React from "react";
 import { defaultJurySize, GameState, Houseguest, nonEvictedHouseguests, PlayerProfile } from "../../model";
 import { WeekRecord } from "../history";
 import { ALL_COMPS } from "../comps";
-import { CompPlay, CompResult, CompResults, tiedForFirst } from "../comps/compRunner";
+import { CompPlay, CompResult, CompResults, settleResults, tiedForFirst } from "../comps/compRunner";
 import { CompDefinition, Opponent } from "../comps/compTypes";
 import { seededRand } from "../comps/random";
 import { botHide, HideTiebreakPlay, HideTiebreakResults, hideOutcome, tiebreakHouse, VetoHide } from "../comps/hideTiebreak";
@@ -228,10 +228,11 @@ export function CompTestMode(props: { cast: PlayerProfile[] }) {
                     opponents={game.opponents}
                     moreToPlay={false}
                     onScore={(score, answers, picks) => {
-                        const all = [
+                        const all = settleResults(game.comp, [
                             { id: game.participants[0].id, score, answers, picks },
                             ...game.opponents.map((o) => ({ id: o.hg.id, score: o.score, answers: o.answers, picks: o.picks })),
-                        ];
+                        ]);
+                        score = all[0].score;
                         setNewBest(recordScore(game.comp.id, score) ? score : null);
                         playCue(Math.max(...all.map((r) => r.score)) === score ? "win" : "lose");
                         setResults(all);

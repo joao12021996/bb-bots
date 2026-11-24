@@ -92,5 +92,8 @@ export interface CompDefinition {
     // their answers and picks (players' and bots' alike). Shown between rounds; see StageScores.
     progress?: (r: RoundData, rounds: number, ctx: SimContext) => number;
     staged?: boolean; // played in rounds, with the scores between them worked out another way (knockouts)
+    // Once everyone's done: the final scores, worked out from everyone's together (a comp where how you do
+    // depends on how the others do, like Guess the Number's knockout). Everyone missing keeps their score.
+    settle?: (results: { id: number; score: number }[]) => { [id: number]: number };
     available?: (gameState: GameState, history: WeekRecord[]) => boolean;
 }

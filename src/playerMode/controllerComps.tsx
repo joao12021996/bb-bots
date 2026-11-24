@@ -8,7 +8,7 @@ import { botPour, botSwaps, claimLine, Pour, STRIKES_OUT, TAINTED_WINE_ID, TAINT
 import { Sip } from "./comps/wineSip";
 import { pickQuickComp, pickWeeklyComp } from "./comps";
 import { sample, seededRand } from "./comps/random";
-import { CompResult, LiveScore, tiedForFirst } from "./comps/compRunner";
+import { CompResult, LiveScore, settleResults, tiedForFirst } from "./comps/compRunner";
 import { shiftRelationship } from "./social/socialActions";
 import { botGuess, closestGuesses, makeTiebreaker, TiebreakGuess } from "./comps/tiebreaker";
 import { botHide, hideOutcome, tiebreakHouse, VetoHide } from "./comps/hideTiebreak";
@@ -236,7 +236,7 @@ export abstract class ControllerComps extends ControllerCore {
         let worstFirst: number[] = [];
         // a player a bot stood in for is marked: they rank under everyone else, and can't win
         const mark = (results: CompResult[]) =>
-            results.map((r) => {
+            settleResults(comp, results).map((r) => {
                 const { away, ...rest } = r;
                 return this.stoodIn(r.id) ? { ...rest, away: true } : rest;
             });

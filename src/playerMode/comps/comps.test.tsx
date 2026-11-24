@@ -594,56 +594,132 @@ describe("after each round: your answer, everyone else's, then the right one", (
         }
     });
 
-    it("Guess the Number: everyone's guess with higher or lower; got it together, a new number; the only one, the win", async () => {
-        const { encodeTurns, decodeTurns } = require("./guessTheNumber");
+    it("Guess the Number: right guesses stay hidden until half the field has them; they go through, the rest are out", async () => {
+        const { encodeTurns, decodeTurns, settleGuesses, formatGuess } = require("./guessTheNumber");
         const { randInt } = require("./random");
-        expect(decodeTurns(encodeTurns([2, 1, 3]))).toEqual([2, 1, 3, 99]);
-        // got the first number sooner beats anything after it; level on it, the second number decides
-        expect(encodeTurns([2, 5, 5, 5])).toBeGreaterThan(encodeTurns([3, 1, 1, 1]));
-        expect(encodeTurns([2, 1])).toBeGreaterThan(encodeTurns([2, 2]));
+        expect(decodeTurns(encodeTurns([2, 1, 3])).slice(0, 4)).toEqual([2, 1, 3, 31]);
+        // 4 in it: the first 2 to get number 1 go through (here 3, tied on turn 2), then the first 2 of those 3
+        const settled = settleGuesses([
+            { id: 1, score: encodeTurns([2, 4, 1]) },
+            { id: 2, score: encodeTurns([2, 2, 3]) },
+            { id: 3, score: encodeTurns([1, 3, 2]) },
+            { id: 4, score: encodeTurns([3, 1, 1]) },
+        ]);
+        expect(formatGuess(settled[4])).toBe("out on number 1");
+        expect(formatGuess(settled[1])).toBe("out on number 2");
+        expect(formatGuess(settled[2])).toBe("out on number 3");
+        expect(formatGuess(settled[3])).toBe("🏆 last one standing");
+        expect(formatGuess(encodeTurns([1]))).toBe("🤫"); // what's handed in gives nothing away
         jest.useFakeTimers();
         try {
             const r = seededRand(7);
-            const secrets = [0, 1, 2, 3].map(() => randInt(r, 1, 100));
+            const secrets = Array.from({ length: 8 }, () => randInt(r, 1, 100));
             const wrong = (n: number) => String(n === 1 ? 2 : n - 1);
             const type = async (m: any, digits: string) => {
                 for (const d of digits) await m.click(d);
                 await m.click("Guess");
             };
-            // both bots get the first number on guess 2; on the second, one gets it on guess 1, the other on guess 3
-            const m = await mount("guess-the-number", 7, [encodeTurns([2, 1, 4, 4]), encodeTurns([2, 3, 4, 4])]);
+            const board = (m: any, who: string) => m.answers().find((row: string) => row.startsWith(`${who}: `));
+
+            // the bots get number 1 on guesses 2 and 3; the player never does, and is out once both have it
+            const m = await mount("guess-the-number", 7, [encodeTurns([2, 1]), encodeTurns([3, 1])]);
+            const [a, b] = m.opponents.map((o) => o.hg.name);
             await type(m, wrong(secrets[0]));
-            const rows = m.answers();
-            expect(rows).toHaveLength(3);
-            expect(rows[0]).toMatch(/^You: \d+ (⬆️|⬇️)$/);
-            rows.slice(1).forEach((row) => expect(row).not.toContain("✅"));
-            expect(m.container.textContent).toContain("Nobody got it");
+            expect(m.answers()).toHaveLength(3);
+            expect(board(m, "You")).toMatch(/^You: \d+ (⬆️|⬇️)$/);
+            expect(m.container.textContent).toContain("Nobody's got it yet");
             await m.click("Next guess");
-            // nobody's shown the guesses again, or what's still possible
             expect(m.container.textContent).not.toContain("It's between");
-            expect(m.container.textContent).not.toMatch(/\d+ (⬆️|⬇️)/);
-            await type(m, String(secrets[0]));
-            expect(m.answers().filter((row) => row.endsWith("✅"))).toHaveLength(3);
-            expect(m.container.textContent).toContain("New number");
-            await m.click("Next number");
-            expect(m.container.textContent).toContain("Number 2, guess 1");
-            await type(m, wrong(secrets[1]));
+            await type(m, wrong(secrets[0]));
+            expect(board(m, a)).toBe(`${a}: 🤫`); // got it, hidden
+            expect(m.container.textContent).toContain("1 of the 2 needed has got it");
+            await m.click("Next guess");
+            await type(m, wrong(secrets[0]));
+            expect(board(m, a)).toBe(`${a}: ${secrets[0]} ✅`);
+            expect(board(m, b)).toBe(`${b}: ${secrets[0]} ✅`);
             expect(m.container.textContent).toContain("You're out");
-            expect(m.finished).toEqual([]);
             await m.click("See how I did");
-            expect(m.finished).toEqual([encodeTurns([2, 2])]);
+            expect(m.finished).toEqual([encodeTurns([])]);
             m.done();
 
-            // the only one to get it wins
-            const w = await mount("guess-the-number", 7, [encodeTurns([3, 1, 1, 1]), encodeTurns([4, 1, 1, 1])]);
+            // the player gets it first, locked in and hidden; once a bot has it too they go through, and on the
+            // second number (two left: the first to get it wins) the player gets it alone
+            const w = await mount("guess-the-number", 7, [encodeTurns([2, 2]), encodeTurns([3, 1])]);
+            const [a2, b2] = w.opponents.map((o) => o.hg.name);
             await type(w, String(secrets[0]));
-            expect(w.container.textContent).toContain("Only you got it");
+            expect(board(w, "You")).toBe("You: 🤫");
+            await w.click("Next guess");
+            expect(w.container.textContent).toContain("You've got it");
+            await w.click("Next guesses");
+            expect(board(w, "You")).toBe(`You: ${secrets[0]} ✅`);
+            expect(board(w, a2)).toBe(`${a2}: ${secrets[0]} ✅`);
+            expect(board(w, b2)).not.toContain("✅");
+            await w.click("Next number");
+            expect(w.answers()).toHaveLength(0);
+            expect(w.container.textContent).toContain(`Still in: you and ${a2}`);
+            await type(w, String(secrets[1]));
+            expect(w.container.textContent).toContain("last one standing");
             await w.click("See how I did");
-            expect(w.finished[0]).toBeGreaterThan(encodeTurns([3, 1, 1, 1]));
+            expect(w.finished).toEqual([encodeTurns([1, 1])]);
+            const final = settleGuesses([
+                { id: 0, score: w.finished[0] },
+                { id: 1, score: encodeTurns([2, 2]) },
+                { id: 2, score: encodeTurns([3, 1]) },
+            ]);
+            expect(formatGuess(final[0])).toBe("🏆 last one standing");
             w.done();
         } finally {
             jest.useRealTimers();
         }
+    });
+
+    it("Guess the Number online: a turn waits for the other players' guesses, and shows the real ones", async () => {
+        const { encodeTurns } = require("./guessTheNumber");
+        const { randInt } = require("./random");
+        const comp = ALL_COMPS.find((c) => c.id === "guess-the-number")!;
+        const gs = game();
+        const [me, rival, bot] = nonEvictedHouseguests(gs).slice(0, 3);
+        const r = seededRand(7);
+        const secret = randInt(r, 1, 100);
+        const wrong = (n: number) => (n === 1 ? 2 : n - 1);
+        const theirs = secret > 50 ? secret - 10 : secret + 10;
+        const recorded: (number | string)[] = [];
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        const render = (picks: string[]) =>
+            act(async () => {
+                ReactDOM.render(
+                    <StageContext.Provider
+                        value={{ comp, ctx: { seed: 7, gameState: gs, history, participants: [me, rival, bot] }, human: me, mine: () => ({}), opponents: [], playing: [{ hg: rival, score: null, picks }] } as StageInfo}
+                    >
+                        <comp.Component
+                            participants={[me, rival, bot]}
+                            human={me}
+                            gameState={gs}
+                            history={history}
+                            rand={seededRand(7)}
+                            opponents={[{ hg: bot, score: encodeTurns([4]) }]}
+                            report={() => undefined}
+                            finish={() => undefined}
+                            recordAnswer={(_i: number, _c: boolean, pick?: number | string) => recorded.push(pick!)}
+                        />
+                    </StageContext.Provider>,
+                    container
+                );
+            });
+        await render([]);
+        const click = (text: string) => act(async () => (Array.from(container.querySelectorAll("button")).find((b) => b.textContent!.trim() === text) as HTMLButtonElement).click());
+        for (const d of String(wrong(secret))) await click(d);
+        await click("Guess");
+        expect(recorded).toEqual([`0.1.${wrong(secret)}`]); // the guess goes out to the others
+        expect(container.textContent).toContain(`Waiting for ${rival.name} to guess`);
+        await render([`0.1.${theirs}`]); // theirs comes in
+        const rows = Array.from(container.querySelectorAll(".bbb-board-fig")).map((f) => `${f.querySelector(".bbb-board-name")!.textContent}: ${f.querySelector(".bbb-board-front")!.textContent}`);
+        expect(rows).toContain(`${rival.name}: ${theirs} ${theirs < secret ? "⬆️" : "⬇️"}`);
+        act(() => {
+            ReactDOM.unmountComponentAtNode(container);
+        });
+        container.remove();
     });
 
     it("Count 'Em: everyone's count, and how many there really were", async () => {

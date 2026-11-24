@@ -40,6 +40,13 @@ export function tiedForFirst(
     return tied.sort((a, b) => b.score - a.score).map((r) => r.id);
 }
 
+// The final scores, for a comp that works them out from everyone's together (see CompDefinition.settle).
+export function settleResults<T extends { id: number; score: number }>(comp: CompDefinition, results: T[]): T[] {
+    if (!comp.settle) return results;
+    const scores = comp.settle(results);
+    return results.map((r) => (scores[r.id] !== undefined ? { ...r, score: scores[r.id] } : r));
+}
+
 // Ranks results best first. Nobody wins a tie for free: a tie for first goes to a tiebreaker.
 export function rankResults(results: CompResult[], _humanIds: number[] = []): CompResult[] {
     return [...results].sort((a, b) => (a.away ? 1 : 0) - (b.away ? 1 : 0) || b.score - a.score);
@@ -210,6 +217,7 @@ export function CompPlay(props: CompPlayProps) {
                 hg: props.participants.find((p) => p.id === l.id)!,
                 score: l.score,
                 answers: l.answers,
+                picks: l.picks,
             }))
             .filter((p) => !!p.hg);
         return {

@@ -1,45 +1,80 @@
 import React from "react";
 import { BigButton, Subtle, Title } from "../ui/common";
-import { CompDefinition, CompProps, Opponent, SimContext, SimResult } from "./compTypes";
-import { Keypad } from "./compUi";
+import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
+import { Keypad, StageContext } from "./compUi";
 import { AnswerBoards, BoardRow, boardsDoneAt } from "./compVideo";
 import { clamp, Rand, randInt, seededRand } from "./random";
 
-// Guess the Number: one secret number from 1 to 100, and everyone guesses at once. Every guess is shown, each
-// with "higher" or "lower", once, as it's made: nobody's shown the guesses again or what's still possible, so
-// keeping track is up to you. The first time anyone gets it, everyone who
-// didn't is out. If only one got it, they win; if two or more got it on the same turn, they play a new number.
+// Guess the Number: a secret number from 1 to 100, and everyone still in guesses at once. Every guess is shown
+// once, with "higher" or "lower" (nobody's shown the guesses again, or what's still possible: keeping track is up to
+// you). A right guess stays hidden: whoever got it is locked in, and nobody sees the number. Once half the field
+// has it, it's revealed: they go through to a new number, and everyone else is out. The last one standing wins.
 //
-// How it fits a comp where everyone takes their own turn: a score is the turn someone got each number on, number
-// after number (fewer is better), compared number by number. That's exactly the knockout: whoever got the first
-// number soonest is still in, and of those, whoever got the second soonest, and so on. A bot's turns are worked
-// out up front; on screen its wrong guesses are made up to fit, closing in on the number at the same pace a
-// player can.
+// How it fits a comp where everyone takes their own turn: what anyone hands in is the turn they got each number on
+// (a bot's are worked out up front; on screen its wrong guesses are made up to fit, closing in at the pace a player
+// can). Once everyone's done, `settle` plays the knockout out from those turns, the same way the screen did, and
+// gives the final scores. Online, the players in it see each other's real guesses: each guess goes out with the
+// score so far, and a turn waits until everyone still guessing has made theirs.
 
-const NUMBERS = 4; // after this many numbers, anyone still tied goes to the tiebreaker
+const NUMBERS = 8; // after this many numbers, anyone still in goes to the tiebreaker
 const MAX_TURN = 5; // by the fifth turn there's only one number left to guess
 // How wide the range of numbers still possible is, before each turn: everyone's guesses close it in this fast.
 const WIDTHS = [100, 30, 9, 3, 1];
-const BASE = 100;
-const NOT_IN = BASE - 1; // a number someone never got to play (they were out by then)
+const BASE = 32;
+const NOT_IN = BASE - 1; // never got it (out by then)
+const WAIT_MS = 60000; // online: how long a turn waits on a player who's gone quiet
 
-// Turns per number, best first, into a score (higher is better).
+// The turn someone got each number on, into what they hand in (always below zero).
 export function encodeTurns(turns: number[]): number {
     let x = 0;
-    for (let i = 0; i < NUMBERS; i++) x = x * BASE + (turns[i] ?? NOT_IN);
+    for (let i = 0; i < NUMBERS; i++) x = x * BASE + clamp(turns[i] ?? NOT_IN, 1, NOT_IN);
     return -x;
 }
 
 export function decodeTurns(score: number): number[] {
-    let x = Math.round(Math.abs(score));
-    // older saves: just the number of guesses
-    if (x < BASE) return [x];
+    if (score >= 0) return [];
+    let x = Math.round(-score);
+    if (x < BASE) return [x]; // older saves: just the number of guesses
     const turns: number[] = [];
     for (let i = 0; i < NUMBERS; i++) {
         turns.unshift(x % BASE);
         x = Math.floor(x / BASE);
     }
     return turns;
+}
+
+// How many get through a number: half the field, rounded up (two left: the first to get it wins).
+export const throughCount = (field: number) => Math.ceil(field / 2);
+
+// Final scores: the last one standing on top; anyone out, by the number they went out on.
+const WON = 10000;
+const STILL_IN = 5000; // still in after every number: the tiebreaker
+const outScore = (number: number, turn: number) => 100 * (number + 1) + (40 - Math.min(turn, NOT_IN));
+
+// The knockout, played out from everyone's turns, exactly as the screen plays it.
+export function settleGuesses(results: { id: number; score: number }[]): { [id: number]: number } {
+    const turns: { [id: number]: number[] } = {};
+    results.forEach((r) => (turns[r.id] = decodeTurns(r.score)));
+    const t = (id: number, n: number) => {
+        const v = turns[id][n];
+        return v && v > 0 && v < NOT_IN ? v : NOT_IN;
+    };
+    const scores: { [id: number]: number } = {};
+    let field = results.map((r) => r.id);
+    for (let n = 0; n < NUMBERS && field.length > 1; n++) {
+        const got = field
+            .map((id) => t(id, n))
+            .filter((v) => v < NOT_IN)
+            .sort((a, b) => a - b);
+        const need = throughCount(field.length);
+        const cutoff = got.length === 0 ? 0 : got[Math.min(need, got.length) - 1];
+        const through = field.filter((id) => t(id, n) <= cutoff);
+        field.filter((id) => !through.includes(id)).forEach((id) => (scores[id] = outScore(n, t(id, n))));
+        field = through;
+    }
+    if (field.length === 1) scores[field[0]] = WON;
+    else field.forEach((id) => (scores[id] = STILL_IN));
+    return scores;
 }
 
 function secretsFrom(rand: Rand): number[] {
@@ -72,137 +107,190 @@ function wrongGuess(noise: Rand, secret: number, lo: number, hi: number, nextWid
     return goLow ? secret - d : secret + d;
 }
 
-interface Turn {
-    rows: BoardRow[];
-    found: number[]; // who got it
-    salt: number;
+// A guess, as it goes out to the other players: "number.turn.guess".
+const pickOf = (number: number, turn: number, guess: number) => `${number}.${turn}.${guess}`;
+function guessIn(picks: (number | string)[] | undefined, number: number, turn: number): number | undefined {
+    const head = `${number}.${turn}.`;
+    const p = (picks || []).find((x) => typeof x === "string" && x.startsWith(head));
+    return p === undefined ? undefined : Number(String(p).slice(head.length));
 }
 
-type Outcome = { kind: "next" } | { kind: "won" } | { kind: "out" } | { kind: "tie"; withIds: number[] } | { kind: "tiebreak" } | { kind: "found" };
+interface Shown {
+    rows: BoardRow[];
+    salt: number;
+    lockedNow: number; // how many have it so far (hidden)
+    need: number;
+    through?: number[]; // it's out: who got through
+}
 
 function GuessTheNumber(props: CompProps) {
+    const info = React.useContext(StageContext);
+    const me = props.human.id;
     const [secrets] = React.useState(() => secretsFrom(props.rand));
     const [noise] = React.useState(() => seededRand(Math.floor(props.rand() * 1e9)));
     const [number, setNumber] = React.useState(0); // which number (0-based)
     const [turn, setTurn] = React.useState(1);
     const [mine, setMine] = React.useState<number[]>([]); // the turn the player got each number on
-    const [range, setRange] = React.useState<[number, number]>([1, 100]);
+    const [myTurn, setMyTurn] = React.useState<number | null>(null); // got this number, on this turn (hidden)
+    const [range, setRange] = React.useState<[number, number]>([1, 100]); // for making up wrong guesses
     const [value, setValue] = React.useState("");
-    const [shown, setShown] = React.useState<{ turn: Turn; outcome: Outcome; score: number } | null>(null);
+    const [shown, setShown] = React.useState<Shown | null>(null);
+    const [pending, setPending] = React.useState<{ guess: number | null; since: number } | null>(null);
+    const [now, setNow] = React.useState(Date.now());
+    const sent = React.useRef(0);
 
-    // everyone else whose turns are known (bots, and players who have played), with the turns they got each number on
-    const others = React.useMemo(
-        () =>
-            props.opponents
-                .filter((o: Opponent) => !o.live || o.live.done)
-                .map((o) => ({ hg: o.hg, turns: decodeTurns(o.score) })),
-        [props.opponents]
-    );
-    // still in for this number: got every number before it on the same turn as the player
-    const inNow = others.filter((o) => mine.every((t, i) => o.turns[i] === t));
+    // everyone else: bots and players done (their turns known), and online, players still playing (their guesses
+    // coming in)
+    const known = props.opponents.map((o) => ({ id: o.hg.id, hg: o.hg, turns: decodeTurns(o.score), picks: o.picks }));
+    const playing = info ? info.playing.filter((p) => !known.some((k) => k.id === p.hg.id)) : [];
+    const blind = known.length === 0 && playing.length === 0 && props.participants.length > 1;
+    const [field, setField] = React.useState<number[]>(() => [me, ...known.map((k) => k.id), ...playing.map((p) => p.hg.id)]);
+    const lastNumber = blind ? Math.min(NUMBERS, Math.ceil(Math.log2(props.participants.length)) + 1) : NUMBERS;
     const secret = secrets[number];
+    const faceOf = (id: number) =>
+        id === me ? props.human : (known.find((k) => k.id === id)?.hg ?? playing.find((p) => p.hg.id === id)?.hg ?? { name: "?", imageURL: "" });
+    const nameOf = (id: number) => (id === me ? "You" : faceOf(id).name);
 
-    const submit = () => {
-        const g = parseInt(value, 10);
-        if (!(g >= 1 && g <= 100)) {
-            setValue("");
-            return;
+    const { report } = props;
+    React.useEffect(() => void report(encodeTurns([NOT_IN])), [report]); // so the guesses go out from the first one
+
+    // someone else's guess on this number, on turn k: undefined while it hasn't come in, NaN for a made-up wrong one
+    const theirGuess = (id: number, k: number): number | undefined => {
+        const k1 = known.find((x) => x.id === id);
+        if (k1) {
+            const real = guessIn(k1.picks, number, k);
+            if (real !== undefined) return real;
+            return k1.turns[number] === k ? secret : NaN;
         }
-        setValue("");
-        // someone who already won (a 0) gets it straight away
-        const theirTurn = (o: { turns: number[] }) => Math.max(1, o.turns[number] ?? NOT_IN);
+        const p = playing.find((x) => x.hg.id === id);
+        return p ? guessIn(p.picks, number, k) : NaN;
+    };
+    // the turn someone got this number on (up to turn `upTo`), or null
+    const gotOn = (id: number, upTo: number): number | null => {
+        if (id === me) return myTurn !== null && myTurn <= upTo ? myTurn : null;
+        for (let k = 1; k <= upTo; k++) if (theirGuess(id, k) === secret) return k;
+        return null;
+    };
+
+    // a turn: everyone still guessing shows their guess. `guess`: the player's (null: locked in already)
+    const resolve = (guess: number | null, force = false): boolean => {
+        const k = turn;
+        const guessing = field.filter((id) => id !== me && gotOn(id, k - 1) === null);
+        if (!force && guessing.some((id) => theirGuess(id, k) === undefined)) return false;
         const [lo, hi] = range;
-        const next = WIDTHS[Math.min(turn, WIDTHS.length - 1)];
-        const guesses = inNow.map((o) => ({ o, g: theirTurn(o) === turn ? secret : wrongGuess(noise, secret, lo, hi, next) }));
-        const all = [{ id: props.human.id, g }, ...guesses.map((x) => ({ id: x.o.hg.id, g: x.g }))];
+        const next = WIDTHS[Math.min(k, WIDTHS.length - 1)];
+        const guesses: { [id: number]: number | null } = {};
+        guessing.forEach((id) => {
+            const g = theirGuess(id, k);
+            guesses[id] = g === undefined ? null : Number.isNaN(g) ? wrongGuess(noise, secret, lo, hi, next) : g;
+        });
+        if (guess !== null) guesses[me] = guess;
+        const myT = myTurn ?? (guess === secret ? k : null);
+        const got = field.filter((id) => (id === me ? myT !== null : gotOn(id, k - 1) !== null || guesses[id] === secret));
+        const need = throughCount(field.length);
+        const out = got.length >= need;
         let [nlo, nhi] = range;
-        all.forEach(({ g: x }) => {
+        Object.values(guesses).forEach((x) => {
+            if (x === null) return;
             if (x < secret) nlo = Math.max(nlo, x + 1);
             if (x > secret) nhi = Math.min(nhi, x - 1);
         });
-        const arrow = (x: number) => (x === secret ? "✅" : x < secret ? "⬆️" : "⬇️");
-        const rows: BoardRow[] = [
-            { id: props.human.id, name: props.human.name, imageURL: props.human.imageURL, you: true, answer: `${g} ${arrow(g)}`, correct: g === secret ? true : undefined },
-            ...guesses.map((x) => ({
-                id: x.o.hg.id,
-                name: x.o.hg.name,
-                imageURL: x.o.hg.imageURL,
-                answer: `${x.g} ${arrow(x.g)}`,
-                correct: x.g === secret ? true : undefined,
-            })),
-        ];
-        const found = all.filter((x) => x.g === secret).map((x) => x.id);
-        const meRight = g === secret;
-        let outcome: Outcome;
-        let score: number;
-        if (!found.length) {
-            outcome = { kind: "next" };
-            score = encodeTurns([...mine, NOT_IN]);
-        } else if (meRight && others.length === 0) {
-            outcome = { kind: "found" };
-            score = encodeTurns([...mine, turn, ...Array(NUMBERS).fill(0)]);
-        } else if (meRight && found.length === 1) {
-            outcome = { kind: "won" };
-            score = encodeTurns([...mine, turn, ...Array(NUMBERS).fill(0)]);
-        } else if (meRight) {
-            score = encodeTurns([...mine, turn]);
-            outcome = number + 1 >= NUMBERS ? { kind: "tiebreak" } : { kind: "tie", withIds: found.filter((id) => id !== props.human.id) };
-        } else {
-            outcome = { kind: "out" };
-            score = encodeTurns([...mine, turn + 1]);
-        }
-        props.report(score);
-        if (props.pauseClock) props.pauseClock(true);
+        const arrow = (x: number) => (x < secret ? "⬆️" : "⬇️");
+        const rows: BoardRow[] = field.map((id) => {
+            const hg = faceOf(id);
+            const base = { id, name: hg.name, imageURL: hg.imageURL, you: id === me };
+            const g = guesses[id];
+            const locked = id === me ? myTurn !== null : gotOn(id, k - 1) !== null;
+            if (locked) return { ...base, answer: out ? `${secret} ✅` : "🔒", correct: out ? true : undefined };
+            if (g === null || g === undefined) return { ...base, answer: "…", correct: out ? false : undefined };
+            if (g === secret) return { ...base, answer: out ? `${secret} ✅` : "🤫", correct: out ? true : undefined };
+            return { ...base, answer: `${g} ${arrow(g)}`, correct: out ? false : undefined };
+        });
+        if (myT !== null && myTurn === null) setMyTurn(myT);
         setRange([nlo, nhi]);
-        setShown({ turn: { rows, found, salt: number * 10 + turn }, outcome, score });
+        setPending(null);
+        if (props.pauseClock) props.pauseClock(true);
+        // while it's hidden, the score so far doesn't give it away
+        report(encodeTurns([...mine, out && myT !== null ? myT : NOT_IN]));
+        setShown({ rows, salt: number * 10 + k, lockedNow: got.length, need, through: out ? got : undefined });
+        return true;
     };
+
+    const submit = () => {
+        const g = parseInt(value, 10);
+        setValue("");
+        if (!(g >= 1 && g <= 100)) return;
+        if (props.recordAnswer) props.recordAnswer(sent.current++, false, pickOf(number, turn, g));
+        if (!resolve(g)) setPending({ guess: g, since: Date.now() });
+    };
+    const waitLocked = () => {
+        if (!resolve(null)) setPending({ guess: null, since: Date.now() });
+    };
+
+    // online: try again as the others' guesses come in (and stop waiting on anyone who's gone quiet)
+    React.useEffect(() => {
+        if (!pending) return;
+        if (resolve(pending.guess, Date.now() - pending.since > WAIT_MS)) return;
+        const t = setTimeout(() => setNow(Date.now()), 1000);
+        return () => clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pending, info, now]);
 
     const carryOn = () => {
         if (!shown) return;
-        const { outcome, score } = shown;
         if (props.pauseClock) props.pauseClock(false);
-        if (outcome.kind === "next") {
+        const through = shown.through;
+        if (!through) {
             setTurn(turn + 1);
             setShown(null);
             return;
         }
-        if (outcome.kind === "tie") {
-            setMine([...mine, turn]);
-            setNumber(number + 1);
-            setTurn(1);
-            setRange([1, 100]);
-            setShown(null);
-            return;
-        }
-        props.finish(score);
+        if (!through.includes(me)) return props.finish(encodeTurns([...mine, NOT_IN]));
+        const all = [...mine, myTurn!];
+        if ((through.length === 1 && !blind) || number + 1 >= lastNumber) return props.finish(encodeTurns(all));
+        setMine(all);
+        setField(through);
+        setNumber(number + 1);
+        setTurn(1);
+        setMyTurn(null);
+        setRange([1, 100]);
+        setShown(null);
     };
 
-    const nameOf = (id: number) => (id === props.human.id ? "You" : (others.find((o) => o.hg.id === id)?.hg.name ?? "?"));
     const names = (ids: number[]) => ids.map(nameOf).join(", ");
 
     if (shown) {
-        const { outcome, turn: t } = shown;
-        const done = boardsDoneAt(t.salt);
-        const verdict =
-            outcome.kind === "next"
-                ? "Nobody got it. Guess again!"
-                : outcome.kind === "found"
-                  ? `You got it: ${secret}, on guess ${turn}!`
-                  : outcome.kind === "won"
-                    ? `🏆 Only you got it: ${secret}! You win!`
-                    : outcome.kind === "out"
-                      ? `❌ ${names(t.found)} got it (${secret}). You're out.`
-                      : outcome.kind === "tie"
-                        ? `⚖️ It's ${secret}! You and ${names(outcome.withIds)} got it. New number, just you ${outcome.withIds.length > 1 ? "lot" : "two"}.`
-                        : `⚖️ It's ${secret}, and you're still tied with ${names(t.found.filter((id) => id !== props.human.id))}. On to the tiebreaker!`;
-        const label =
-            outcome.kind === "next" ? "Next guess" : outcome.kind === "tie" ? "Next number" : "See how I did";
+        const through = shown.through;
+        const lockedIn = myTurn !== null;
+        let verdict: string;
+        let label = "Next guess";
+        if (!through) {
+            verdict =
+                shown.lockedNow === 0
+                    ? "Nobody's got it yet. Guess again!"
+                    : `🤫 ${shown.lockedNow} of the ${shown.need} needed ${shown.lockedNow === 1 ? "has" : "have"} got it${lockedIn ? ", you included" : ""}.`;
+        } else if (blind) {
+            verdict = `You got it: ${secret}, on guess ${myTurn}!`;
+            label = number + 1 >= lastNumber ? "See how I did" : "Next number";
+        } else if (!through.includes(me)) {
+            verdict = `❌ It was ${secret}. Through: ${names(through)}. You're out.`;
+            label = "See how I did";
+        } else if (through.length === 1) {
+            verdict = `🏆 It was ${secret}, and you're the last one standing!`;
+            label = "See how I did";
+        } else if (number + 1 >= lastNumber) {
+            verdict = `⚖️ It was ${secret}. Still in: ${names(through)}. On to the tiebreaker!`;
+            label = "See how I did";
+        } else {
+            verdict = `✅ It was ${secret}! Through to a new number: ${names(through)}.`;
+            label = "Next number";
+        }
         return (
-            <div className="bbb-reveal" key={t.salt} style={{ "--done": `${done}s` } as React.CSSProperties}>
+            <div className="bbb-reveal" key={shown.salt} style={{ "--done": `${boardsDoneAt(shown.salt)}s` } as React.CSSProperties}>
                 <Subtle>
                     Number {number + 1}, guess {turn}
                 </Subtle>
-                <AnswerBoards rows={t.rows} salt={t.salt} />
+                <AnswerBoards rows={shown.rows} salt={shown.salt} />
                 <div className="bbb-reveal-late">
                     <Title>{verdict}</Title>
                 </div>
@@ -213,28 +301,44 @@ function GuessTheNumber(props: CompProps) {
         );
     }
 
+    const others = field.filter((id) => id !== me);
+    const waitingOn = pending ? others.filter((id) => gotOn(id, turn - 1) === null && theirGuess(id, turn) === undefined) : [];
     return (
         <div>
             <Title>
                 Number {number + 1}, guess {turn}
             </Title>
-            {inNow.length > 0 ? (
+            {others.length > 0 ? (
                 <Subtle>
-                    Guessing with you: {inNow.map((o) => o.hg.name).join(", ")}
+                    Still in: you and {names(others)}. The first {throughCount(field.length)} to get it go through.
                 </Subtle>
             ) : (
                 <Subtle>Guess a number from 1 to 100.</Subtle>
             )}
             {turn > 1 && <Subtle>Remember the guesses: nobody will show you them again.</Subtle>}
-            <Keypad value={value} onChange={setValue} onSubmit={submit} maxLength={3} submitLabel="Guess" />
+            {pending ? (
+                <Subtle>⏳ Waiting for {names(waitingOn)} to guess…</Subtle>
+            ) : myTurn !== null ? (
+                <div>
+                    <Title>🤫 You've got it: {secret}.</Title>
+                    <Subtle>It stays hidden until half of you have it.</Subtle>
+                    <BigButton kind="success" onClick={waitLocked}>
+                        Next guesses
+                    </BigButton>
+                </div>
+            ) : (
+                <Keypad value={value} onChange={setValue} onSubmit={submit} maxLength={3} submitLabel="Guess" />
+            )}
         </div>
     );
 }
 
-export function formatGuessTurns(score: number): string {
-    // the turn on each number they played (someone out on a turn shows the turn after it)
-    const turns = decodeTurns(score).filter((t) => t > 0 && t < NOT_IN);
-    return turns.length ? `guess ${turns.join(" → ")}` : "won";
+// Final scores are settled (0 and up); what anyone hands in before that stays hidden.
+export function formatGuess(score: number): string {
+    if (score < 0) return "🤫";
+    if (score >= WON) return "🏆 last one standing";
+    if (score >= STILL_IN) return `still in after ${NUMBERS} numbers`;
+    return `out on number ${Math.floor(score / 100)}`;
 }
 
 export const GuessTheNumberComp: CompDefinition = {
@@ -243,11 +347,13 @@ export const GuessTheNumberComp: CompDefinition = {
     emoji: "💯",
     kind: "luck",
     rules:
-        "One secret number from 1 to 100, and everyone guesses at once. Every guess is shown once, with higher or lower: keep track of them yourself. " +
-        "The first time anyone gets it, everyone who didn't is out. Only one got it? They win. Two or more? They play a new number.",
-    maxSeconds: 240,
+        "A secret number from 1 to 100, and everyone guesses at once. Every guess is shown once, with higher or lower: keep track of them yourself. " +
+        "Get it and you're locked in, but it stays hidden until half of you have it. Then those go through to a new number, and the rest are out. Last one standing wins.",
+    maxSeconds: 300,
     Component: GuessTheNumber,
     simulate: simulateGuessTheNumber,
-    botScore: (p) => encodeTurns([clamp(Math.round(5 - 2 * p), 1, MAX_TURN), 4, 4, 4]),
-    format: formatGuessTurns,
+    botScore: (p) => encodeTurns(Array(NUMBERS).fill(clamp(Math.round(5 - 2 * p), 1, MAX_TURN))),
+    format: formatGuess,
+    staged: true, // online: the players in it see each other's guesses as they come in
+    settle: settleGuesses,
 };
