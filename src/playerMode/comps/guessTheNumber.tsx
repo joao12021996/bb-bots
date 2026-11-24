@@ -16,7 +16,7 @@ import { clamp, Rand, randInt, seededRand } from "./random";
 // gives the final scores. Online, the players in it see each other's real guesses: each guess goes out with the
 // score so far, and a turn waits until everyone still guessing has made theirs.
 
-const NUMBERS = 8; // after this many numbers, anyone still in goes to the tiebreaker
+const NUMBERS = 10; // numbers it can take (a tie on the last one goes to whoever took the fewest guesses overall)
 const MAX_TURN = 5; // by the fifth turn there's only one number left to guess
 // How wide the range of numbers still possible is, before each turn: everyone's guesses close it in this fast.
 const WIDTHS = [100, 30, 9, 3, 1];
@@ -43,12 +43,12 @@ export function decodeTurns(score: number): number[] {
     return turns;
 }
 
-// How many get through a number: half the field, rounded up (two left: the first to get it wins).
-export const throughCount = (field: number) => Math.ceil(field / 2);
+// How many it takes to end a number: half the field, rounded up; with three or fewer left, the first to get it.
+// Get it on the same turn as the last one needed and you're through too, so a tie just means another number.
+export const throughCount = (field: number) => (field <= 3 ? 1 : Math.ceil(field / 2));
 
 // Final scores: the last one standing on top; anyone out, by the number they went out on.
 const WON = 10000;
-const STILL_IN = 5000; // still in after every number: the tiebreaker
 const outScore = (number: number, turn: number) => 100 * (number + 1) + (40 - Math.min(turn, NOT_IN));
 
 // The knockout, played out from everyone's turns, exactly as the screen plays it.
@@ -61,19 +61,24 @@ export function settleGuesses(results: { id: number; score: number }[]): { [id: 
     };
     const scores: { [id: number]: number } = {};
     let field = results.map((r) => r.id);
+    let reached = 0; // the number it stopped on
     for (let n = 0; n < NUMBERS && field.length > 1; n++) {
+        reached = n;
         const got = field
             .map((id) => t(id, n))
             .filter((v) => v < NOT_IN)
             .sort((a, b) => a - b);
+        if (got.length === 0) break; // nobody ever got it (they all ran out of time)
         const need = throughCount(field.length);
         const cutoff = got.length === 0 ? 0 : got[Math.min(need, got.length) - 1];
         const through = field.filter((id) => t(id, n) <= cutoff);
         field.filter((id) => !through.includes(id)).forEach((id) => (scores[id] = outScore(n, t(id, n))));
         field = through;
     }
-    if (field.length === 1) scores[field[0]] = WON;
-    else field.forEach((id) => (scores[id] = STILL_IN));
+    // never a tiebreaker: still level after every number, the fewest guesses overall wins
+    const total = (id: number) => turns[id].reduce((a, _v, i) => a + t(id, i), 0);
+    const order = [...field].sort((a, b) => total(a) - total(b) || a - b);
+    order.forEach((id, i) => (scores[id] = i === 0 ? WON : outScore(reached, t(id, reached))));
     return scores;
 }
 
@@ -279,7 +284,7 @@ function GuessTheNumber(props: CompProps) {
             verdict = `🏆 It was ${secret}, and you're the last one standing!`;
             label = "See how I did";
         } else if (number + 1 >= lastNumber) {
-            verdict = `⚖️ It was ${secret}. Still in: ${names(through)}. On to the tiebreaker!`;
+            verdict = `⚖️ It was ${secret}. Still level after ${NUMBERS} numbers: the fewest guesses overall wins.`;
             label = "See how I did";
         } else {
             verdict = `✅ It was ${secret}! Through to a new number: ${names(through)}.`;
@@ -310,7 +315,8 @@ function GuessTheNumber(props: CompProps) {
             </Title>
             {others.length > 0 ? (
                 <Subtle>
-                    Still in: you and {names(others)}. The first {throughCount(field.length)} to get it go through.
+                    Still in: you and {names(others)}.{" "}
+                    {field.length <= 3 ? "The first to get it wins." : `Once ${throughCount(field.length)} of you get it, the rest are out.`}
                 </Subtle>
             ) : (
                 <Subtle>Guess a number from 1 to 100.</Subtle>
@@ -337,7 +343,6 @@ function GuessTheNumber(props: CompProps) {
 export function formatGuess(score: number): string {
     if (score < 0) return "🤫";
     if (score >= WON) return "🏆 last one standing";
-    if (score >= STILL_IN) return `still in after ${NUMBERS} numbers`;
     return `out on number ${Math.floor(score / 100)}`;
 }
 
@@ -348,8 +353,9 @@ export const GuessTheNumberComp: CompDefinition = {
     kind: "luck",
     rules:
         "A secret number from 1 to 100, and everyone guesses at once. Every guess is shown once, with higher or lower: keep track of them yourself. " +
-        "Get it and you're locked in, but it stays hidden until half of you have it. Then those go through to a new number, and the rest are out. Last one standing wins.",
-    maxSeconds: 300,
+        "Get it and you're locked in, but it stays hidden until half of you have it. Then those go through to a new number, and the rest are out. " +
+        "Down to three or fewer, the first to get it wins (a tie on the same guess: another number).",
+    maxSeconds: 600,
     Component: GuessTheNumber,
     simulate: simulateGuessTheNumber,
     botScore: (p) => encodeTurns(Array(NUMBERS).fill(clamp(Math.round(5 - 2 * p), 1, MAX_TURN))),
