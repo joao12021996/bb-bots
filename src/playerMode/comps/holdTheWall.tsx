@@ -1,6 +1,7 @@
 import React from "react";
 import { BigButton, Subtle, Title, whenDone } from "../ui/common";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
+import { crowdOf, EnduranceCrowd } from "./enduranceCrowd";
 import { clamp, gaussian, Rand, seededRand } from "./random";
 
 const LIMIT = 300;
@@ -209,18 +210,7 @@ function HoldTheWall(props: CompProps) {
                 </div>
             )}
             {dealNews && <Subtle>{dealNews}</Subtle>}
-            <div className="bbb-wall">
-                {[{ hg: props.human, score: fallen ? survived : Infinity }, ...opponents].map((o) => {
-                    const standing = o.score > survived || (o.hg.id === props.human.id && !fallen);
-                    return (
-                        <div key={o.hg.id} className={`bbb-wall-player ${standing ? "" : "is-down"}`}>
-                            <img src={o.hg.imageURL} alt="" />
-                            <span>{o.hg.id === props.human.id ? "You" : o.hg.name}</span>
-                            <small>{standing ? "on the wall" : `fell at ${Math.min(o.score, survived).toFixed(0)}s`}</small>
-                        </div>
-                    );
-                })}
-            </div>
+            <EnduranceCrowd mode="wall" seconds={survived} people={crowdOf(props.human, fallen ? survived : undefined, x / ZONE, opponents, survived)} />
             <Subtle>
                 {standing.length} of {opponents.length} opponents still
                 standing

@@ -5,6 +5,7 @@ import { BigButton, Subtle, Title } from "../ui/common";
 import { assignPersonalities, currentPersonalities, PersonalityId, Situation, voice } from "../social/personality";
 import { CompDefinition, CompProps, SimContext, SimResult } from "./compTypes";
 import { AnswerReveal, QuizScoreboard, Reveal, revealRows, rightSoFar, sumSoFar, useAnimationFrame, useQuizClock } from "./compUi";
+import { crowdOf, EnduranceCrowd } from "./enduranceCrowd";
 import { answerQuestion, clamp, gaussian, pick, Rand, randInt, seededRand, shuffled } from "./random";
 
 // ---------------- Balance Beam ----------------
@@ -135,6 +136,11 @@ function BalanceBeam(props: CompProps) {
                     </button>
                 </div>
             )}
+            <EnduranceCrowd
+                mode="beam"
+                seconds={view.seconds}
+                people={crowdOf(props.human, view.alive ? undefined : view.seconds, view.tilt, props.opponents, view.seconds)}
+            />
         </div>
     );
 }

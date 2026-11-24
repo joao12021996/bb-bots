@@ -188,40 +188,188 @@
     color: var(--bbb-gold);
 }
 
-/* hold the wall standings */
-.bbb-wall {
+/* endurance comps: the cast as cartoons (balance beam, hold the wall) */
+.bbb-crowd {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 8px;
-    margin: 10px auto 4px;
+    gap: 4px 6px;
+    margin: 12px auto 4px;
     max-width: 640px;
 }
-.bbb-wall-player {
-    width: 78px;
+.bbb-crowd-member {
+    width: 84px;
     display: flex;
     flex-direction: column;
     align-items: center;
     font-size: 0.8rem;
-    transition: opacity 300ms, filter 300ms;
 }
-.bbb-wall-player img {
-    width: 54px;
-    height: 54px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 3px solid #34d399;
-}
-.bbb-wall-player small {
+.bbb-crowd-member small {
     color: var(--bbb-muted);
     font-size: 0.7rem;
 }
-.bbb-wall-player.is-down {
-    opacity: 0.45;
+.bbb-crowd-name {
+    max-width: 84px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.bbb-crowd-member.is-you .bbb-crowd-name {
+    font-weight: 700;
+    color: var(--bbb-gold);
+}
+.bbb-crowd-stage {
+    position: relative;
+    width: 84px;
+    height: 120px;
+}
+.bbb-crowd-mat {
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    top: 108px;
+    height: 9px;
+    border-radius: 5px;
+    background: #3b82f6;
+    opacity: 0.55;
+}
+.bbb-crowd-beam {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: 76px;
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #a78bfa, #f472b6);
+}
+.bbb-crowd-beam::after {
+    content: "";
+    position: absolute;
+    left: calc(50% - 8px);
+    top: 6px;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 24px solid #475569;
+}
+.bbb-crowd-wall {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    top: 0;
+    height: 84px;
+    border-radius: 6px;
+    background: radial-gradient(circle at 20% 15%, #fbbf24 0 3px, transparent 4px), radial-gradient(circle at 75% 40%, #34d399 0 3px, transparent 4px),
+        radial-gradient(circle at 30% 70%, #f472b6 0 3px, transparent 4px), radial-gradient(circle at 80% 85%, #60a5fa 0 3px, transparent 4px),
+        linear-gradient(180deg, #8b5e3c, #6b4428);
+}
+.bbb-crowd-fig {
+    position: absolute;
+    left: 22px;
+    width: 40px;
+    height: 64px;
+    color: var(--bbb-text);
+}
+.bbb-crowd-body line {
+    stroke: currentColor;
+    stroke-width: 3;
+    stroke-linecap: round;
+}
+.bbb-crowd-fig img {
+    position: absolute;
+    left: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #34d399;
+    background: #ddd;
+}
+.bbb-crowd-member.is-you .bbb-crowd-fig img {
+    border-color: var(--bbb-gold);
+}
+.bbb-crowd-member.is-down .bbb-crowd-fig img {
+    border-color: #fb7185;
     filter: grayscale(1);
 }
-.bbb-wall-player.is-down img {
-    border-color: #fb7185;
+.bbb-crowd-dizzy {
+    position: absolute;
+    left: 24px;
+    top: -6px;
+    font-size: 0.9rem;
+}
+.is-beam .bbb-crowd-fig {
+    top: 12px;
+    transform-origin: 50% 100%;
+}
+.is-beam .bbb-crowd-fig img {
+    top: 0;
+}
+.is-wall .bbb-crowd-fig {
+    top: 4px;
+    transform-origin: 50% 0;
+}
+.is-wall .bbb-crowd-fig img {
+    top: 9px;
+}
+.is-beam .bbb-crowd-fig.is-moving {
+    animation: bbb-beam-sway 1.6s ease-in-out infinite;
+}
+.is-wall .bbb-crowd-fig.is-moving {
+    animation: bbb-wall-sway 1.6s ease-in-out infinite;
+}
+.is-beam .bbb-crowd-fig.is-falling {
+    transform: translate(calc(var(--dir) * -20px), 27px) rotate(calc(var(--dir) * 95deg));
+    animation: bbb-beam-fall 0.9s ease-in both;
+}
+.is-wall .bbb-crowd-fig.is-falling {
+    transform: translate(calc(var(--dir) * 30px), 93px) rotate(calc(var(--dir) * 90deg));
+    animation: bbb-wall-fall 0.9s ease-in both;
+}
+@keyframes bbb-beam-sway {
+    0%,
+    100% {
+        transform: rotate(calc(var(--amp) * -16deg));
+    }
+    50% {
+        transform: rotate(calc(var(--amp) * 16deg));
+    }
+}
+@keyframes bbb-wall-sway {
+    0%,
+    100% {
+        transform: translateX(calc(var(--amp) * -9px)) rotate(calc(var(--amp) * 10deg));
+    }
+    50% {
+        transform: translateX(calc(var(--amp) * 9px)) rotate(calc(var(--amp) * -10deg));
+    }
+}
+@keyframes bbb-beam-fall {
+    0% {
+        transform: rotate(0deg);
+    }
+    35% {
+        transform: rotate(calc(var(--dir) * 40deg));
+    }
+    100% {
+        transform: translate(calc(var(--dir) * -20px), 27px) rotate(calc(var(--dir) * 95deg));
+    }
+}
+@keyframes bbb-wall-fall {
+    0% {
+        transform: rotate(0deg);
+    }
+    25% {
+        transform: translateY(4px) rotate(calc(var(--dir) * 12deg));
+    }
+    100% {
+        transform: translate(calc(var(--dir) * 30px), 93px) rotate(calc(var(--dir) * 90deg));
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .bbb-crowd-fig.is-moving,
+    .bbb-crowd-fig.is-falling {
+        animation: none !important;
+    }
 }
 
 /* pass-and-play handoff */
