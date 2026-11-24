@@ -587,9 +587,197 @@
     .bbb-boards *,
     .bbb-reveal-late,
     .bbb-video *,
-    .bbb-after-video {
+    .bbb-after-video,
+    .bbb-search * {
         animation-duration: 0.01s !important;
         animation-delay: 0s !important;
         animation-iteration-count: 1 !important;
+    }
+}
+
+/* ---------- Hide the Veto tiebreaker: the search, as a cartoon (see hideTiebreak.tsx) ---------- */
+.bbb-search {
+    max-width: 640px;
+    margin: 10px auto;
+}
+.bbb-search-house {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 6px;
+    padding: 10px;
+    margin-top: 26px;
+    border-radius: 0 0 14px 14px;
+    border: 2px solid var(--bbb-border);
+    border-top: none;
+    background: rgba(var(--bbb-ink), 0.04);
+}
+/* the roof */
+.bbb-search-house::before {
+    content: "";
+    position: absolute;
+    left: -2px;
+    right: -2px;
+    top: -26px;
+    height: 26px;
+    background: linear-gradient(180deg, #a78bfa, #6d28d9);
+    clip-path: polygon(6% 0, 94% 0, 100% 100%, 0 100%);
+}
+.bbb-search-spot {
+    position: relative;
+    min-height: 92px;
+    padding: 6px 4px 4px;
+    border-radius: 10px;
+    border: 2px solid var(--bbb-border);
+    background: rgba(var(--bbb-ink), 0.05);
+    text-align: center;
+    overflow: hidden;
+    transition: opacity 0.3s, border-color 0.3s;
+}
+.bbb-search-icon {
+    font-size: 1.7rem;
+    line-height: 1.2;
+}
+.bbb-search-label {
+    font-size: 0.66rem;
+    line-height: 1.15;
+    color: var(--bbb-muted);
+}
+.bbb-search-spot.is-now {
+    border-color: var(--bbb-gold);
+    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.3);
+}
+.bbb-search-spot.is-now .bbb-search-icon {
+    animation: bbb-vid-shake 0.3s ease-in-out infinite;
+}
+.bbb-search-spot.is-done {
+    opacity: 0.45;
+}
+.bbb-search-spot.has-card {
+    opacity: 1;
+    border-color: #dc2626;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.3);
+}
+.bbb-search-empty {
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: var(--bbb-muted);
+    text-transform: uppercase;
+}
+/* the searcher pops up behind the spot and peers around with a magnifying glass */
+.bbb-search-searcher {
+    position: absolute;
+    right: 2px;
+    bottom: 0;
+    width: 40px;
+    animation: bbb-search-peek 0.65s ease-out both;
+}
+.bbb-search-searcher .bbb-toon {
+    width: 40px;
+    height: 40px;
+}
+.bbb-search-glass {
+    position: absolute;
+    left: -14px;
+    top: 4px;
+    font-size: 1.15rem;
+    animation: bbb-search-sweep 0.6s ease-in-out infinite alternate;
+}
+.bbb-search-card {
+    position: absolute;
+    left: 50%;
+    top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 4px;
+    border-radius: 8px;
+    background: #dc2626;
+    font-size: 1rem;
+    transform: translateX(-50%);
+    animation: bbb-search-card 0.45s ease-out both;
+}
+.bbb-search-card img {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #fff;
+}
+.bbb-search-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px 10px;
+    margin-top: 12px;
+}
+.bbb-search-fig {
+    position: relative;
+    width: 64px;
+    text-align: center;
+    font-size: 0.72rem;
+}
+.bbb-search-fig .bbb-toon {
+    width: 56px;
+    height: 56px;
+}
+.bbb-search-fig.is-you b {
+    color: var(--bbb-gold-text, #fde68a);
+}
+.bbb-search-fig.is-out {
+    opacity: 0.7;
+}
+.bbb-search-fig.is-sweating .bbb-toon {
+    animation: bbb-vid-tremble 0.18s linear infinite;
+}
+.bbb-search-fig.is-sweating::after {
+    content: "💦";
+    position: absolute;
+    right: 2px;
+    top: 0;
+    font-size: 0.8rem;
+}
+.bbb-search-crown {
+    position: absolute;
+    left: 50%;
+    top: -14px;
+    z-index: 1;
+    font-size: 1.1rem;
+    transform: translateX(-50%);
+}
+@keyframes bbb-search-peek {
+    0% {
+        transform: translateY(100%);
+    }
+    35% {
+        transform: translateY(0);
+    }
+    65% {
+        transform: translateY(0) rotate(-8deg);
+    }
+    100% {
+        transform: translateY(0) rotate(4deg);
+    }
+}
+@keyframes bbb-search-sweep {
+    from {
+        transform: translate(0, 0) rotate(-12deg);
+    }
+    to {
+        transform: translate(-6px, 10px) rotate(12deg);
+    }
+}
+@keyframes bbb-search-card {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, 30px) scale(0.5);
+    }
+    70% {
+        opacity: 1;
+        transform: translate(-50%, -4px) scale(1.2);
+    }
+    100% {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1);
     }
 }

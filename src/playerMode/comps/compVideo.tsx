@@ -65,7 +65,7 @@ export function boardsDoneAt(salt = 0): number {
     return FLIP_START + FLIP_TIME + hold;
 }
 
-function Toon(props: { hg: { name: string; imageURL: string }; react?: Reaction; className?: string }) {
+export function Toon(props: { hg: { name: string; imageURL: string }; react?: Reaction; className?: string }) {
     const { hg, react } = props;
     return (
         <div

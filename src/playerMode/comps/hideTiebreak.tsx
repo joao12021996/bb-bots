@@ -1,6 +1,7 @@
 import React from "react";
 import { Houseguest } from "../../model";
 import { BigButton, Panel, Subtle, Title } from "../ui/common";
+import { pickReaction, Toon, WINNER } from "./compVideo";
 import { HidingSpot, hidingSpots } from "./iconicComps";
 import { Rand, seededRand } from "./random";
 
@@ -45,6 +46,109 @@ const header = (title: string) => (
 );
 
 const looks = (s: HidingSpot) => "🔍".repeat(s.obvious);
+
+// what each spot looks like in the search cartoon
+const SPOT_ICON: { [name: string]: string } = {
+    "Under the couch cushions": "🛋️",
+    "In the fridge": "🥛",
+    "Inside the washing machine": "🧺",
+    "Behind the house wall": "🧱",
+    "In the cereal box": "🥣",
+    "Under a mattress": "🛏️",
+    "In the hot tub filter": "🛁",
+    "Inside a pillowcase": "🛌",
+    "Behind the toilet": "🚽",
+    "In the freezer, under the ice": "🧊",
+    "In the pool table pocket": "🎱",
+    "Taped under the kitchen table": "🍽️",
+};
+
+// The search, as a cartoon: the whole house, every spot in it, and someone tearing each one apart in turn (one of
+// the others in the tie, never whoever hid a card there). A card that turns up pops out of its spot; down below,
+// everyone in the tie sweats it out, and takes it their own way when their card is found (or isn't).
+function SearchScene(props: {
+    spots: HidingSpot[];
+    tied: Houseguest[];
+    hides: VetoHide[];
+    searched: number;
+    done: boolean;
+    winnerId?: number;
+    stillTied: number[];
+    you: (id: number) => boolean;
+}) {
+    const { spots, tied, hides, searched, done } = props;
+    const byId = (id: number) => tied.find((hg) => hg.id === id)!;
+    const cardsAt = (i: number) => hides.filter((h) => h.spot === i).map((h) => byId(h.id));
+    const now = spots.findIndex((s) => s.searchedAt === searched);
+    // whoever's searching this spot: someone whose card isn't in it, taking turns
+    let searcher: Houseguest | null = null;
+    if (now >= 0) {
+        const here = new Set(cardsAt(now).map((hg) => hg.id));
+        const free = tied.filter((hg) => !here.has(hg.id));
+        const pool = free.length ? free : tied;
+        searcher = pool[(searched - 1) % pool.length];
+    }
+    return (
+        <div className="bbb-search" aria-hidden="true">
+            <div className="bbb-search-house">
+                {spots.map((s, i) => {
+                    const cards = cardsAt(i);
+                    const isNow = i === now && !done;
+                    const searchedHere = s.searchedAt <= searched;
+                    const state = isNow ? "is-now" : searchedHere ? "is-done" : "";
+                    return (
+                        <div key={s.name} className={`bbb-search-spot ${state} ${searchedHere && cards.length ? "has-card" : ""}`}>
+                            <div className="bbb-search-icon">{SPOT_ICON[s.name] || "📦"}</div>
+                            <div className="bbb-search-label">{s.name}</div>
+                            {isNow && searcher && (
+                                <div className="bbb-search-searcher" key={searched}>
+                                    <Toon hg={searcher} />
+                                    <span className="bbb-search-glass">🔍</span>
+                                </div>
+                            )}
+                            {searchedHere && cards.length > 0 && (
+                                <div className="bbb-search-card">
+                                    🃏
+                                    {cards.map((hg) => (
+                                        <img key={hg.id} src={hg.imageURL} alt="" />
+                                    ))}
+                                </div>
+                            )}
+                            {searchedHere && !cards.length && !isNow && <div className="bbb-search-empty">nothing</div>}
+                        </div>
+                    );
+                })}
+            </div>
+            <div className="bbb-search-row">
+                {tied
+                    .filter((hg) => hides.some((h) => h.id === hg.id))
+                    .map((hg) => {
+                        const h = hides.find((x) => x.id === hg.id)!;
+                        const found = spots[h.spot].searchedAt <= searched;
+                        const out = found && !props.stillTied.includes(hg.id);
+                        const react = !done
+                            ? found
+                                ? pickReaction(false, hg.id, h.spot)
+                                : undefined
+                            : props.winnerId === hg.id
+                              ? WINNER
+                              : pickReaction(!out, hg.id, h.spot);
+                        const sweating = !found && !done;
+                        return (
+                            <div
+                                key={`${hg.id}-${found}-${done}`}
+                                className={`bbb-search-fig${out ? " is-out" : ""}${sweating ? " is-sweating" : ""}${props.you(hg.id) ? " is-you" : ""}`}
+                            >
+                                {props.winnerId === hg.id && done && <div className="bbb-search-crown">👑</div>}
+                                <Toon hg={hg} react={react} />
+                                <b>{props.you(hg.id) ? "You" : hg.name}</b>
+                            </div>
+                        );
+                    })}
+            </div>
+        </div>
+    );
+}
 
 export function HideTiebreakPlay(props: {
     title: string;
@@ -132,6 +236,16 @@ export function HideTiebreakResults(props: {
             <Subtle>
                 {done ? "The search is over." : `Searching the house… ${searched} of ${spots.length} spots`}
             </Subtle>
+            <SearchScene
+                spots={spots}
+                tied={props.tied}
+                hides={hides}
+                searched={searched}
+                done={done}
+                winnerId={winnerId}
+                stillTied={stillTied}
+                you={you}
+            />
             <div className="bbb-answers">
                 {order.map((h) => {
                     const found = at(h) <= searched;
@@ -148,16 +262,6 @@ export function HideTiebreakResults(props: {
                         </div>
                     );
                 })}
-            </div>
-            <div className="bbb-spots">
-                {spots.map((s) => (
-                    <div key={s.name} className={`bbb-spot ${s.searchedAt <= searched ? "is-searched" : ""}`}>
-                        <b>{s.name}</b>
-                        <span>
-                            {looks(s)} {s.searchedAt <= searched ? "· searched" : ""}
-                        </span>
-                    </div>
-                ))}
             </div>
             {done &&
                 (winner ? (
