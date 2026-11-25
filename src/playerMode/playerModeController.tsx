@@ -1083,7 +1083,7 @@ export class PlayerModeController extends ControllerHouse {
     }
 
     // A bot veto holder heard the players out before the ceremony (see vetoCase): a nominee who convinced them gets
-    // saved, unless the HoH made a better case for keeping the nominations the same.
+    // saved, unless the HoH (or a houseguest who asked) made a better case for keeping the nominations the same.
     protected swayVeto(choice: { decision: Houseguest | null; reason: string }, pov: Houseguest, noms: Houseguest[], hoh: Houseguest) {
         const cases = this.state.week.vetoCases || {};
         if (noms.some((n) => n.id === pov.id)) return choice;
@@ -1104,14 +1104,18 @@ export class PlayerModeController extends ControllerHouse {
         const asks = Object.values(this.state.week.vetoAsks || {});
         const won = noms.filter((n) => cases[n.id] || asks.includes(n.id)).sort((a, b) => (pov.relationships[b.id] ?? 0) - (pov.relationships[a.id] ?? 0));
         const hohWon = hoh.id !== pov.id && cases[hoh.id] === true;
-        const hohRel = pov.relationships[hoh.id] ?? 0;
-        if (won.length > 0 && !choice.decision && (!hohWon || (pov.relationships[won[0].id] ?? 0) > hohRel))
+        // everyone who talked them into keeping the nominations the same: the one they like most counts
+        const keepers = [...(hohWon ? [hoh.id] : []), ...(this.state.week.vetoKeeps || []).filter((id) => id !== pov.id)];
+        const keepRel = Math.max(-Infinity, ...keepers.map((id) => pov.relationships[id] ?? 0));
+        if (won.length > 0 && !choice.decision && (keepers.length === 0 || (pov.relationships[won[0].id] ?? 0) > keepRel))
             return {
                 decision: won[0],
                 reason: cases[won[0].id] ? `${won[0].name} made their case, and it worked.` : `I was asked to save ${won[0].name}, and I agreed.`,
             };
-        if (hohWon && choice.decision && !cases[choice.decision.id])
-            return { decision: null, reason: `${hoh.name} asked me to keep the nominations the same.` };
+        if (keepers.length > 0 && choice.decision && !cases[choice.decision.id]) {
+            const by = hohWon ? hoh : this.player(keepers[0]);
+            return { decision: null, reason: `${by.name} asked me to keep the nominations the same.` };
+        }
         return choice;
     }
 

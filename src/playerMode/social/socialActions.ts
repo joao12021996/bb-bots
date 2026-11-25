@@ -23,8 +23,9 @@ export type DealAction =
     | { kind: "meeting"; botId: number } // a house meeting to call someone out (two actions, once a week)
     | { kind: "snoop" } // eavesdrop on an alliance meeting
     | { kind: "rumour"; botId: number; targetId: number; rumour: "coming" | "secretAlliance" | "trashTalk" }
-    // to the veto holder: a nominee, "use it on me"; the HoH, "don't use it"; anyone else, "use it on `targetId`"
-    | { kind: "vetoCase"; botId: number; targetId?: number }
+    // to the veto holder: a nominee, "use it on me"; the HoH, "don't use it"; anyone else, "use it on `targetId`",
+    // or (`keep`) "don't use it"
+    | { kind: "vetoCase"; botId: number; targetId?: number; keep?: boolean }
     // the endgame (see endgame.ts): a three-way pact with `botId` and `targetId`; making your case to a future juror
     | { kind: "final3"; botId: number; targetId: number }
     | { kind: "juryCase"; botId: number };

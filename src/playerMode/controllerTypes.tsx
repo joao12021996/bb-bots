@@ -65,6 +65,7 @@ export interface WeekProgress {
     pawnAsk?: { ids: number[]; next: Step }; // a player HoH gives a speech about these new nominees, then on to `next`
     vetoCases?: { [playerId: number]: boolean }; // players who made their case to a bot veto holder: did it work
     vetoAsks?: { [playerId: number]: number }; // players who asked a bot veto holder to save someone else, and won them over
+    vetoKeeps?: number[]; // players (not the HoH or a nominee) who talked a bot veto holder into not using it
     mergeTries?: string[]; // pairs of alliances ("id:id") a player has asked to merge this week
     backdoor?: number; // a player HoH's backdoor plan: nominate pawns, and put this houseguest up once the veto's used
     spoke?: number[]; // nominees who have given their eviction-night speech

@@ -801,23 +801,40 @@ export abstract class ControllerSocial extends ControllerComps {
     }
 
     // A nominee asks a bot veto holder to use the veto on them, or the HoH asks them not to use it, or anyone else
-    // asks them to use it on one of the nominees (`targetId`). Once each.
-    protected vetoCase(gs: MutableGameState, actorId: number, botId: number, targetId?: number): SocialOutcome {
+    // asks them to use it on one of the nominees (`targetId`) or (`keep`) not to use it at all. Once each.
+    protected vetoCase(gs: MutableGameState, actorId: number, botId: number, targetId?: number, keep?: boolean): SocialOutcome {
         const s = this.state;
         const bot = getById(gs, botId);
         const me = getById(gs, actorId);
         const noms = s.week.nomineeIds || [];
         const asHoh = actorId === s.week.hohId && !noms.includes(actorId);
-        const forOther = targetId !== undefined && targetId !== actorId && !asHoh && !noms.includes(actorId);
+        const bystander = !asHoh && !noms.includes(actorId);
+        const keepAsk = !!keep && bystander;
+        const forOther = !keepAsk && targetId !== undefined && targetId !== actorId && bystander;
         if (
             s.step !== Step.SocialVeto ||
             s.week.povId !== botId ||
             noms.includes(botId) ||
-            (forOther ? !noms.includes(targetId!) : !asHoh && !noms.includes(actorId))
+            (forOther ? !noms.includes(targetId!) : !keepAsk && bystander)
         )
             return { text: `${bot.name} has nothing you need right now.`, good: false };
         const cases = (s.week.vetoCases = s.week.vetoCases || {});
         if (cases[actorId] !== undefined) return { text: `You already made your case to ${bot.name}.`, good: cases[actorId] };
+        if (keepAsk) {
+            // a harder sell than the HoH's: how much they like you, against how much they like the nominees
+            const likesNom = Math.max(0, ...noms.map((id) => bot.relationships[id] ?? 0));
+            const odds = (0.3 + 0.6 * (bot.relationships[actorId] ?? 0) - 0.4 * likesNom) * socialFactor(me);
+            const yes = Math.abs(rng().randomFloat()) < Math.max(0.05, Math.min(0.85, odds));
+            cases[actorId] = yes;
+            if (yes) {
+                s.week.vetoKeeps = [...(s.week.vetoKeeps || []), actorId];
+                pledge(this.ledger, "noVeto", botId, actorId, gs.phase);
+            }
+            shiftRelationship(gs, actorId, botId, yes ? 0.02 : -0.02);
+            return yes
+                ? { text: `${bot.name} nods: "Fine. The nominations stay the same."`, good: true }
+                : { text: `${bot.name} won't commit: "I'll do what's best for my game."`, good: false };
+        }
         if (forOther) {
             const target = getById(gs, targetId!);
             // it's someone else's neck: how much they like you, and how much they like the nominee
@@ -887,7 +904,7 @@ export abstract class ControllerSocial extends ControllerComps {
             case "rumour":
                 return spreadRumour(gs, this.ledger, this.book, actorId, action.botId, action.targetId, action.rumour);
             case "vetoCase":
-                return this.vetoCase(gs, actorId, action.botId, action.targetId);
+                return this.vetoCase(gs, actorId, action.botId, action.targetId, action.keep);
             case "final3": {
                 if (!this.endgameOpen()) return { text: "It's too early for a final-three pact.", good: false };
                 const result = offerFinal3(gs, this.ledger, this.pacts, actorId, action.botId, action.targetId, week, (id) => this.isHuman({ id }));

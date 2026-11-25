@@ -314,6 +314,15 @@ export function BotTalkPanel(props: {
                         🏅 Ask them to use the veto on {name(id)}
                     </button>
                 ))}
+                {vetoFor.length > 0 && (
+                    <button
+                        type="button"
+                        className={chip("success")}
+                        onClick={() => doAction("Keep the nominations the same, okay? Don't use the veto.", { kind: "vetoCase", botId, keep: true })}
+                    >
+                        🏅 Ask them not to use the veto
+                    </button>
+                )}
                 {campaign && iAmNominee && botVotes && (
                     <>
                         <button

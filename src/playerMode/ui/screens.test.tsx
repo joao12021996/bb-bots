@@ -351,6 +351,23 @@ describe("player mode screens", () => {
         expect(controller.socialAct({ kind: "vetoCase", botId: 2, targetId: 5 })!.good).toBe(false);
     });
 
+    it("anyone else can ask a bot veto holder not to use the veto", () => {
+        const controller = controllerAtSocial();
+        const s = controller.state;
+        s.step = Step.SocialVeto;
+        s.week = { hohId: 1, nomineeIds: [3, 4], povId: 2 };
+        s.actionsLeft = 3;
+        const outcome = controller.socialAct({ kind: "vetoCase", botId: 2, keep: true })!;
+        expect(s.week.vetoCases![0]).toBe(outcome.good);
+        expect(!!(s.week.vetoKeeps || []).includes(0)).toBe(outcome.good);
+        // it worked: the bot keeps the nominations the same, even if it meant to use it
+        s.week.vetoCases = { 0: true };
+        s.week.vetoKeeps = [0];
+        const sway = (controller as any).swayVeto({ decision: controller.player(3), reason: "" }, controller.player(2), [controller.player(3), controller.player(4)], controller.player(1));
+        expect(sway.decision).toBeNull();
+        expect(sway.reason).toContain(controller.player(0).name);
+    });
+
     it("a HoH can ask allies to go up as a pawn, and they remember it when they win HoH", () => {
         const controller = controllerAtSocial();
         const s = controller.state;
