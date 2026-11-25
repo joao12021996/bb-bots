@@ -373,7 +373,7 @@ export function SocialScreen(props: SocialScreenProps) {
                 <PlayerChatPanel session={session} controller={controller} me={me} otherId={other.id} />
                 {actionsLeft > 0 && (
                     <BigButton
-                        kind="success"
+                        kind="warning"
                         onClick={() => {
                             setAllianceName(suggestAllianceName(controller.book));
                             setMode({ kind: "alliance", botId: other.id });
@@ -414,12 +414,12 @@ export function SocialScreen(props: SocialScreenProps) {
                         value={allianceName}
                         onChange={(e) => setAllianceName(e.target.value)}
                     />
-                    <button type="submit" className="button is-success">
+                    <button type="submit" className="button is-warning">
                         🤝 Start it
                     </button>
                 </form>
                 {joinable.map((a) => (
-                    <BigButton key={a.id} kind="info" onClick={() => act({ kind: "alliance", botId: other.id, allianceId: a.id })}>
+                    <BigButton key={a.id} kind="warning" onClick={() => act({ kind: "alliance", botId: other.id, allianceId: a.id })}>
                         ➕ Invite to {a.name}
                     </BigButton>
                 ))}

@@ -471,7 +471,7 @@ export function BotTalkPanel(props: {
             {canTalk && (
                 <div className="bbb-talk-chips" aria-label="Questions">
                     {[...TALK_SUGGESTIONS, ...joinable.map((a) => `Want to join ${a.name}?`)].map((t) => (
-                        <button key={t} type="button" className={chip("light")} onClick={() => send(t)}>
+                        <button key={t} type="button" className={chip(/alliance|join/i.test(t) ? "warning" : "light")} onClick={() => send(t)}>
                             {t}
                         </button>
                     ))}
